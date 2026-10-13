@@ -1,0 +1,23 @@
+# Core (everyone)
+numpy>=1.26
+pyyaml>=6.0
+requests>=2.32
+
+# Geometry + data (Avneet, Paramveer)
+trimesh>=4.4
+pandas>=2.2
+scikit-learn>=1.5
+
+# Training (Avneet) - install the CUDA build on the Nebius H100:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+torch>=2.4
+tqdm>=4.66
+tensorboard>=2.17
+
+# Service + agent (Pranoy)
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.8
+
+# Dev
+pytest>=8.0

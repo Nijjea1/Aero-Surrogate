@@ -1,0 +1,24 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Data and artifacts - never commit these
+data/*
+!data/.gitkeep
+!data/README.md
+runs/
+*.pt
+*.ckpt
+*.npy
+*.zarr/
+*.stl
+*.vtu
+*.vtp
+
+node_modules/
+web/dist/
+.DS_Store

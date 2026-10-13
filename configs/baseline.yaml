@@ -1,0 +1,44 @@
+run_name: baseline
+seed: 0
+
+data:
+  labels_csv: data/drag_coefficients.csv
+  mesh_dir: data/meshes
+  mesh_glob: "*.stl"
+
+  # Column names in labels_csv. Run `python -m src.data --check` first —
+  # the published DrivAerNet CSVs may use different headers and the loader
+  # will tell you what it actually found.
+  id_column: Design
+  target_column: Average Cd
+  category_column: null        # e.g. "Category" if present; enables per-category eval
+
+  n_points: 4096               # points sampled from each mesh surface
+  normalize_geometry: true     # center + scale each mesh to unit sphere
+  cache_dir: data/cache        # sampled point clouds are cached as .npy
+
+  val_fraction: 0.15
+  test_fraction: 0.15
+
+model:
+  hidden_dim: 256
+  n_layers: 4
+  dropout: 0.1
+  # Predict mean and log-variance instead of a point estimate. This is the
+  # uncertainty head — keep it on, it is part of the contribution.
+  heteroscedastic: true
+
+train:
+  epochs: 200
+  batch_size: 16
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  num_workers: 4
+  amp: true
+  patience: 30                 # early stopping on val loss
+  out_dir: runs
+
+# Stage 3 hook — not used by the baseline trainer.
+# physics:
+#   continuity_weight: 0.0     # add once predicting fields, not scalars
