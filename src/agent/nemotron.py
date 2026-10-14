@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 from ..contracts import PARAM_BOUNDS, validate_params
 from .constraints import Constraint, violations
-from .provider import ProviderError, TokenFactoryClient
+from .provider import BudgetExceeded, ProviderError, TokenFactoryClient
 
 SYSTEM_PROMPT = """You are an aerodynamicist minimising the drag coefficient (Cd) of a car,
 working with a fast neural surrogate instead of CFD.
@@ -31,7 +31,8 @@ from the current best trusted design, plus your reasoning. You may first call
 `compare` or `history` if it helps, but keep it brief.
 
 Rules:
-- Change one or two parameters per step so their effect is attributable.
+- Change at most two parameters per step so their effect is attributable
+  (enforced: a step that changes more is refused).
 - Stay inside each parameter's bounds and the listed constraints.
 - The surrogate has a trust gate. A REJECTED result means the model does not
   understand that region (too uncertain, or too unlike its training data).
@@ -91,6 +92,11 @@ TOOLS = [
 ]
 
 
+def _call_name(call: dict) -> str | None:
+    function = call.get("function")
+    return function.get("name") if isinstance(function, dict) else None
+
+
 class NoProposal(RuntimeError):
     """The model did not produce a valid design within the step's round limit."""
 
@@ -102,6 +108,17 @@ class Proposal:
     reasoning: str
     rounds: int
     feedback: list[str] = field(default_factory=list)
+
+
+def design_key(params: dict[str, float]) -> tuple[float, ...]:
+    """Numeric identity of a design in contract order. Adding 0.0 folds -0.0
+    into 0.0, so the same car cannot be rescored under a different spelling."""
+    return tuple(float(params[name]) + 0.0 for name in PARAM_BOUNDS)
+
+
+def _int_arg(args: dict, name: str) -> int | None:
+    value = args.get(name)
+    return None if isinstance(value, bool) or not isinstance(value, int) else value
 
 
 def _fmt(value: float) -> str:
@@ -158,13 +175,17 @@ class NemotronProposer:
     # before its tool call; with thinking off it answers in ~110 tokens.
     # Super thinks briefly either way. Measured on Token Factory 2026-10-14.
     thinking: bool = True
+    max_changes: int = 2
+    # The run's spend limit, checked before every call including correction
+    # rounds. None means only the global spend cap applies.
+    budget_usd: float | None = None
 
     def propose(self, history: list[dict], *, body_style: str, evaluations_left: int,
                 total_evaluations: int, best_pressure: dict | None = None,
                 provenance: str = "unknown") -> Proposal:
         best = _best(history)
         base = dict(best["params"]) if best else {name: 0.0 for name in PARAM_BOUNDS}
-        scored = {json.dumps(row["params"], sort_keys=True) for row in history}
+        scored = {design_key(row["params"]) for row in history}
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": state_message(
@@ -174,16 +195,22 @@ class NemotronProposer:
         ]
         feedback: list[str] = []
         for round_number in range(1, self.max_rounds + 1):
+            if self.budget_usd is not None and self.client.usage.cost_usd >= self.budget_usd:
+                raise BudgetExceeded(f"run budget ${self.budget_usd:.4f} reached: "
+                                     f"${self.client.usage.cost_usd:.4f} spent")
             reply = self.client.chat(
                 messages, tools=TOOLS, tool_choice="auto", max_tokens=self.max_tokens,
-                temperature=self.temperature,
+                temperature=self.temperature, budget_usd=self.budget_usd,
                 extra=None if self.thinking else {"chat_template_kwargs": {"enable_thinking": False}})
-            message = reply["message"]
-            calls = message.get("tool_calls") or []
-            messages.append({"role": "assistant", "content": message.get("content") or "",
+            message = reply.get("message") if isinstance(reply, dict) else None
+            message = message if isinstance(message, dict) else {}
+            calls = message.get("tool_calls")
+            calls = [call for call in calls if isinstance(call, dict)] if isinstance(calls, list) else []
+            content = message.get("content")
+            messages.append({"role": "assistant", "content": content if isinstance(content, str) else "",
                              **({"tool_calls": calls} if calls else {})})
             if not calls:
-                problem = ("reply was cut off before a tool call" if reply["finish_reason"] == "length"
+                problem = ("reply was cut off before a tool call" if reply.get("finish_reason") == "length"
                            else "no tool call in reply")
                 feedback.append(problem)
                 messages.append({"role": "user", "content": f"{problem}. Call evaluate now."})
@@ -193,24 +220,28 @@ class NemotronProposer:
                 result, candidate = self._handle(call, history, base, scored, proposal is not None)
                 if candidate:
                     proposal = candidate
-                elif call.get("function", {}).get("name") == "evaluate":
+                elif _call_name(call) == "evaluate":
                     feedback.append(result)
-                messages.append({"role": "tool", "tool_call_id": call.get("id", ""),
+                call_id = call.get("id")
+                messages.append({"role": "tool", "tool_call_id": call_id if isinstance(call_id, str) else "",
                                  "content": result})
             if proposal:
                 proposal.rounds, proposal.feedback = round_number, feedback
                 return proposal
         raise NoProposal(f"no valid design after {self.max_rounds} rounds: " + "; ".join(feedback[-3:]))
 
-    def _handle(self, call: dict, history: list[dict], base: dict[str, float], scored: set[str],
+    def _handle(self, call: dict, history: list[dict], base: dict[str, float], scored: set[tuple],
                 already_proposed: bool) -> tuple[str, Proposal | None]:
-        function = call.get("function") or {}
+        function = call.get("function")
+        if not isinstance(function, dict):
+            return "error: malformed tool call", None
         name = function.get("name")
+        raw = function.get("arguments")
         try:
-            args = json.loads(function.get("arguments") or "{}")
+            args = raw if isinstance(raw, dict) else json.loads(raw or "{}")
             if not isinstance(args, dict):
                 raise ValueError
-        except ValueError:
+        except (TypeError, ValueError):
             return "error: arguments must be a JSON object", None
         if name == "compare":
             return self._compare(history, args), None
@@ -225,7 +256,7 @@ class NemotronProposer:
             return "ignored: only one evaluate per step", None
         return self._evaluate(args, base, scored)
 
-    def _evaluate(self, args: dict, base: dict[str, float], scored: set[str]) -> tuple[str, Proposal | None]:
+    def _evaluate(self, args: dict, base: dict[str, float], scored: set[tuple]) -> tuple[str, Proposal | None]:
         changes, reasoning = args.get("changes"), args.get("reasoning")
         if not isinstance(changes, dict) or not changes:
             return "rejected before scoring: 'changes' must be a non-empty object", None
@@ -249,11 +280,15 @@ class NemotronProposer:
                 values[key] = float(value)
         if problems:
             return "rejected before scoring: " + "; ".join(problems), None
+        changed = sorted(key for key, value in values.items() if value + 0.0 != float(base[key]) + 0.0)
+        if len(changed) > self.max_changes:
+            return (f"rejected before scoring: change at most {self.max_changes} parameters per step "
+                    f"(this changes {len(changed)}: {', '.join(changed)})"), None
         params = dict(base, **values)
         problems = validate_params(params) + violations(params, self.constraints)
         if problems:
             return "rejected before scoring (not clamped): " + "; ".join(problems), None
-        if json.dumps(params, sort_keys=True) in scored:
+        if design_key(params) in scored:
             return "rejected before scoring: this exact design was already scored; try something new", None
         return "accepted for scoring", Proposal(params=params, changes=values,
                                                 reasoning=reasoning.strip(), rounds=0)
@@ -261,7 +296,10 @@ class NemotronProposer:
     @staticmethod
     def _compare(history: list[dict], args: dict) -> str:
         rows = {row["iteration"]: row for row in history}
-        a, b = rows.get(args.get("iteration_a")), rows.get(args.get("iteration_b"))
+        first, second = _int_arg(args, "iteration_a"), _int_arg(args, "iteration_b")
+        if first is None or second is None:
+            return "error: iteration_a and iteration_b must be integers"
+        a, b = rows.get(first), rows.get(second)
         if a is None or b is None:
             return "error: both iterations must already be scored in this run"
         diff = {name: _fmt(b["params"][name] - a["params"][name])
@@ -271,4 +309,4 @@ class NemotronProposer:
 
 
 __all__ = ["NemotronProposer", "NoProposal", "Proposal", "ProviderError", "SYSTEM_PROMPT",
-           "TOOLS", "state_message"]
+           "TOOLS", "design_key", "state_message"]

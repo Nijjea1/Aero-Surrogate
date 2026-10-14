@@ -215,14 +215,14 @@ def test_provider_error_and_spend_cap_stop_visibly(tmp_path, monkeypatch):
     assert len(rows) == 1 and events[-1]["stop_reason"].startswith("provider error")
     assert any(e["type"] == "provider_error" for e in events)
     _, rows, events = live_run(tmp_path / "b", monkeypatch, [BudgetExceeded("cap reached")])
-    assert events[-1]["stop_reason"].startswith("spend cap")
+    assert events[-1]["stop_reason"] == "budget: cap reached"
 
 
 def test_run_cost_budget_stops_the_run(tmp_path, monkeypatch):
     replies = [[evaluate_call({"B_Ramp_Angle": float(i)}, call_id=f"c{i}")] for i in range(1, 9)]
     client, rows, events = live_run(tmp_path, monkeypatch, replies, iterations=9, run_budget_usd=0.0025)
     assert len(client.sent) == 3 and len(rows) == 4
-    assert "run cost budget" in events[-1]["stop_reason"]
+    assert "run budget" in events[-1]["stop_reason"]
 
 
 def test_corrections_are_logged_as_events(tmp_path, monkeypatch):
@@ -272,3 +272,105 @@ def test_loop_gates_with_the_serving_models_thresholds(tmp_path, monkeypatch):
     assert RunLog(tmp_path).read("calibrated")[0]["accepted"]
     designer.run(2, "fallback", True, evaluator=lambda *_: dict(evaluation))
     assert not RunLog(tmp_path).read("fallback")[0]["accepted"]
+
+
+# ---------------------------------------------------- audit regressions, Oct 14
+
+
+def test_run_budget_bounds_correction_rounds(tmp_path, monkeypatch):
+    # Audit 2: the budget was only checked between steps, so a step's four
+    # correction rounds and further failing steps kept spending.
+    client, rows, events = live_run(tmp_path, monkeypatch, ["no tool"] * 20, iterations=10,
+                                    run_budget_usd=0.0025, max_consecutive_failures=5)
+    assert len(client.sent) == 3  # 0.001 per fake call: stops once 0.0025 is passed
+    assert "run budget" in events[-1]["stop_reason"]
+
+
+@pytest.mark.parametrize("budget", [-1.0, float("nan"), float("inf"), True])
+def test_run_budget_must_be_finite_and_nonnegative(tmp_path, monkeypatch, budget):
+    monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
+    with pytest.raises(ValueError, match="run budget"):
+        designer.run(2, "bad-budget", False, evaluator=stub_evaluator(),
+                     proposer=NemotronProposer(FakeClient([])), run_budget_usd=budget)
+    assert not (tmp_path / "bad-budget.jsonl").exists()
+
+
+@pytest.mark.parametrize("call", [
+    tool_call("compare", {"iteration_a": [], "iteration_b": 0}),
+    tool_call("compare", {"iteration_a": True, "iteration_b": 0}),
+    tool_call("history", {"last_n": "5"}),
+    {"id": "c1", "type": "function", "function": "evaluate"},
+    {"id": "c1", "type": "function", "function": {"name": "evaluate", "arguments": 42}},
+    {"id": 7, "function": {"name": "evaluate", "arguments": "[1, 2]"}},
+])
+def test_malformed_tool_calls_get_feedback_not_a_crash(call):
+    # Audit 3: compare with iteration_a=[] raised TypeError and killed the run.
+    client = FakeClient([[call], [evaluate_call({"B_Ramp_Angle": 1.0}, call_id="c2")]])
+    proposal = propose(NemotronProposer(client), [row(0, BASE, 0.3)])
+    assert proposal.params["B_Ramp_Angle"] == 1.0
+    tool_reply = [m for m in client.sent[1] if m["role"] == "tool"][0]
+    assert tool_reply["content"].startswith("error")
+
+
+@pytest.mark.parametrize("reply", [
+    {"role": "assistant", "content": None, "tool_calls": "evaluate"},
+    {"role": "assistant", "content": 5, "tool_calls": [None, 3]},
+])
+def test_malformed_messages_count_as_no_tool_call(reply):
+    client = FakeClient([reply, [evaluate_call({"B_Ramp_Angle": 1.0})]])
+    proposal = propose(NemotronProposer(client), [row(0, BASE, 0.3)])
+    assert proposal.feedback == ["no tool call in reply"]
+
+
+def test_signed_zero_cannot_rescore_a_design():
+    # Audit 5: -0.0 serialised differently from 0.0 and slipped past.
+    client = FakeClient([[evaluate_call({"B_Ramp_Angle": -0.0})],
+                         [evaluate_call({"B_Ramp_Angle": 1.0}, call_id="c2")]])
+    proposal = propose(NemotronProposer(client), [row(0, BASE, 0.3)])
+    assert "already scored" in proposal.feedback[0]
+
+
+def test_integer_and_float_spellings_are_the_same_design():
+    history = [row(0, BASE, 0.3), row(1, dict(BASE, B_Ramp_Angle=2.0), 0.29)]
+    client = FakeClient([[evaluate_call({"B_Ramp_Angle": 2})],
+                         [evaluate_call({"B_Ramp_Angle": 3.0}, call_id="c2")]])
+    proposal = propose(NemotronProposer(client), history)
+    assert "already scored" in proposal.feedback[0]
+
+
+def test_changing_more_than_two_parameters_is_refused():
+    changes = {"B_Ramp_Angle": 1.0, "B_Diffusor_Angle": 1.0, "A_Car_Width": 5.0}
+    client = FakeClient([[evaluate_call(changes)], [evaluate_call({"B_Ramp_Angle": 1.0}, call_id="c2")]])
+    proposal = propose(NemotronProposer(client), [row(0, BASE, 0.3)])
+    assert "change at most 2 parameters" in proposal.feedback[0]
+    # Restating an unchanged value does not count as a change.
+    restated = {"B_Ramp_Angle": 1.0, "B_Diffusor_Angle": 1.0, "A_Car_Width": 0.0}
+    client = FakeClient([[evaluate_call(restated)]])
+    assert propose(NemotronProposer(client), [row(0, BASE, 0.3)]).rounds == 1
+
+
+def test_scoring_failure_still_finishes_the_run(tmp_path, monkeypatch):
+    # Audit 4: a failing evaluator left only run_started behind.
+    monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
+
+    def broken(*_):
+        raise RuntimeError("model/service failed")
+
+    with pytest.raises(RuntimeError):
+        designer.run(2, "broken", True, evaluator=broken)
+    events = RunLog(tmp_path).read_events("broken")
+    assert [e["type"] for e in events] == ["run_started", "run_finished"]
+    assert events[-1]["stop_reason"] == "error: RuntimeError: model/service failed"
+
+
+def test_service_down_leaves_no_orphan_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
+
+    def down():
+        raise designer.requests.ConnectionError("refused")
+
+    monkeypatch.setattr(designer, "service_health", down)
+    with pytest.raises(designer.requests.ConnectionError):
+        designer.run(2, "orphan", True)
+    assert not (tmp_path / "orphan.jsonl").exists()
+    assert RunLog(tmp_path).read_events("orphan") == []

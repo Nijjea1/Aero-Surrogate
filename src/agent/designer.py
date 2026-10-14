@@ -130,46 +130,79 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
 
     Live runs stop early, visibly, with a run_finished event naming the reason:
     repeated invalid proposals, a provider failure, the global spend cap, or
-    this run's own cost budget. Dry-run always scores exactly `iterations`.
+    this run's own cost budget (checked before every model call). An
+    exception also writes run_finished before propagating. Dry-run always
+    scores exactly `iterations`.
     """
     if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
         raise ValueError("iterations must be a positive integer")
+    if (isinstance(run_budget_usd, bool) or not isinstance(run_budget_usd, (int, float))
+            or not math.isfinite(run_budget_usd) or run_budget_usd < 0):
+        raise ValueError("run budget must be a finite nonnegative number of USD")
     problems = validate_body_style(body_style)
     if problems:
         raise ValueError("; ".join(problems))
     constraints = list(constraints or [])
-    if not dry_run and proposer is None:
-        client = TokenFactoryClient.from_env(model=model)
-        think = thinking == "on" or (thinking == "auto" and "nano" not in client.model.lower())
-        proposer = NemotronProposer(client, constraints=constraints, thinking=think)
-    log = RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
-    log.reserve(run_id)
-    evaluate = evaluator or evaluate_design
+    if not dry_run:
+        if proposer is None:
+            client = TokenFactoryClient.from_env(model=model)
+            think = thinking == "on" or (thinking == "auto" and "nano" not in client.model.lower())
+            proposer = NemotronProposer(client, constraints=constraints, thinking=think)
+        # Enforced before every provider call, including correction rounds.
+        proposer.budget_usd = run_budget_usd
+    # Readiness checks come before the run is reserved, so a service that is
+    # down cannot leave an orphaned, never-started run behind.
     if provenance is None:
         provenance = describe_provenance(service_health()) if evaluator is None else "injected evaluator"
     if thresholds is None:
         thresholds = service_thresholds() if evaluator is None else {}
+    log = RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
+    log.reserve(run_id)
     log.append_event(run_id, {
         "type": "run_started", "mode": "scripted" if dry_run else "nemotron",
         "model": None if dry_run else proposer.client.model, "body_style": body_style,
         "thinking": None if dry_run else proposer.thinking,
-        "evaluation_budget": iterations, "constraints": [str(c) for c in constraints],
+        "evaluation_budget": iterations, "run_budget_usd": None if dry_run else run_budget_usd,
+        "constraints": [str(c) for c in constraints],
         "surrogate": provenance, "gate_thresholds": thresholds,
     })
-    history: list[dict] = []
-    best_cd = None
+    state = {"history": [], "best_cd": None}
+    try:
+        stop_reason = _drive(state, iterations, run_id, dry_run, log, evaluator or evaluate_design,
+                             body_style, proposer, constraints, provenance, thresholds,
+                             max_consecutive_failures)
+    except BaseException as exc:
+        # Every started run gets a terminal event, even when scoring or the
+        # service fails, so a reader never mistakes a dead run for a live one.
+        stop_reason = f"error: {type(exc).__name__}: {exc}"
+        _finish(log, run_id, stop_reason, state, None if dry_run else proposer)
+        raise
+    _finish(log, run_id, stop_reason, state, None if dry_run else proposer)
+    return run_id
+
+
+def _finish(log: RunLog, run_id: str, stop_reason: str, state: dict,
+            proposer: NemotronProposer | None) -> None:
+    usage = vars(proposer.client.usage).copy() if proposer is not None else None
+    log.append_event(run_id, {"type": "run_finished", "stop_reason": stop_reason,
+                              "scored": len(state["history"]), "best_cd": state["best_cd"],
+                              "usage": usage})
+
+
+def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog,
+           evaluate: Callable[[dict[str, float], str], dict], body_style: str,
+           proposer: NemotronProposer | None, constraints: list[Constraint], provenance: str,
+           thresholds: dict, max_consecutive_failures: int) -> str:
+    """Propose, score, gate and log until done. Returns the stop reason."""
+    history = state["history"]
     best_pressure = None
     failures = 0
-    stop_reason = "evaluation budget used"
     started = time.monotonic()
     while len(history) < iterations:
         if dry_run or not history:
             proposal = scripted_proposer(history)
             params, reasoning = proposal["params"], proposal["reasoning"]
         else:
-            if proposer.client.usage.cost_usd >= run_budget_usd:
-                stop_reason = f"run cost budget ${run_budget_usd:.2f} reached"
-                break
             try:
                 proposal = proposer.propose(
                     history, body_style=body_style, evaluations_left=iterations - len(history),
@@ -178,16 +211,13 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
                 failures += 1
                 log.append_event(run_id, {"type": "no_valid_proposal", "detail": str(exc)})
                 if failures >= max_consecutive_failures:
-                    stop_reason = f"{failures} consecutive steps without a valid proposal"
-                    break
+                    return f"{failures} consecutive steps without a valid proposal"
                 continue
             except BudgetExceeded as exc:
-                stop_reason = f"spend cap: {exc}"
-                break
+                return f"budget: {exc}"
             except ProviderError as exc:
                 log.append_event(run_id, {"type": "provider_error", "detail": str(exc)})
-                stop_reason = f"provider error: {exc}"
-                break
+                return f"provider error: {exc}"
             failures = 0
             params, reasoning = proposal.params, proposal.reasoning
             for problem in proposal.feedback:
@@ -203,22 +233,19 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
             # Only the baseline can reach here; live proposals are checked
             # before scoring. It stays a reference, never the best design.
             reason = "reference only: " + "; ".join(broken)
-        if reason is None and (best_cd is None or evaluation["cd"] < best_cd):
-            best_cd = evaluation["cd"]
+        if reason is None and (state["best_cd"] is None or evaluation["cd"] < state["best_cd"]):
+            state["best_cd"] = evaluation["cd"]
             best_pressure = evaluation.get("pressure_summary") or None
         record = IterationRecord(
             run_id=run_id, iteration=len(history), params=dict(params), body_style=body_style,
             cd=evaluation["cd"], cl=evaluation["cl"], uncertainty=evaluation["uncertainty"],
             in_distribution=evaluation["in_distribution"], accepted=reason is None,
-            reject_reason=reason, reasoning=reasoning, best_cd_so_far=best_cd,
+            reject_reason=reason, reasoning=reasoning, best_cd_so_far=state["best_cd"],
             wall_clock_s=time.monotonic() - started, ood_score=evaluation.get("ood_score"),
         )
         log.append(record)
         history.append(record.to_dict())
-    usage = None if dry_run else vars(proposer.client.usage).copy()
-    log.append_event(run_id, {"type": "run_finished", "stop_reason": stop_reason,
-                              "scored": len(history), "best_cd": best_cd, "usage": usage})
-    return run_id
+    return "evaluation budget used"
 
 
 def main() -> None:
