@@ -339,6 +339,14 @@ def test_unservable_checkpoints_fail_at_load(trained, tmp_path, changes, message
         TorchPredictor(_save(tmp_path, _variant(trained[1], **changes)))
 
 
+def test_feature_space_detector_is_refused_for_a_parameter_model(trained, tmp_path):
+    ckpt = copy.deepcopy(trained[1])
+    assert ckpt["ood"].get("space", "parameters") == "parameters"
+    ckpt["ood"]["space"] = "features"
+    with pytest.raises(CheckpointError, match="measures 'features'"):
+        TorchPredictor(_save(tmp_path, ckpt))
+
+
 def test_mismatched_weights_fail_at_load(trained, tmp_path):
     ckpt = copy.deepcopy(trained[1])
     del ckpt["state_dict"]["mean_head.weight"]

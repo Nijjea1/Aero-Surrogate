@@ -336,6 +336,11 @@ class TorchPredictor(BasePredictor):
                 threshold = float(detector.threshold)
             except Exception as exc:  # noqa: BLE001
                 raise CheckpointError(f"cannot rebuild the OOD detector: {exc}") from exc
+            # A feature-space detector measures the point-cloud encoder's output,
+            # not this design vector; scoring parameters with it would be noise.
+            space = getattr(detector, "space", "parameters")
+            if space != "parameters":
+                raise CheckpointError(f"OOD detector measures '{space}', but params-v1 needs 'parameters'")
             if ood_mean.shape != (n_inputs,) or cov_inv.shape != (n_inputs, n_inputs):
                 raise CheckpointError("OOD detector dimensions do not match the input columns")
             if not math.isfinite(threshold) or threshold <= 0:
