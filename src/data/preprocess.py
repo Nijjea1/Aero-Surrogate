@@ -52,13 +52,25 @@ mixed sign -- because the morphs change A_Car_Width, A_Car_Length and
 A_Car_Roof_Height, so frontal area varies per run. Measuring it per run is what
 turns scatter into bias.
 
-The residual -2.3% is almost certainly the frontal area: _frontal_area below
-rasterises and fills bounding boxes for large triangles, which overestimates A
-by roughly that much, and Cd scales as 1/A. An exact projected area (shapely,
-via trimesh.path.polygons.projected) would settle it but is slow on 753k faces.
-Not chased, because the finding that matters is already in hand: the surface ->
-coefficient path reproduces CFD to a constant factor, so a model predicting Cp
-and wall shear can be checked against its own integrated drag.
+An exact projected area (shapely, via trimesh.path.polygons.projected, ~15 min
+on 753k faces) narrows it but does not close it:
+
+    run 1   A raster 2.2397   A exact 2.2230   Cd 0.2987   err -1.6%
+    run 2   A raster 2.2991   A exact 2.2786   Cd 0.2767   err -1.6%
+    run 3   A raster 2.1391   A exact 2.1221   Cd 0.2536   err -1.7%
+
+The rasteriser overestimates area by only ~0.8%, not the 2.3% first assumed.
+What is left is a -1.6% constant with 0.1% scatter -- so one scale factor is
+still unaccounted for, most plausibly a reference-area convention (whether
+below-ground wheel area counts, say) or the averaging window behind the "Trim"
+in CpMeanTrim differing from the window behind the reported forces. Not chased
+further, because it does not affect the surrogate: we TRAIN on the reported
+coefficients and use integration only as a consistency check, where a constant
+factor is detectable and correctable while scatter would not be.
+
+The finding that matters is already in hand: the surface -> coefficient path
+reproduces CFD to a constant factor, so a model predicting Cp and wall shear
+can be checked against its own integrated drag.
 
 NOTE ON WHAT DrivAerML IS: every run is a morphed NOTCHBACK. Nine of the 49
 solids are named Notchback*. So the cross-category generalisation result
