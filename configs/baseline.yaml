@@ -2,6 +2,7 @@ run_name: baseline
 seed: 0
 
 data:
+  kind: pointcloud             # pointcloud | table
   labels_csv: data/drag_coefficients.csv
   mesh_dir: data/meshes
   mesh_glob: "*.stl"
@@ -21,6 +22,7 @@ data:
   test_fraction: 0.15
 
 model:
+  kind: pointnet              # pointnet | param_mlp
   hidden_dim: 256
   n_layers: 4
   dropout: 0.1
@@ -36,6 +38,14 @@ train:
   grad_clip: 1.0
   num_workers: 4
   amp: true
+  # The uncertainty head is trained in a second phase, against a frozen
+  # mean -- see the module docstring in src/train/train.py. This is what
+  # keeps sigma calibrated instead of collapsing.
+  two_stage: true
+  variance_epochs: 300
+  variance_patience: 40
+  variance_lr: 3.0e-3
+  nll_beta: 0.5                # only used with --single-stage
   patience: 30                 # early stopping on val loss
   out_dir: runs
 
