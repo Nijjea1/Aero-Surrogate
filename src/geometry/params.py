@@ -228,6 +228,20 @@ def _resolve(params: dict[str, float]) -> dict[str, float]:
     return out
 
 
+def _glass(drop: float, base_drop: float, base_angle: float,
+           inclination: float, length_mm: float) -> tuple[float, float]:
+    """Angle from horizontal (radians) and length (m) of a glass panel.
+
+    The panel falls `drop` from its pivot to its base. Its horizontal run is
+    the baseline body's, so the roof dial changes the angle and not the run;
+    then the inclination dial rakes it and the length dial extends it.
+    """
+    run = base_drop / math.tan(math.radians(base_angle))
+    angle = math.atan2(drop, run) - math.radians(_DEG_PER_INCLINATION * inclination)
+    angle = min(max(angle, math.radians(8.0)), math.radians(80.0))
+    return angle, math.hypot(drop, run) + length_mm / 1000
+
+
 def _build_profile(p: dict[str, float], body_style: str) -> dict:
     """Side profile and plan-view width, sampled at stations along x."""
     if body_style not in _STYLES:
@@ -239,18 +253,21 @@ def _build_profile(p: dict[str, float], body_style: str) -> dict:
     roof_z = _ROOF_Z + p["A_Car_Roof_Height"] / 1000
     half_width = _HALF_WIDTH + p["A_Car_Width"] / 2000
 
-    # Windscreen: pivots on the roof front edge.
-    ws_angle = math.radians(_WINDSCREEN_ANGLE - _DEG_PER_INCLINATION * p["D_Winscreen_Inclination"])
-    ws_len = (roof_z - _COWL_Z) / math.sin(math.radians(_WINDSCREEN_ANGLE)) + p["D_Winscreen_Length"] / 1000
+    # Windscreen: pivots on the roof front edge. The glass keeps the baseline
+    # footprint on the cowl, so a taller roof makes it steeper, not longer --
+    # deriving the length from the roof height instead stretched the car by
+    # half a metre on the shallow fastback glass.
     roof_front_x = _ROOF_FRONT_X + front
+    ws_angle, ws_len = _glass(roof_z - _COWL_Z, _ROOF_Z - _COWL_Z, _WINDSCREEN_ANGLE,
+                              p["D_Winscreen_Inclination"], p["D_Winscreen_Length"])
     cowl = (roof_front_x - ws_len * math.cos(ws_angle), roof_z - ws_len * math.sin(ws_angle))
 
-    # Rear glass: pivots on the roof rear edge.
+    # Rear glass: pivots on the roof rear edge, the same way.
     roof_end_x = style["roof_end"] + front + stretch
     roof_end_z = roof_z - style["roof_drop"]
-    rw_base = style["rear_window_angle"]
-    rw_angle = math.radians(rw_base - _DEG_PER_INCLINATION * p["D_Rear_Window_Inclination"])
-    rw_len = (roof_end_z - style["deck_z"]) / math.sin(math.radians(rw_base)) + p["D_Rear_Window_Length"] / 1000
+    rw_angle, rw_len = _glass(roof_end_z - style["deck_z"], _ROOF_Z - style["roof_drop"] - style["deck_z"],
+                              style["rear_window_angle"], p["D_Rear_Window_Inclination"],
+                              p["D_Rear_Window_Length"])
     deck_start = (roof_end_x + rw_len * math.cos(rw_angle), roof_end_z - rw_len * math.sin(rw_angle))
 
     # Trunk lid: tilts and bows between the rear glass and the tail.
