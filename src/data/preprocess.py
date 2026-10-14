@@ -4,6 +4,7 @@
     python -m src.data.preprocess --combine              # 49 solids -> one mesh
     python -m src.data.preprocess --regions              # check the region map
     python -m src.data.preprocess --validate --limit 3   # integration consistency
+    python -m src.data.preprocess --index                # -> a stage-1 trainable set
 
 STEP 1, AND IT IS MANDATORY: each drivaer_N.stl is a SCENE of 49 named solids,
 none of them watertight on its own. Area-weighted sampling and any surface
@@ -349,6 +350,74 @@ def cmd_validate(root: Path, limit: int | None) -> int:
     return 0
 
 
+def cmd_index(root: Path) -> int:
+    """Emit a labels CSV + flat mesh dir so the STAGE-1 pipeline can train on
+    real DrivAerML geometry with no new training code.
+
+    src/data/dataset.py already reads "a CSV of ids and targets plus a
+    directory of <id>.stl". DrivAerML ships neither: labels are one tiny CSV
+    per run, and the combined meshes sit at combined/run_N/drivaer_N_*.stl. So
+    rather than teach the loader a second layout, translate into the layout it
+    has. The point-cloud model, the two-phase trainer, the OOD detector and
+    every test then work on real cars unchanged.
+
+    Meshes are symlinked, not copied -- 30 runs of combined STL is ~1 GB and
+    duplicating it buys nothing.
+    """
+    import pandas as pd
+
+    runs = _runs(root)
+    combined_root = root / "combined"
+    out = root / "index"
+    mesh_dir = out / "meshes"
+    mesh_dir.mkdir(parents=True, exist_ok=True)
+
+    rows, missing = [], []
+    for i in runs:
+        stl = combined_root / f"run_{i}" / f"drivaer_{i}_single_solid.stl"
+        csv = root / f"run_{i}" / f"force_mom_{i}.csv"
+        if not stl.exists() or not csv.exists():
+            missing.append(i)
+            continue
+        forces = pd.read_csv(csv).iloc[0]
+        link = mesh_dir / f"run_{i}.stl"
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(stl.resolve())
+        rows.append({
+            "Design": f"run_{i}",
+            "Average Cd": float(forces["Cd"]),
+            "Average Cl": float(forces["Cl"]),
+            # Every DrivAerML run is a morphed notchback, so this column is
+            # constant. Kept for the schema, useless for splitting -- the
+            # cross-category experiment needs DrivAerNet.
+            "Category": "notchback",
+        })
+
+    if not rows:
+        print(f"nothing indexed -- run --combine first ({len(missing)} runs missing output)")
+        return 1
+
+    df = pd.DataFrame(rows)
+    csv_path = out / "labels.csv"
+    df.to_csv(csv_path, index=False)
+
+    cd = df["Average Cd"].to_numpy()
+    print(f"indexed {len(df)} runs -> {out}")
+    print(f"  labels   {csv_path}")
+    print(f"  meshes   {mesh_dir}  ({len(list(mesh_dir.glob('*.stl')))} symlinks)")
+    print(f"  Cd       mean {cd.mean():.4f}  sd {cd.std():.4f}  "
+          f"range [{cd.min():.4f}, {cd.max():.4f}]")
+    if missing:
+        print(f"  skipped  {len(missing)} runs with no combined mesh: {missing[:8]}")
+    if len(df) < 100:
+        print(f"\n  WARNING: {len(df)} designs is far too few to train a point-cloud")
+        print("  model from scratch. This path exists to prove the geometry")
+        print("  pipeline end to end, not to produce a reportable R^2.")
+    print(f"\nnext:  python -m src.data.dataset --check --config configs/drivaerml.yaml")
+    return 0
+
+
 def cmd_inspect(root: Path) -> int:
     """What is actually in the downloaded data, before touching it."""
     runs = _runs(root)
@@ -423,6 +492,8 @@ def main() -> int:
     ap.add_argument("--combine", action="store_true")
     ap.add_argument("--validate", action="store_true",
                     help="integrate surface fields, compare with reported forces")
+    ap.add_argument("--index", action="store_true",
+                    help="emit labels.csv + flat mesh dir for the stage-1 pipeline")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--force", action="store_true", help="redo existing output")
     args = ap.parse_args()
@@ -436,6 +507,8 @@ def main() -> int:
         return cmd_combine(root, args.limit, args.force)
     if args.validate:
         return cmd_validate(root, args.limit)
+    if args.index:
+        return cmd_index(root)
     ap.print_help()
     return 0
 

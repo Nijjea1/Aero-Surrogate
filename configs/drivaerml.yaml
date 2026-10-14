@@ -1,0 +1,66 @@
+# Real DrivAerML geometry -> Cd, through the stage-1 point-cloud pipeline.
+#
+#   python -m src.data.drivaerml --runs 30 --download
+#   python -m src.data.preprocess --combine --index
+#   python -m src.data.dataset --check --config configs/drivaerml.yaml
+#   python -m src.train.train --config configs/drivaerml.yaml
+#
+# PURPOSE: prove the geometry path end to end on real cars. Until now the
+# point-cloud model had only ever seen the synthetic fixture.
+#
+# NOT A REPORTABLE RESULT. 30 designs is far too few to train a point-cloud
+# network from scratch; expect heavy overfitting and a weak held-out R². The
+# number that counts is the DrivAerNet parametric one (configs/drivaernet.yaml,
+# R² 0.875 on 4,165 designs). Scale this up only by downloading more runs.
+#
+# Sized for Kaggle T4 / CPU per the compute policy in CLAUDE.md.
+
+run_name: drivaerml
+seed: 0
+
+data:
+  kind: pointcloud
+  labels_csv: data/drivaerml/index/labels.csv
+  mesh_dir: data/drivaerml/index/meshes      # symlinks to the combined STLs
+  mesh_glob: "*.stl"
+
+  id_column: Design
+  target_column: Average Cd
+  # Every DrivAerML run is a morphed notchback, so the column is constant and
+  # a held-out-category split is impossible here. Left null so --check does not
+  # report a failure that is a property of the dataset, not a bug. The
+  # cross-category result comes from DrivAerNet.
+  category_column: null
+
+  # 753k faces per mesh, so sampling is the cost. 2048 keeps a 30-design
+  # cache under a minute and fits a 16 GB T4.
+  n_points: 2048
+  normalize_geometry: true
+  cache_dir: data/drivaerml/index/cache
+
+  val_fraction: 0.2            # 30 designs: 18 train / 6 val / 6 test
+  test_fraction: 0.2
+
+model:
+  kind: pointnet
+  hidden_dim: 128              # smaller than baseline: 18 training samples
+  n_layers: 3
+  dropout: 0.1
+  heteroscedastic: true
+
+train:
+  epochs: 150
+  batch_size: 4
+  lr: 1.0e-3
+  weight_decay: 1.0e-2         # heavy, because 18 samples overfits instantly
+  grad_clip: 1.0
+  num_workers: 0
+  amp: false
+  two_stage: true
+  variance_epochs: 150
+  variance_patience: 30
+  variance_lr: 1.0e-3
+  nll_beta: 0.5
+  patience: 30
+  ood_quantile: 0.99
+  out_dir: runs
