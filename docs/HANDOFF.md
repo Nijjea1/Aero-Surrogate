@@ -131,19 +131,55 @@ eight `PRESSURE_REGIONS` keys arrive in stage 2 with surface fields. Until
 then the service should keep returning the stub's values and we should not
 pretend otherwise in the demo.
 
-**3. `in_distribution` needs a definition, and sigma alone is not it.** A
-bigger problem: the model trains on DrivAerNet meshes, and at serve time it
-sees meshes from `params_to_mesh` — a *different shape generator*. Those are
-arguably out of distribution by construction, which would make the uncertainty
-head either reject everything or, worse, fail to notice. Worth ten minutes on a
-standup. Options, cheapest first:
+**3. Sigma alone is NOT an OOD detector. Measured, on real data.**
 
-- Fit `params_to_mesh` to produce DrivAer-like bodies, so the two generators
-  overlap.
-- Serve the **parameter** model instead, which has no mesh round trip and so no
-  mismatch. This is the main reason it exists.
-- Define `in_distribution` on parameter-space distance to the training set
-  rather than on sigma.
+Trained on real DrivAerNet with one body style held out entirely:
+
+| Split | Test R² | mean sigma | 1-sigma coverage |
+|---|---|---|---|
+| random (in-distribution) | 0.873 | 0.0067 | 0.62 |
+| notchback held out (OOD) | 0.277 | 0.0081 | **0.35** |
+
+In distribution the head is well calibrated. Out of distribution R² collapses
+to 0.28 while sigma widens only 20% — so coverage falls to 0.35 where it
+should be 0.68. **The model is confidently wrong on a body style it has never
+seen**, which is exactly the failure the gate exists to prevent.
+
+So `in_distribution` cannot be `sigma < UNCERTAINTY_THRESHOLD`. It needs a
+real distribution check, and cheap options exist:
+
+- distance in standardised parameter space to the k nearest training designs
+- a density estimate on the training parameters (a Gaussian fit is enough to
+  start)
+- the explicit body-style indicator, which the model already takes as input:
+  if the requested style was not in training, say so without guessing
+
+This is good news for the submission, not bad. "We measured our own OOD
+detector and found sigma insufficient, so we added a density check" is a
+stronger story than a gate nobody stress-tested. But it has to be built.
+
+**4. The parameter spaces do not match, concretely.** `contracts.PARAM_BOUNDS`
+has 8 absolute dimensions. Real DrivAerNet has 23 morph **deltas** from a
+baseline body, in mixed units, and `ride_height`, `boat_tail_angle` and
+`roof_curvature` have no counterpart at all. Partial correspondences exist
+(`rear_diffuser_angle` ~ `B_Diffusor_Angle`, `track_width` ~ `A_Car_Width`),
+but the semantics differ — delta vs absolute — so they are not interchangeable.
+
+Two coherent routes, and this is a group decision:
+
+- **Serve the point-cloud model.** Paramveer's `params_to_mesh` then only has
+  to make plausible car shapes, not reproduce DrivAerNet's parameterisation.
+  Needs no contract change, and the OOD check above is what keeps it honest.
+- **Change the contract** to DrivAerNet's 23 parameters plus body style. More
+  faithful to the data, but all three of us have to agree and Paramveer's
+  geometry module changes.
+
+One more thing the delta parameterisation explains: without the body-style
+input, test R² is 0.60; with it, 0.873. The parameters are relative to a
+different baseline per category, so a model that cannot tell which baseline it
+is perturbing cannot resolve them. That 0.60-vs-0.87 gap is the same gap the
+literature reports between the diverse set and within-category results, and
+here it has a concrete mechanism. Report both numbers.
 
 ---
 
