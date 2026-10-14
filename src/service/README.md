@@ -1,8 +1,10 @@
 # Track B local development
 
-This service currently uses deterministic **synthetic** predictions. The
-scripted agent is an offline development fixture, not Nemotron. No aerodynamic
-accuracy, calibrated OOD detection, or real inference speed is claimed.
+By default this service uses deterministic **synthetic** predictions (the
+stub). Setting `AERO_CHECKPOINT` serves one of Avneet's real params-v1
+checkpoints instead; see "Serving a real checkpoint" below. The scripted agent
+is an offline development fixture, not Nemotron. The stub claims no
+aerodynamic accuracy, calibrated OOD detection, or real inference speed.
 
 ## Setup on Windows PowerShell
 
@@ -44,8 +46,8 @@ Open `http://127.0.0.1:8000/docs` for interactive requests.
 
 | Endpoint | Payload/result |
 |---|---|
-| GET /health | Ready predictor, synthetic flag, schema version |
-| GET /schema | Bounds, body styles, default parameters, pressure regions, thresholds |
+| GET /health | Ready predictor, synthetic flag, schema version, `model_version`, `checkpoint_sha256` (torch only), `output_provenance` |
+| GET /schema | Bounds, body styles, default parameters, pressure regions, the thresholds the serving predictor uses |
 | POST /evaluate | `{"params": <complete parameter object>, "body_style": "fastback"}` returns Evaluation (`body_style` optional) |
 | POST /compare | `{"design_a": {"params": ...}, "design_b": {"params": ...}}` |
 | GET /history/{run_id} | Array of IterationRecord objects; 404 for an absent run |
@@ -89,13 +91,53 @@ $env:AERO_RUNLOG_DIR = 'runs/logs'
 ```
 
 `AERO_RUNLOG_DIR` must identify the same directory for the service and agent.
-`AERO_CHECKPOINT` must be empty for the stub. A nonempty checkpoint currently
-fails startup explicitly because the real adapter is not implemented.
+`AERO_CHECKPOINT` must be empty for the stub. A nonempty value loads that
+checkpoint with `TorchPredictor`; anything wrong with it fails startup. There
+is never a fallback to the stub.
+
+## Serving a real checkpoint
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+.\.venv\Scripts\python.exe -m pip install -r requirements-model.txt
+$env:AERO_CHECKPOINT = 'runs/drivaernet-random/best.pt'
+.\.venv\Scripts\python.exe -m uvicorn src.service.app:app --host 127.0.0.1 --port 8000
+```
+
+CPU torch is enough. Loading uses `torch.load(..., weights_only=False)`, which
+executes code pickled in the file: only load checkpoints a trusted teammate
+produced with `src/train/train.py`.
+
+Only `params-v1` checkpoints (design parameters in, Cd out) are served. Startup
+fails with a clear error for a missing or unreadable file, a point-cloud
+(`pointcloud-v1`) or unknown preprocess version, a `schema_version` other than
+the contract's, input columns that are not exactly the 16 contract parameters
+plus `cat_<body style>` indicators, mismatched weights, or a model without an
+uncertainty head. Model input is built by walking the checkpoint's
+`preprocess.param_columns` in order and standardised with its `norm_stats`,
+following `docs/HANDOFF.md` section 3.
+
+What the real model does and does not produce (`/health` -> `output_provenance`):
+
+| Field | Source |
+|---|---|
+| `cd`, `uncertainty` | model (`uncertainty` is the Cd standard deviation) |
+| `ood_score` | model's Mahalanobis OOD detector, or `null` if the checkpoint has none |
+| `cl` | placeholder `0.0`: stage 1 does not predict lift |
+| `pressure_summary` | unavailable: always `{}`; `/compare` lists every region as unavailable |
+
+`in_distribution` uses the OOD threshold calibrated into the checkpoint (99%
+of held-out validation designs pass), not the contract's 3.0 placeholder, and
+the contract's uncertainty threshold (checkpoints carry no calibrated one).
+`/schema` reports both values actually in use.
 
 Run IDs contain 1-128 letters, digits, hyphens or underscores; Windows device
 names are rejected. Logs live at `runs/logs/<run_id>.jsonl` and are Git-ignored.
 Malformed completed records produce a visible error. Incomplete trailing
 records are excluded from history, and appending to such a log is refused.
 
-Next milestones: real checkpoint adapter, live Token Factory tools, paid-call
+Next milestones: pass the predictor's calibrated thresholds to the shared gate
+(`/compare` and the agent still call `rejection_reason` with the contract
+defaults, so with a real checkpoint they can reject a design `/evaluate` marks
+in distribution), live Token Factory tools, paid-call
 budgets, run start/status/cancel API, hosted authentication and deployment.

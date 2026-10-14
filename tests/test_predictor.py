@@ -75,7 +75,7 @@ def test_all_bounds_are_accepted_but_untrusted():
 
 def test_checkpoint_selection_never_silently_falls_back():
     assert isinstance(load_predictor(), StubPredictor)
-    with pytest.raises(NotImplementedError, match="Refusing"):
+    with pytest.raises(FileNotFoundError, match="checkpoint not found"):
         load_predictor("missing-checkpoint.pt")
     with pytest.raises(ValueError, match="non-empty"):
         load_predictor("")

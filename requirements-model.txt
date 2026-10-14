@@ -1,0 +1,13 @@
+# Serving a real checkpoint (TorchPredictor, AERO_CHECKPOINT=<path>).
+# Adds the model stack on top of the lightweight service requirements.
+#
+# CPU torch is enough for serving: the params-v1 model is a small MLP and one
+# /evaluate is a single forward pass plus a Mahalanobis distance. To avoid the
+# multi-GB CUDA wheel, install the CPU build first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-model.txt
+#
+# src.train.model needs only torch; src.train.ood needs only numpy.
+-r requirements-service.txt
+torch>=2.4
+numpy>=1.26

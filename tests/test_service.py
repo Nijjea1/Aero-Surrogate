@@ -59,7 +59,7 @@ def test_cors(client):
 
 def test_configured_checkpoint_does_not_fall_back(monkeypatch):
     monkeypatch.setenv("AERO_CHECKPOINT", "missing.pt")
-    with pytest.raises((NotImplementedError, FileNotFoundError, RuntimeError)):
+    with pytest.raises(FileNotFoundError, match="checkpoint not found"):
         with TestClient(create_app()):
             pass
 
