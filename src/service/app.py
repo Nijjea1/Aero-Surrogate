@@ -4,7 +4,7 @@
 
 Implemented endpoints:
     GET  /health              -> {"ok": true, "predictor": ...}
-    GET  /schema              -> param bounds, defaults, pressure regions
+    GET  /schema              -> param bounds, body styles, defaults, thresholds
     POST /evaluate            -> Evaluation (the contract)
     POST /compare             -> field delta between two designs
     GET  /history/{run_id}    -> the run log
@@ -25,8 +25,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, FiniteFloat, field_validator
 
 from src.contracts import (
-    Design, Evaluation, PARAM_BOUNDS, PRESSURE_REGIONS, SCHEMA_VERSION,
-    UNCERTAINTY_THRESHOLD, default_params,
+    BODY_STYLES, DEFAULT_BODY_STYLE, Design, Evaluation, OOD_SCORE_THRESHOLD, PARAM_BOUNDS,
+    PRESSURE_REGIONS, SCHEMA_VERSION, UNCERTAINTY_THRESHOLD, default_params,
+    validate_body_style,
 )
 from src.service.predictor import BasePredictor, load_predictor, validate_design_params
 from src.service.gate import rejection_reason
@@ -36,12 +37,21 @@ from src.service.runlog import RunLog
 class DesignRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     params: dict[str, FiniteFloat]
+    body_style: str = DEFAULT_BODY_STYLE
     design_id: str | None = None
 
     @field_validator("params", mode="before")
     @classmethod
     def validate_parameters(cls, value):
         problems = validate_design_params(value)
+        if problems:
+            raise ValueError("; ".join(problems))
+        return value
+
+    @field_validator("body_style")
+    @classmethod
+    def validate_style(cls, value):
+        problems = validate_body_style(value)
         if problems:
             raise ValueError("; ".join(problems))
         return value
@@ -89,20 +99,27 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
     def schema():
         return {"schema_version": SCHEMA_VERSION, "param_bounds": PARAM_BOUNDS,
                 "defaults": default_params(), "pressure_regions": PRESSURE_REGIONS,
+                "body_styles": BODY_STYLES, "default_body_style": DEFAULT_BODY_STYLE,
+                "param_units": "offsets from the baseline body of the chosen style: "
+                               "angles in degrees, lengths in mm, curvatures and "
+                               "inclinations dimensionless",
                 "uncertainty_threshold": UNCERTAINTY_THRESHOLD,
-                "uncertainty_units": "Cd standard deviation"}
+                "uncertainty_units": "Cd standard deviation",
+                "ood_score_threshold": OOD_SCORE_THRESHOLD}
 
     @application.post("/evaluate", response_model=Evaluation)
     def evaluate(request: DesignRequest):
         return application.state.predictor.evaluate(
-            Design(params=request.params, design_id=request.design_id)
+            Design(params=request.params, body_style=request.body_style,
+                   design_id=request.design_id)
         )
 
     @application.post("/compare")
     def compare(request: CompareRequest):
         a = evaluate(request.design_a).to_dict()
         b = evaluate(request.design_b).to_dict()
-        reasons = {"design_a": rejection_reason(a), "design_b": rejection_reason(b)}
+        reasons = {"design_a": rejection_reason(a, body_style=request.design_a.body_style),
+                   "design_b": rejection_reason(b, body_style=request.design_b.body_style)}
         common = a["pressure_summary"].keys() & b["pressure_summary"].keys()
         return {
             "design_a": a, "design_b": b,
@@ -110,6 +127,7 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
                       "pressure_summary": {key: b["pressure_summary"][key] - a["pressure_summary"][key]
                                            for key in sorted(common)}},
             "delta_direction": "design_b minus design_a",
+            "same_body_style": request.design_a.body_style == request.design_b.body_style,
             "trusted": all(reason is None for reason in reasons.values()),
             "reject_reasons": reasons,
             "comparison_kind": "scalar and regional summaries; not a surface-field comparison",

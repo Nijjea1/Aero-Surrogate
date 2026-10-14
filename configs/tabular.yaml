@@ -1,0 +1,54 @@
+# Design parameters → Cd. Gate insurance: no meshes, trains in seconds.
+#
+#   python -m src.data.dataset --check --config configs/tabular.yaml
+#   python -m src.train.train --config configs/tabular.yaml
+#
+# Point labels_csv at the real DrivAerNet design-parameter table once it is
+# downloaded. --check prints which of the eight PARAM_BOUNDS names it actually
+# found and whether the data stays inside those bounds.
+
+run_name: tabular
+seed: 0
+
+data:
+  kind: table
+  labels_csv: data/synthetic/drag_coefficients.csv
+
+  id_column: Design
+  target_column: Average Cd
+  category_column: Category
+
+  # Defaults to src.contracts.PARAM_NAMES, in that order. Override only if the
+  # published table spells them differently — and keep the order, because the
+  # column order is what the checkpoint promises the service.
+  param_columns: null
+
+  val_fraction: 0.15
+  test_fraction: 0.15
+
+model:
+  kind: param_mlp
+  hidden_dim: 128
+  n_layers: 2                  # best of a 72-config sweep on the fixture
+  dropout: 0.0                 # dropout cost ~0.02 test R² at this data size
+  heteroscedastic: true
+  quadratic_features: false    # measured: costs ~0.03 test R². See model.py.
+
+train:
+  epochs: 400
+  batch_size: 32
+  lr: 3.0e-3
+  weight_decay: 1.0e-2
+  grad_clip: 1.0
+  num_workers: 0
+  amp: false
+  # The uncertainty head is trained in a second phase, against a frozen
+  # mean -- see the module docstring in src/train/train.py. This is what
+  # keeps sigma calibrated instead of collapsing.
+  two_stage: true
+  variance_epochs: 300
+  variance_patience: 40
+  variance_lr: 3.0e-3
+  nll_beta: 0.5                # only used with --single-stage
+  patience: 60
+  out_dir: runs

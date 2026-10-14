@@ -35,14 +35,14 @@ def test_invalid_parameter_container(client, value):
 @pytest.mark.parametrize("value", [None, "0.15", True, [], {}, 99])
 def test_invalid_values(client, value):
     params = default_params()
-    params["ride_height"] = value
+    params["B_Ramp_Angle"] = value
     response = client.post("/evaluate", json={"params": params})
     assert response.status_code == 422
     assert "detail" in response.json()
 
 
 def test_nonfinite_and_unknown_keys(client):
-    body = '{"params":{"ride_height":NaN}}'
+    body = '{"params":{"B_Ramp_Angle":NaN}}'
     assert client.post("/evaluate", content=body, headers={"Content-Type": "application/json"}).status_code == 422
     params = default_params()
     params["typo"] = 1
@@ -62,3 +62,22 @@ def test_configured_checkpoint_does_not_fall_back(monkeypatch):
     with pytest.raises((NotImplementedError, FileNotFoundError, RuntimeError)):
         with TestClient(create_app()):
             pass
+
+
+def test_schema_publishes_the_2_0_0_contract(client):
+    schema = client.get("/schema").json()
+    assert schema["schema_version"] == "2.0.0"
+    assert schema["body_styles"] == ["fastback", "notchback", "estateback"]
+    assert schema["default_body_style"] == "fastback"
+    assert set(schema["defaults"].values()) == {0.0}
+    assert "ood_score_threshold" in schema
+
+
+def test_body_style_is_validated_and_changes_the_answer(client):
+    params = default_params()
+    fastback = client.post("/evaluate", json={"params": params}).json()
+    estate = client.post("/evaluate", json={"params": params, "body_style": "estateback"}).json()
+    assert estate["cd"] != fastback["cd"]
+    assert fastback["ood_score"] is not None
+    for bad in ("hatchback", 3, None):
+        assert client.post("/evaluate", json={"params": params, "body_style": bad}).status_code == 422
