@@ -41,6 +41,7 @@ To point the page at a different service, add `?api=` to the URL:
 | Pressure by region | `pressure_summary`. A region the model doesn't predict shows as n/a and is never filled in |
 | Synthetic banner | `GET /health` `synthetic: true`. The stub's numbers are never presented as results |
 | 3D car | `POST /api/mesh` → `src/geometry/viewer.py`. Drag to orbit, scroll to zoom, hover for region and Cp |
+| Airflow and road loads | The prediction plus the car's outline and frontal area from `/api/mesh`. See [Airflow](#airflow) |
 
 ## 3D colour modes
 
@@ -56,6 +57,41 @@ The sliders reshape the car: the service and the geometry share the
 contracts 2.0.0 parameters. If the service ever sends names the geometry
 doesn't know, the car keeps its baseline shape and the page says so under
 the viewer.
+
+## Airflow
+
+The page opens on **Driving**: the car on a road running to the horizon,
+with trees and posts streaming past and air streaking over and around the
+body. The camera sweeps slowly from the front three-quarter to the rear
+three-quarter. Dragging takes it over, and the sweep resumes a few seconds
+after you let go. **Wind tunnel** streams smoke from a rake of nozzles five
+lanes wide, so it wraps over the roof and round both sides. **Still** stops
+the animation. **Full screen** fills the screen with the view and its
+read-out, for recording the demo.
+
+It's an illustration driven by the prediction, not a flow simulation, and the
+caption says so. Every moving part comes from a predicted number:
+
+| What you see | Set by |
+|---|---|
+| The path of each streamline | The car's real outline (`flow` in `/api/mesh`). The air between the body and a streamline keeps its cross-section, so a far-field offset ρ passes at r = √(1 + ρ²) body-radii. |
+| Smoke colour | Predicted mean Cp of the region the air is passing, on the same scale as the paint |
+| Smoke speed | That Cp, by Bernoulli: \|v\|/U = √(1 − Cp) |
+| Wake size, churn and length | Predicted Cd against the selected style's baseline |
+| Wake bending down or up | Predicted Cl. Lift pushes the air down behind the car. |
+| Trembling | Predicted σ against the gate threshold |
+| Grey smoke and a red flag | The gate rejected the prediction |
+
+The read-out over the view (`web/physics.js`) turns the prediction into loads
+at the chosen speed, at sea-level air density. Drag force is ½ρv²·Cd·A, with
+± from σ. It also shows the power to push through the air, the energy per
+100 km from drag alone, and lift, which is marked unvalidated until Cl is
+checked against CFD. Changes are compared against the baseline body of the
+same style, with its own frontal area.
+
+With `prefers-reduced-motion`, the airflow starts paused. `?debug=1` exposes
+the page state as `aero` in the console. For example,
+`aero.flow.stats.frameMs` is the animation's work per frame, about 1–2 ms.
 
 ## Presets
 

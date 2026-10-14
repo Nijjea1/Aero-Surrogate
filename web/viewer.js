@@ -4,12 +4,16 @@
 //   viewer.setMesh(payload)          // from POST /api/mesh (src/geometry/viewer.py)
 //   viewer.setRegionValues(summary)  // Evaluation.pressure_summary
 //   viewer.setMode("field" | "regions" | "plain")
+//   viewer.setAnimator(fn | null)    // fn(dt, t) every frame; null renders on demand
+//   viewer.setView("orbit" | "side" | "chase")
 //
 // Geometry arrives in the car's frame (x nose to tail, y lateral, z up) and is
-// turned into three.js's y-up frame here, centred on the car.
+// turned into three.js's y-up frame here, centred on the car: X = x - cx,
+// Y = z, Z = -(y - cy). viewer.frame says what cx and cy were.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 const CP_RANGE = 0.8;   // saturate a little early so typical suction reads
 const COLORS = {
@@ -28,7 +32,12 @@ export function createViewer(container, { onHover } = {}) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x6a6a66, 1.1));
+  // Soft studio reflections, so the body reads as a solid in three dimensions
+  // rather than a flat-shaded shape.
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+  pmrem.dispose();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x6a6a66, 0.7));
   const sun = new THREE.DirectionalLight(0xffffff, 1.1);
   sun.position.set(-4, 6, 3);
   scene.add(sun);
@@ -37,7 +46,7 @@ export function createViewer(container, { onHover } = {}) {
   scene.add(fill);
   scene.add(groundShadow());
 
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
   camera.position.set(-4.4, 1.9, 3.9);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0.6, 0);
@@ -48,7 +57,9 @@ export function createViewer(container, { onHover } = {}) {
   controls.update();
   controls.addEventListener("change", render);
 
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05 });
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.42, metalness: 0.1, envMapIntensity: 0.55,
+  });
   let mesh = null;
   let data = null;          // decoded per-vertex fields
   let mode = "field";
@@ -84,6 +95,7 @@ export function createViewer(container, { onHover } = {}) {
       scene.add(mesh);
     }
     data = { region, cp, regions: payload.regions };
+    api.frame = { cx, cy, length: hi[0] - lo[0] };
     paint();
   }
 
@@ -153,14 +165,50 @@ export function createViewer(container, { onHover } = {}) {
     renderer.render(scene, camera);
   }
 
-  function resetView() {
-    camera.position.set(-4.4, 1.9, 3.9);
-    controls.target.set(0, 0.6, 0);
+  // ---- animation: on demand by default, every frame while an animator runs
+  let animator = null;
+  let looping = false;   // one frame loop at most, however often the animator changes
+  let last = 0;
+  function frame(now) {
+    if (!animator) { looping = false; return; }
+    const dt = Math.min((now - last) / 1000, 0.05);  // a hidden tab must not jump
+    last = now;
+    animator(dt, now / 1000);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  function setAnimator(fn) {
+    animator = fn;
+    if (fn && !looping) {
+      looping = true;
+      last = performance.now();
+      requestAnimationFrame(frame);
+    }
+    if (!fn) render();
+  }
+
+  const VIEWS = {
+    orbit: [[-4.4, 1.9, 3.9], [0, 0.6, 0]],
+    side: [[0.4, 1.0, 8.6], [0.4, 0.75, 0]],
+    chase: [[-6.3, 2.2, 4.6], [0.35, 0.62, 0]],
+    tunnel: [[-5.0, 2.9, 6.6], [0.8, 0.6, 0]],
+  };
+  function setView(name = "orbit") {
+    const [position, target] = VIEWS[name] || VIEWS.orbit;
+    camera.position.set(...position);
+    controls.target.set(...target);
     controls.update();
+    render();
   }
 
   resize();
-  return { setMesh, setRegionValues, setMode, resetView };
+  const api = {
+    setMesh, setRegionValues, setMode, setAnimator, setView, render,
+    resetView: () => setView("orbit"),
+    scene, camera, controls, frame: null,
+  };
+  return api;
 }
 
 // Blue below zero, red above, a neutral gray midpoint.

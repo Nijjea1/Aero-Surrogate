@@ -8,6 +8,8 @@
 //
 // Point it at another service with ?api=http://host:port
 
+import { aeroLoads } from "./physics.js";
+
 const API = (new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 // Readable names and units. Anything not listed falls back to the raw name.
@@ -87,6 +89,11 @@ const state = {
   viewer: null,
   viewerMode: "field",
   meshSeq: 0,
+  flow: null,         // airflow animation (web/flow.js), once three.js has loaded
+  flowMode: "off",
+  speedKmh: 110,
+  area: null,         // frontal area of the car on screen, m^2, from /api/mesh
+  baselineArea: null, // and of the selected style's baseline body
 };
 
 const VIEWER_CAPTIONS = {
@@ -95,6 +102,12 @@ const VIEWER_CAPTIONS = {
   regions: "Each region painted with the mean Cp the service predicts for it. Gray surfaces belong to no region.",
   plain: "Drag to orbit, scroll to zoom.",
 };
+
+const FLOW_CAPTION = "Airflow is an illustration driven by the prediction, not a simulation: the smoke " +
+  "takes the predicted pressure of each region it passes (colour, and speed by Bernoulli), the wake grows " +
+  "with predicted Cd, bends with predicted lift and trembles with σ. Shown in slow motion.";
+
+const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -346,6 +359,8 @@ function renderResult() {
   renderPressure(e.pressure_summary || {});
   renderHistory();
   state.viewer?.setRegionValues(e.pressure_summary || {});
+  updateFlow();
+  renderHud();
 }
 
 // ---------------------------------------------------------------- 3D viewer
@@ -364,6 +379,103 @@ async function initViewer() {
     button.addEventListener("click", () => setViewerMode(button.dataset.mode));
   }
   setViewerMode(state.viewerMode);
+  await initFlow();
+}
+
+async function initFlow() {
+  try {
+    const { createFlow } = await import("./flow.js");
+    state.flow = createFlow(state.viewer);
+  } catch (error) {
+    console.error(error);
+    return;
+  }
+  state.flow.setSpeed(state.speedKmh);
+  // ?debug=1 exposes the page state in the console, e.g. aero.flow.stats.frameMs
+  if (new URLSearchParams(location.search).has("debug")) window.aero = state;
+  // Respect reduced motion: the airflow starts paused, one click to play.
+  if (REDUCED_MOTION) state.flow.setPaused(true);
+  for (const button of $("flow-modes").querySelectorAll("button")) {
+    button.addEventListener("click", () => setFlowMode(button.dataset.flow));
+  }
+  $("speed").addEventListener("input", () => {
+    state.speedKmh = Number($("speed").value);
+    state.flow.setSpeed(state.speedKmh);
+    renderHud();
+  });
+  $("flow-pause").addEventListener("click", () => {
+    const paused = $("flow-pause").textContent === "Pause";
+    state.flow.setPaused(paused);
+    $("flow-pause").textContent = paused ? "Play" : "Pause";
+  });
+  $("fullscreen").addEventListener("click", () => {
+    const panel = $("viewer").closest(".viewer-panel");
+    if (document.fullscreenElement) document.exitFullscreen();
+    else panel.requestFullscreen?.().catch(() => {});
+  });
+  document.addEventListener("fullscreenchange", () => {
+    $("fullscreen").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+  });
+  updateFlow();
+  setFlowMode("drive");   // open on the car driving; "Still" is one click away
+}
+
+function setFlowMode(mode) {
+  state.flowMode = mode;
+  for (const button of $("flow-modes").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.flow === mode));
+  }
+  const on = mode !== "off";
+  $("flow-hud").hidden = !on;
+  $("flow-pause").hidden = !on;
+  $("flow-pause").textContent = REDUCED_MOTION ? "Play" : "Pause";
+  if (REDUCED_MOTION) state.flow.setPaused(true);
+  state.flow.setMode(mode);
+  setViewerMode(state.viewerMode);   // refresh the caption
+  renderHud();
+}
+
+// Hand the current prediction to the airflow. Called whenever the prediction,
+// the baseline or the shape changes.
+function updateFlow() {
+  if (!state.flow || !state.current) return;
+  const e = state.current.evaluation;
+  const baseline = state.baselines[baselineKey()];
+  state.flow.setPrediction({
+    cd: e.cd, cl: e.cl, sigma: e.uncertainty,
+    threshold: state.schema.uncertainty_threshold,
+    trusted: !rejectionReason(e, state.current.bodyStyle),
+    pressure: e.pressure_summary || {},
+    baselineCd: baseline?.cd,
+  });
+}
+
+function renderHud() {
+  if (!state.current || !state.area) return;
+  const e = state.current.evaluation;
+  const speedKmh = state.speedKmh;
+  const now = aeroLoads({ cd: e.cd, cl: e.cl, sigma: e.uncertainty, area: state.area, speedKmh });
+  const baseline = state.baselines[baselineKey()];
+  const base = baseline && state.baselineArea
+    ? aeroLoads({ cd: baseline.cd, cl: baseline.cl, area: state.baselineArea, speedKmh })
+    : null;
+  $("speed-value").textContent = `${speedKmh} km/h`;
+  $("hud-speed").textContent = `${speedKmh} km/h`;
+  $("hud-drag").textContent = `${fmt(now.drag, 0)} N ± ${fmt(now.dragSigma, 0)}`;
+  $("hud-power").textContent = `${fmt(now.power, 1)} kW`;
+  $("hud-energy").textContent = `${fmt(now.energyPer100km, 2)} kWh / 100 km`;
+  $("hud-lift").textContent = now.lift < 0 ? `${fmt(-now.lift, 0)} N down` : `${fmt(now.lift, 0)} N up`;
+  hudDelta($("hud-drag-delta"), base && now.drag - base.drag, (d) => `${signed(d, 0)} N vs baseline`);
+  hudDelta($("hud-energy-delta"), base && now.energyPer100km - base.energyPer100km,
+    (d) => `${signed(d, 2)} kWh vs baseline`);
+  $("hud-flag").hidden = !rejectionReason(e, state.current.bodyStyle);
+}
+
+function hudDelta(el, delta, text) {
+  const show = typeof delta === "number" && state.current.label !== "Baseline";
+  el.textContent = show ? text(delta) : "";
+  if (show && Math.abs(delta) > 1e-9) el.dataset.good = String(delta < 0);
+  else el.removeAttribute("data-good");
 }
 
 function setViewerMode(mode) {
@@ -373,7 +485,8 @@ function setViewerMode(mode) {
   }
   $("cp-legend").hidden = mode === "plain";
   $("viewer-caption").textContent = VIEWER_CAPTIONS[mode] +
-    (mode === "regions" && state.health?.synthetic ? " Values are from the synthetic stub." : "");
+    (mode === "regions" && state.health?.synthetic ? " Values are from the synthetic stub." : "") +
+    (state.flowMode !== "off" ? ` ${FLOW_CAPTION}` : "");
   state.viewer?.setMode(mode);
 }
 
@@ -405,6 +518,11 @@ async function refreshMesh(params) {
   state.viewer.setMesh(payload);
   // The prediction may have landed before the viewer finished loading.
   state.viewer.setRegionValues(state.current?.evaluation.pressure_summary || {});
+  state.area = payload.frontal_area_m2;
+  state.baselineArea = payload.baseline_frontal_area_m2 ?? null;
+  state.flow?.setShape(payload.flow, state.viewer.frame);
+  updateFlow();
+  renderHud();
   $("dims").textContent = `${fmt(payload.length_m, 2)} × ${fmt(payload.width_m, 2)} × ${fmt(payload.height_m, 2)} m` +
     ` · frontal area ${fmt(payload.frontal_area_m2, 2)} m²`;
   const ignored = payload.ignored_params || [];
