@@ -88,6 +88,32 @@ class RunLog:
         with _LOCK:
             return self._read_path(self._path(run_id), run_id)
 
+    def _event_path(self, run_id: str) -> Path:
+        # A subdirectory, so list_runs' *.jsonl glob only ever sees scored runs.
+        return self._path(run_id).parent / "events" / f"{run_id}.jsonl"
+
+    def append_event(self, run_id: str, event: dict) -> None:
+        """Record something that is not a scored attempt: run start/finish,
+        invalid or duplicate proposals, provider failures. These have no valid
+        Evaluation, so they never go into the IterationRecord log."""
+        if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+            raise ValueError("event must be an object with a string 'type'")
+        payload = json.dumps(dict(event, run_id=run_id), allow_nan=False,
+                             separators=(",", ":")) + "\n"
+        path = self._event_path(run_id)
+        with _LOCK:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8", newline="\n") as stream:
+                stream.write(payload)
+
+    def read_events(self, run_id: str) -> list[dict]:
+        path = self._event_path(run_id)
+        with _LOCK:
+            if not path.exists():
+                return []
+            return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
+                    if line.endswith("}")]
+
     def list_runs(self) -> list[dict]:
         """Return sorted run IDs and their counts of completed records.
 
