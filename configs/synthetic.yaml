@@ -1,0 +1,55 @@
+# Synthetic fixture — the local dev loop, no download required.
+#
+#   python -m src.data.synthetic --n 300 --out data/synthetic
+#   python -m src.data.dataset --check --config configs/synthetic.yaml
+#   python -m src.train.train --config configs/synthetic.yaml
+#
+# Labels come from src/data/synthetic.py::analytic_cd plus gaussian noise, so
+# the achievable R² is known (~0.97). If training lands well under that, the
+# bug is ours. Never report a number from this config as a result.
+
+run_name: synthetic
+seed: 0
+
+data:
+  kind: pointcloud
+  labels_csv: data/synthetic/drag_coefficients.csv
+  mesh_dir: data/synthetic/meshes
+  mesh_glob: "*.stl"
+
+  id_column: Design
+  target_column: Average Cd
+  category_column: Category    # fastback | notchback | estate
+
+  n_points: 2048               # half the real config: the fixture is simple
+  normalize_geometry: true
+  cache_dir: data/synthetic/cache
+
+  val_fraction: 0.15
+  test_fraction: 0.15
+
+model:
+  kind: pointnet
+  hidden_dim: 256
+  n_layers: 4
+  dropout: 0.1
+  heteroscedastic: true
+
+train:
+  epochs: 120
+  batch_size: 16
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  num_workers: 0               # the cache is warmed up front; workers add nothing
+  amp: false                   # CUDA only; MPS and CPU ignore it anyway
+  # The uncertainty head is trained in a second phase, against a frozen
+  # mean -- see the module docstring in src/train/train.py. This is what
+  # keeps sigma calibrated instead of collapsing.
+  two_stage: true
+  variance_epochs: 300
+  variance_patience: 40
+  variance_lr: 3.0e-3
+  nll_beta: 0.5                # only used with --single-stage
+  patience: 25
+  out_dir: runs

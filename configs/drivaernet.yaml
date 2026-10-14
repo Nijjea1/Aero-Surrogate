@@ -1,0 +1,81 @@
+# REAL DrivAerNet data — design parameters → Cd. No meshes needed.
+#
+#   python -m src.data.drivaernet --fetch
+#   python -m src.data.dataset --check --config configs/drivaernet.yaml
+#   python -m src.train.train --config configs/drivaernet.yaml
+#   python -m src.train.train --config configs/drivaernet.yaml --split category
+#
+# 4,165 designs, 23 morph parameters, CFD-measured Average Cd.
+# Source: github.com/Mohamedelrefaie/DrivAerNet — CC BY-NC 4.0, NON-COMMERCIAL.
+#
+# REPORT R² AGAINST 0.906, NOT 1.0. The Std Cd column gives the solver's own
+# run-to-run spread; it caps any model at R² = 0.906. See src/data/drivaernet.py.
+
+run_name: drivaernet
+seed: 0
+
+data:
+  kind: table
+  labels_csv: data/drivaernet/parametric.csv
+
+  id_column: Experiment
+  target_column: Average Cd
+  category_column: Category      # fastback | notchback | estateback, from the id prefix
+
+  # The 23 morph parameters, in CSV order. These are DELTAS from the baseline
+  # DrivAer body, not absolute dimensions, and they are NOT the same space as
+  # contracts.PARAM_BOUNDS — see docs/HANDOFF.md.
+  # The 16 morph parameters of contracts.PARAM_BOUNDS, in that order, plus
+  # the three body-style indicators. Measured better than all 23: the six
+  # side-mirror and door-handle dials and the greenhouse angle contribute
+  # under 0.003 R² between them, and dropping them lifts held-out-category
+  # R² from 0.277 to 0.479. See src/contracts.py.
+  param_columns:
+    - B_Ramp_Angle
+    - B_Diffusor_Angle
+    - B_Trunklid_Angle
+    - D_Rear_Window_Inclination
+    - D_Winscreen_Inclination
+    - D_Winscreen_Length
+    - D_Rear_Window_Length
+    - E_A_B_C_Pillar_Thickness
+    - E_Fenders_Arch_Offset
+    - G_Trunklid_Curvature
+    - G_Trunklid_Length
+    - H_Front_Bumper_Curvature
+    - H_Front_Bumper_Length
+    - A_Car_Length
+    - A_Car_Width
+    - A_Car_Roof_Height
+    - cat_fastback
+    - cat_notchback
+    - cat_estateback
+
+  val_fraction: 0.15
+  test_fraction: 0.15
+
+model:
+  kind: param_mlp
+  in_dim: 19
+  hidden_dim: 256              # 4,165 designs supports more capacity than 300 did
+  n_layers: 3
+  dropout: 0.1
+  heteroscedastic: true
+  quadratic_features: false
+
+train:
+  epochs: 400
+  batch_size: 64
+  lr: 1.0e-3
+  weight_decay: 1.0e-3
+  grad_clip: 1.0
+  num_workers: 0
+  amp: false
+  two_stage: true
+  variance_epochs: 300
+  variance_patience: 30
+  variance_lr: 1.0e-3
+  nll_beta: 0.5
+  ood_quantile: 0.99           # threshold = this quantile of val distances
+  patience: 40
+  out_dir: runs
