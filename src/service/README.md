@@ -60,16 +60,29 @@ the best trusted design plus reasoning; uses one evaluation), `compare` and
 gate and logging; the model never writes its own result.
 
 Before anything is scored, a proposal is refused with a precise reason (never
-clamped) if it names an unknown parameter, leaves the bounds, breaks a
-`--constraint`, or repeats a design already scored. The model gets up to four
-rounds per step to correct itself. The run stops visibly, with the reason in
-its `run_finished` event, after two steps in a row without a valid proposal, a
-provider failure, the run's `--run-budget` (default $0.50), or the global spend
-cap. The agent gates with the thresholds `/schema` reports, so a real
-checkpoint's calibrated OOD threshold applies to the agent as well.
+clamped) if it names an unknown parameter, changes more than two parameters,
+leaves the bounds, breaks a `--constraint`, or repeats a design already scored
+(compared numerically, so `2`, `2.0` and `-0.0`/`0.0` spellings cannot slip
+through). Malformed tool calls get an error reply, never a crash. The model
+gets up to four rounds per step to correct itself. The run stops visibly, with
+the reason in its `run_finished` event, after two steps in a row without a
+valid proposal, a provider failure, the run's `--run-budget` (default $0.50,
+checked before every model call including correction rounds), or the global
+spend cap. A run that fails with an exception still gets a `run_finished`
+event; service readiness is checked before a run ID is reserved. The agent
+gates with the thresholds `/schema` reports, so a real checkpoint's calibrated
+OOD threshold applies to the agent and `/compare` as well.
 
-Costs: every billed call is appended to `runs/spend.jsonl`; calls are refused
-once its total reaches `AERO_SPEND_CAP_USD` (default $5). Measured on the stub:
+`--constraint` takes numeric rules (`NAME >= NUMBER`, also `<=`, `<`, `>`);
+turning a sentence like "keep the roof street-legal" into such a rule is up to
+whoever starts the run, not automatic.
+
+Costs: before each call the client reserves its worst-case cost in
+`runs/spend.jsonl` under a lock shared by threads and processes, and refuses
+the call if the total plus outstanding reservations would pass
+`AERO_SPEND_CAP_USD` (default $5). After the call the reservation is settled
+to the billed amount, released if nothing was billed, or kept in full if the
+response carried no usable usage. Measured on the stub:
 25 Super evaluations cost about $0.025, 10 Nano evaluations about $0.002.
 `--thinking auto` (default) turns model thinking off for Nano, which otherwise
 spends ~1.6k tokens per step and can be cut off before its tool call, and
@@ -170,6 +183,14 @@ What the real model does and does not produce (`/health` -> `output_provenance`)
 of held-out validation designs pass), not the contract's 3.0 placeholder, and
 the contract's uncertainty threshold (checkpoints carry no calibrated one).
 `/schema` reports both values actually in use.
+
+A checkpoint without an OOD detector loads and reports `ood_score: null`; its
+gate is then uncertainty-only, so jointly extreme in-bounds designs are NOT
+screened in that mode and nothing should claim otherwise. A detector that
+measures point-cloud features (`space: "features"`) is refused for a params-v1
+checkpoint. `/evaluate` returns the predictor's own `in_distribution`; the
+shared `rejection_reason` gate is applied by `/compare` and the agent, which
+for the built-in predictors gives the same decision.
 
 Run IDs contain 1-128 letters, digits, hyphens or underscores; Windows device
 names are rejected. Logs live at `runs/logs/<run_id>.jsonl` and are Git-ignored.
