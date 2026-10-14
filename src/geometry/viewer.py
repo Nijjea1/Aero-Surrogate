@@ -25,6 +25,8 @@ from .params import (
     DEFAULT_BODY_STYLE,
     MORPH_BOUNDS,
     _BELT_Z,
+    _TYRE_WIDTH,
+    _WHEEL_RADIUS,
     _build_profile,
     _loft,
     _resolve,
@@ -79,7 +81,29 @@ def mesh_payload(params: dict[str, float], body_style: str = DEFAULT_BODY_STYLE)
         "width_m": float(hi[1] - lo[1]),
         "height_m": float(hi[2] - lo[2]),
         "frontal_area_m2": frontal_area(params, body_style),
+        # The baseline body's area, so drag forces compare like with like.
+        "baseline_frontal_area_m2": frontal_area({}, body_style),
         "ignored_params": sorted(set(params) - set(MORPH_BOUNDS)),
+        "flow": flow_outline(shape),
+    }
+
+
+def flow_outline(shape: dict, n: int = 96) -> dict:
+    """The outline the airflow animation steers around, in the mesh's frame
+    (x nose to tail, z up): roof and underbody lines and the plan half-width
+    at `n` stations, the surface landmarks, and where the wheels are."""
+    x = np.linspace(float(shape["x"][0]), float(shape["x"][-1]), n)
+    pick = lambda key: np.round(np.interp(x, shape["x"], shape[key]), 4).tolist()  # noqa: E731
+    return {
+        "x": np.round(x, 4).tolist(),
+        "z_top": pick("z_top"),
+        "z_bot": pick("z_bot"),
+        "half_width": pick("width"),
+        "landmarks": {k: round(float(v), 4) for k, v in shape["landmarks"].items()},
+        "axles": [round(float(a), 4) for a in shape["axles"]],
+        "wheel_y": round(float(shape["wheel_y"]), 4),
+        "wheel_radius": _WHEEL_RADIUS,
+        "tyre_width": _TYRE_WIDTH,
     }
 
 

@@ -65,12 +65,38 @@
       </div>
       <div class="viewer" id="viewer">
         <div class="viewer-message" id="viewer-message">Loading the 3D view…</div>
+        <div class="flow-hud" id="flow-hud" hidden>
+          <div class="hud-title"><span id="hud-speed">110 km/h</span><span class="hud-sub">from the prediction</span></div>
+          <dl>
+            <div><dt>Drag force</dt><dd><span id="hud-drag">–</span><small id="hud-drag-delta"></small></dd></div>
+            <div><dt>Power to push the air</dt><dd><span id="hud-power">–</span></dd></div>
+            <div><dt>Energy, drag only</dt><dd><span id="hud-energy">–</span><small id="hud-energy-delta"></small></dd></div>
+            <div><dt>Lift <abbr title="Cl is predicted but not yet validated against CFD">unvalidated</abbr></dt><dd><span id="hud-lift">–</span></dd></div>
+          </dl>
+          <div class="hud-flag" id="hud-flag" hidden>Gate rejected: airflow greyed out</div>
+        </div>
       </div>
       <div class="viewer-foot">
         <div class="cp-legend" id="cp-legend" aria-hidden="true">
           <span>Cp ≤ −0.8</span><i class="cp-ramp"></i><span>≥ +0.8</span>
         </div>
         <span class="dims" id="dims"></span>
+      </div>
+      <div class="flow-bar">
+        <div class="segmented" role="group" aria-label="Airflow" id="flow-modes">
+          <button type="button" data-flow="off" aria-pressed="true">Still</button>
+          <button type="button" data-flow="tunnel" aria-pressed="false">Wind tunnel</button>
+          <button type="button" data-flow="drive" aria-pressed="false">Driving</button>
+        </div>
+        <label class="speed" for="speed">
+          <span>Speed</span>
+          <input type="range" id="speed" min="30" max="200" step="5" value="110">
+          <output id="speed-value" for="speed">110 km/h</output>
+        </label>
+        <div class="flow-actions">
+          <button type="button" class="link-button" id="flow-pause" hidden>Pause</button>
+          <button type="button" class="link-button" id="fullscreen">Full screen</button>
+        </div>
       </div>
       <p class="chart-note" id="viewer-caption"></p>
       <p class="chart-note viewer-warning" id="viewer-ignored" hidden></p>

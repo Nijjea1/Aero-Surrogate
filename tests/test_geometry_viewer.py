@@ -68,6 +68,32 @@ def test_old_parameter_names_are_reported():
     assert payload["ignored_params"] == ["ride_height"]
 
 
+def test_flow_outline_wraps_the_mesh(payload):
+    """The airflow steers around this outline, so it must hug the real body."""
+    flow = payload["flow"]
+    vertices = _decode(payload, "vertices", np.float32).reshape(-1, 3)
+    region = _decode(payload, "region", np.int8)
+    body = vertices[region != REGIONS.index("wheel_wells")]
+    x = np.asarray(flow["x"])
+    assert len(x) == len(flow["z_top"]) == len(flow["z_bot"]) == len(flow["half_width"])
+    assert np.all(np.diff(x) > 0)
+    assert x[0] == pytest.approx(body[:, 0].min(), abs=0.02)
+    assert x[-1] == pytest.approx(body[:, 0].max(), abs=0.02)
+    assert max(flow["z_top"]) == pytest.approx(body[:, 2].max(), abs=0.03)
+    assert max(flow["half_width"]) == pytest.approx(np.abs(body[:, 1]).max(), abs=0.08)
+    assert np.all(np.asarray(flow["z_bot"]) < np.asarray(flow["z_top"]))
+    marks = flow["landmarks"]
+    assert marks["hood_front"] < marks["cowl"] < marks["roof_front"] < marks["roof_end"] < marks["deck_start"]
+    assert flow["axles"][0] < flow["axles"][1]
+    json.dumps(flow)
+
+
+def test_baseline_area_is_the_style_default():
+    wide = mesh_payload({"A_Car_Width": MORPH_BOUNDS["A_Car_Width"][1]}, "estateback")
+    assert wide["baseline_frontal_area_m2"] == pytest.approx(frontal_area({}, "estateback"))
+    assert wide["frontal_area_m2"] > wide["baseline_frontal_area_m2"]
+
+
 def test_shape_follows_the_parameters():
     base = mesh_payload({}, "notchback")
     wide = mesh_payload({"A_Car_Width": MORPH_BOUNDS["A_Car_Width"][1]}, "notchback")
