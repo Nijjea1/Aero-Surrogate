@@ -40,7 +40,35 @@ The threshold is CALIBRATED, not guessed: set so that a chosen fraction
 mean something -- "this design is further from the training set than 99% of
 real designs are" -- rather than being a magic constant.
 
-WHAT IT ACTUALLY CATCHES, measured rather than asserted:
+TWO SPACES, AND ONLY ONE OF THEM WORKS. Measured, and this is the most
+important thing in this file:
+
+                                          val FPR   held-out category caught
+    parameter space, full covariance          0.3%            100%
+    feature space, Mahalanobis diagonal       3.3%              0%
+    feature space, kNN k=5                    3.3%             26%
+    feature space, PCA-32 + full cov          3.3%             11%
+    feature space, PCA-8 reconstruction       3.3%              6%
+
+The TABULAR path gets a real detector. The POINT-CLOUD path does not. Eight
+methods were tried on the pooled PointNet features and the best caught a
+quarter of genuinely out-of-distribution designs. The reason is not the
+estimator: a notchback's pooled features sit comfortably inside the range of
+fastback and estateback features, because the encoder was never trained to
+separate body styles and max-pooled extremal features of a car are similar
+across them.
+
+So feature-space OOD here is a WEAK SIGNAL, not a gate. It is shipped with
+method="knn" because 26% beats the 0% that Mahalanobis gave -- a detector that
+silently does nothing is worse than one labelled weak -- but nothing should
+depend on it. If the geometry model is ever served, say in the writeup that its
+OOD detection is unreliable rather than implying the tabular numbers carry over.
+
+This is also the strongest argument for serving the PARAMETRIC model behind
+/evaluate, which is what contracts 2.0.0 enables: that path has a detector that
+demonstrably works.
+
+WHAT THE PARAMETER-SPACE DETECTOR CATCHES, measured rather than asserted:
 
     ordinary designs, body style seen in training     0.3 - 1.7% flagged
     in-bounds but jointly EXTREME parameter corners        100% flagged
@@ -77,7 +105,19 @@ import numpy as np
 
 @dataclass
 class OODDetector:
-    """Mahalanobis distance to the training set, with a calibrated threshold."""
+    """Mahalanobis distance to the training set, with a calibrated threshold.
+
+    `space` records WHAT the distance is measured in:
+      "parameters" -- the standardised design vector (the tabular path)
+      "features"   -- the model's pooled encoder output (the point-cloud path,
+                      where there is no parameter vector to compare)
+
+    `diagonal` records whether the full covariance was estimable. With fewer
+    samples than dimensions it is not -- the sample covariance is singular and
+    its inverse is noise -- so we fall back to a diagonal, which keeps the
+    per-dimension scaling and drops the cross-terms. Stated rather than hidden,
+    because a diagonal detector is weaker and the writeup should say so.
+    """
 
     mean: list[float]
     cov_inv: list[list[float]]
@@ -85,6 +125,11 @@ class OODDetector:
     quantile: float
     n_train: int
     train_scores: dict[str, float]
+    space: str = "parameters"
+    diagonal: bool = False
+    method: str = "mahalanobis"      # "mahalanobis" | "knn"
+    k: int = 5
+    reference: list[list[float]] | None = None   # knn only: the training points
 
     # -- fitting ----------------------------------------------------------
 
@@ -95,6 +140,11 @@ class OODDetector:
         x_calib: np.ndarray | None = None,
         quantile: float = 0.99,
         shrinkage: float = 1e-3,
+        space: str = "parameters",
+        diagonal: bool | None = None,
+        method: str | None = None,
+        k: int = 5,
+        max_reference: int = 4000,
     ) -> "OODDetector":
         """Fit on the training inputs; calibrate the threshold on held-out ones.
 
@@ -105,32 +155,57 @@ class OODDetector:
         x_train = np.asarray(x_train, dtype=np.float64)
         if x_train.ndim != 2:
             raise ValueError(f"expected (n, p), got {x_train.shape}")
-        if len(x_train) <= x_train.shape[1]:
-            raise ValueError(
-                f"{len(x_train)} samples for {x_train.shape[1]} parameters is "
-                f"too few to estimate a covariance"
-            )
+        n, p = x_train.shape
+        if n < 4:
+            raise ValueError(f"{n} samples is too few to fit a detector")
+
+        # A full covariance needs comfortably more samples than dimensions;
+        # below that the sample covariance is singular or near enough that its
+        # inverse is noise. The point-cloud path hits this routinely -- 18
+        # training meshes against a 256-dimensional feature space -- so fall
+        # back to a diagonal instead of refusing to fit at all.
+        if diagonal is None:
+            diagonal = n < 2 * p
+        if method is None:
+            # In feature space a covariance -- full or diagonal -- barely
+            # separates anything; measured, it caught 0% of held-out-category
+            # designs. kNN distance caught 26%. Still weak, but 0% is worse
+            # than weak: it is a detector that silently does nothing.
+            method = "knn" if space == "features" else "mahalanobis"
 
         mean = x_train.mean(axis=0)
-        cov = np.cov(x_train, rowvar=False)
-        # Ridge the diagonal: a parameter the data never varied gives a
-        # singular covariance, and the inverse then blows up.
-        cov = cov + shrinkage * np.eye(cov.shape[0]) * np.trace(cov) / cov.shape[0]
-        cov_inv = np.linalg.inv(cov)
+        if diagonal:
+            var = x_train.var(axis=0)
+            floor = shrinkage * max(float(var.mean()), 1e-12)
+            cov_inv = np.diag(1.0 / np.maximum(var, floor))
+        else:
+            cov = np.cov(x_train, rowvar=False)
+            # Ridge the diagonal: a parameter the data never varied gives a
+            # singular covariance, and the inverse then blows up.
+            cov = cov + shrinkage * np.eye(p) * np.trace(cov) / p
+            cov_inv = np.linalg.inv(cov)
 
         det = cls(
             mean=mean.tolist(),
             cov_inv=cov_inv.tolist(),
             threshold=float("inf"),
             quantile=float(quantile),
-            n_train=int(len(x_train)),
+            n_train=int(n),
             train_scores={},
+            space=space,
+            diagonal=bool(diagonal),
+            method=str(method),
+            k=int(k),
+            reference=(x_train[
+                np.linspace(0, n - 1, min(n, max_reference)).astype(int)
+            ].tolist() if method == "knn" else None),
         )
 
         calib = x_train if x_calib is None else np.asarray(x_calib, dtype=np.float64)
         scores = det.score(calib)
         det.threshold = float(np.quantile(scores, quantile))
         det.train_scores = {
+            "n_dims": int(p),
             "calibrated_on": "train" if x_calib is None else "val",
             "n_calib": int(len(calib)),
             "mean": float(scores.mean()),
@@ -144,8 +219,16 @@ class OODDetector:
     # -- scoring ----------------------------------------------------------
 
     def score(self, x: np.ndarray) -> np.ndarray:
-        """Mahalanobis distance for each row. Lower is more familiar."""
+        """Distance from the training set for each row. Lower is more familiar."""
         x = np.atleast_2d(np.asarray(x, dtype=np.float64))
+        if self.method == "knn":
+            from scipy.spatial import cKDTree
+
+            ref = np.asarray(self.reference, dtype=np.float64)
+            k = min(int(self.k), len(ref))
+            dist = cKDTree(ref).query(x, k=k)[0]
+            # distance to the k-th neighbour, not the mean of the k
+            return np.atleast_2d(dist)[:, -1] if k > 1 else np.ravel(dist)
         delta = x - np.asarray(self.mean)
         m = np.einsum("ij,jk,ik->i", delta, np.asarray(self.cov_inv), delta)
         return np.sqrt(np.maximum(m, 0.0))

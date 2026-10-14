@@ -431,11 +431,23 @@ def test_detector_round_trips_through_a_checkpoint():
     assert back.threshold == det.threshold
 
 
-def test_detector_refuses_too_few_samples():
+def test_detector_refuses_only_when_truly_too_few_samples():
+    """It used to refuse whenever samples <= dimensions. That blocked the
+    point-cloud path entirely (18 meshes, 256 feature dims), so scarce data now
+    degrades to a diagonal covariance and only a handful of samples refuses."""
     from src.train.ood import OODDetector
 
     with pytest.raises(ValueError):
-        OODDetector.fit(_gaussian_cloud(n=4, p=8))
+        OODDetector.fit(_gaussian_cloud(n=3, p=8))
+
+    # fewer samples than dimensions: fits, diagonally
+    det = OODDetector.fit(_gaussian_cloud(n=8, p=16), quantile=0.99,
+                          method="mahalanobis")
+    assert det.diagonal is True
+    assert np.isfinite(det.score(_gaussian_cloud(n=5, p=16))).all()
+
+    with pytest.raises(ValueError):
+        OODDetector.fit(np.zeros((10,)))  # wrong shape
 
 
 def test_detection_rate_reports_a_fraction():
@@ -524,3 +536,81 @@ def test_resume_without_state_starts_fresh(cfg, tmp_path):
     c = _kaggle_like_cfg(cfg, tmp_path, epochs=1, variance_epochs=1)
     result = train(c, device_str="cpu", resume=True)
     assert "r2" in result["test"]
+
+
+def test_detector_falls_back_to_diagonal_when_samples_are_scarce():
+    """18 training meshes against a 256-dim feature space is routine on the
+    point-cloud path. A full covariance is unestimable there, so it must
+    degrade to a diagonal instead of refusing to fit."""
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud(n=20, p=64)
+    det = OODDetector.fit(x[:16], x_calib=x[16:], quantile=0.99,
+                          method="mahalanobis")
+    assert det.diagonal is True
+    assert np.isfinite(det.score(x[16:])).all()
+
+    wide = _gaussian_cloud(n=400, p=8)
+    full = OODDetector.fit(wide[:300], x_calib=wide[300:], quantile=0.99,
+                           method="mahalanobis")
+    assert full.diagonal is False
+
+
+def test_feature_space_defaults_to_knn():
+    """Mahalanobis in feature space was measured at 0% detection; kNN got 26%.
+    The default must follow the measurement, not the convention."""
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud(n=200, p=32)
+    feat = OODDetector.fit(x[:150], x_calib=x[150:], space="features")
+    param = OODDetector.fit(x[:150], x_calib=x[150:], space="parameters")
+    assert feat.method == "knn"
+    assert feat.reference is not None
+    assert param.method == "mahalanobis"
+    assert param.reference is None
+
+
+def test_knn_detector_separates_near_from_far():
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud(n=300, p=16)
+    det = OODDetector.fit(x[:250], x_calib=x[250:], space="features", k=5)
+    near = det.score(x[250:])
+    far = det.score(np.full((20, 16), 20.0))
+    assert far.min() > near.max()
+    assert det.is_in_distribution(x[250:]).mean() > 0.9
+    assert not det.is_in_distribution(np.full((5, 16), 20.0)).any()
+
+
+def test_knn_reference_is_subsampled_and_round_trips():
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud(n=600, p=8)
+    det = OODDetector.fit(x[:500], x_calib=x[500:], space="features",
+                          max_reference=100)
+    assert len(det.reference) == 100
+    back = OODDetector.from_dict(det.to_dict())
+    assert np.allclose(det.score(x[500:]), back.score(x[500:]))
+
+
+@pytest.mark.parametrize("kind", ["pointnet", "param_mlp"])
+def test_models_expose_pooled_features_for_ood(kind):
+    """The point-cloud path has no parameter vector, so OOD distance is
+    measured in the model's pooled feature space. Both models must expose it,
+    and it must be what the heads actually consume."""
+    from src.train.model import build_model
+
+    cfg = {"model": {"kind": kind, "hidden_dim": 32, "n_layers": 2,
+                     "dropout": 0.0, "heteroscedastic": True}}
+    model = build_model(cfg)
+    model.eval()
+    x = (torch.randn(4, 64, 3) if kind == "pointnet"
+         else torch.randn(4, len(PARAM_NAMES)))
+
+    with torch.no_grad():
+        feats = model.features(x)
+        out = model(x)
+        direct = model._emit(feats)
+
+    assert feats.dim() == 2 and feats.shape[0] == 4
+    assert torch.allclose(out, direct), "features() is not what forward() uses"

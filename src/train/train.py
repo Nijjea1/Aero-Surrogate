@@ -573,28 +573,58 @@ def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
     # set the detector was fitted on are optimistically small, and a threshold
     # read off them rejects legitimate designs at serving time.
     detector = None
-    if norm.param_mean is not None:
-        def standardised(ds_):
-            return (np.asarray(ds_.x, np.float64)
-                    - np.asarray(norm.param_mean)) / np.asarray(norm.param_std)
 
-        try:
-            detector = OODDetector.fit(
-                standardised(datasets["train"]),
-                x_calib=standardised(datasets["val"]),
-                quantile=float(t.get("ood_quantile", 0.99)),
-            )
-            print(f"\nood      Mahalanobis, threshold {detector.threshold:.3f} "
-                  f"at the {detector.quantile:.0%} quantile of val")
-            print(f"         val distances  p50 {detector.train_scores['p50']:.2f}  "
-                  f"p95 {detector.train_scores['p95']:.2f}  "
-                  f"max {detector.train_scores['max']:.2f}")
-            held_x = standardised(datasets["test"])
-            flagged = float((detector.score(held_x) > detector.threshold).mean())
-            label = "OOD designs flagged" if held else "test designs flagged (expect ~1%)"
-            print(f"         {label}: {flagged:.1%}")
-        except ValueError as exc:
-            print(f"\nood      skipped: {exc}")
+    if norm.param_mean is not None:
+        # Tabular path: distance in standardised parameter space.
+        space = "parameters"
+
+        def ood_inputs(name: str) -> np.ndarray:
+            x = np.asarray(datasets[name].x, np.float64)
+            return (x - np.asarray(norm.param_mean)) / np.asarray(norm.param_std)
+    else:
+        # Point-cloud path: a mesh has no parameter vector, so measure
+        # distance in the model's own pooled feature space instead. Without
+        # this, geometry checkpoints shipped with ood=None and the gate fell
+        # back to thresholding sigma -- which was measured and does not work.
+        space = "features"
+
+        @torch.no_grad()
+        def ood_inputs(name: str) -> np.ndarray:
+            model.eval()
+            out = []
+            for x, _ in loaders[name]:
+                x = x.to(device, non_blocking=True).float()
+                out.append(model.features(_standardise_inputs(x, norm, device))
+                           .cpu().numpy())
+            return np.concatenate(out).astype(np.float64)
+
+    try:
+        detector = OODDetector.fit(
+            ood_inputs("train"),
+            x_calib=ood_inputs("val"),
+            quantile=float(t.get("ood_quantile", 0.99)),
+            space=space,
+        )
+        if detector.method == "knn":
+            kind = f"kNN k={detector.k}"
+        else:
+            kind = "Mahalanobis, " + ("diagonal" if detector.diagonal
+                                      else "full covariance")
+        print(f"\nood      {kind} in {space} space "
+              f"({detector.train_scores['n_dims']} dims)")
+        if space == "features":
+            print("         NOTE: feature-space detection is a weak signal, not "
+                  "a gate -- see src/train/ood.py")
+        print(f"         threshold {detector.threshold:.3f} at the "
+              f"{detector.quantile:.0%} quantile of val")
+        print(f"         val distances  p50 {detector.train_scores['p50']:.2f}  "
+              f"p95 {detector.train_scores['p95']:.2f}  "
+              f"max {detector.train_scores['max']:.2f}")
+        flagged = float((detector.score(ood_inputs("test")) > detector.threshold).mean())
+        label = "OOD designs flagged" if held else "test designs flagged (expect ~1%)"
+        print(f"         {label}: {flagged:.1%}")
+    except ValueError as exc:
+        print(f"\nood      skipped: {exc}")
 
     # --- test -------------------------------------------------------------
     test = evaluate(model, loaders["test"], device, norm)
