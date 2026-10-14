@@ -88,9 +88,11 @@ def test_run_refuses_reuse_even_empty(tmp_path, monkeypatch, existing):
     assert target.read_text() == existing
 
 
-def test_live_mode_is_explicitly_unavailable(tmp_path, monkeypatch):
+def test_live_mode_without_key_fails_before_creating_a_run(tmp_path, monkeypatch):
     monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
-    with pytest.raises(NotImplementedError, match="Live Nemotron"):
+    monkeypatch.setenv("AERO_ENV_FILE", str(tmp_path / "absent.env"))
+    monkeypatch.delenv("NEBIUS_API_KEY", raising=False)
+    with pytest.raises(designer.ProviderError, match="NEBIUS_API_KEY"):
         designer.run(1, "live", False)
     assert not (tmp_path / "live.jsonl").exists()
 
