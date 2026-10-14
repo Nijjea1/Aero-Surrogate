@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aero Surrogate</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Aero Surrogate</h1>
+      <p class="tagline">Drag, lift and a confidence verdict for one car design, in milliseconds.</p>
+    </div>
+    <div class="service" id="service-status" role="status">
+      <span class="dot"></span><span class="service-text">Connecting to the service…</span>
+    </div>
+  </header>
+
+  <div class="banner banner-warning" id="synthetic-banner" hidden>
+    <span class="banner-icon" aria-hidden="true">!</span>
+    <span><strong>Synthetic predictions.</strong> The service is running the stub, not a trained model.
+      These numbers test the plumbing; they are not aerodynamic results.</span>
+  </div>
+
+  <div class="banner banner-critical" id="error-banner" hidden>
+    <span class="banner-icon" aria-hidden="true">✕</span>
+    <span id="error-text"></span>
+  </div>
+
+  <main class="layout">
+    <section class="panel design" aria-labelledby="design-title">
+      <div class="panel-head">
+        <h2 id="design-title">Design</h2>
+        <button type="button" class="link-button" id="reset-button">Reset to baseline</button>
+      </div>
+
+      <div class="field" id="body-style-field" hidden>
+        <label for="body-style">Body style</label>
+        <select id="body-style"></select>
+      </div>
+
+      <div class="presets" role="group" aria-label="Preset designs" id="presets"></div>
+      <p class="preset-hint" id="preset-hint"></p>
+
+      <div class="sliders" id="sliders"></div>
+    </section>
+
+    <section class="panel results" aria-labelledby="results-title">
+      <div class="panel-head">
+        <h2 id="results-title">Prediction</h2>
+        <span class="timing" id="timing"></span>
+      </div>
+
+      <div class="verdict" id="verdict" data-state="pending">
+        <span class="verdict-icon" aria-hidden="true">…</span>
+        <div>
+          <div class="verdict-label" id="verdict-label">Waiting for the first prediction</div>
+          <div class="verdict-reason" id="verdict-reason"></div>
+        </div>
+      </div>
+
+      <div class="tiles">
+        <div class="tile tile-hero">
+          <div class="tile-label">Drag coefficient, Cd</div>
+          <div class="tile-value" id="cd-value">–</div>
+          <div class="tile-delta" id="cd-delta"></div>
+        </div>
+        <div class="tile">
+          <div class="tile-label">Lift coefficient, Cl</div>
+          <div class="tile-value" id="cl-value">–</div>
+          <div class="tile-delta" id="cl-delta"></div>
+        </div>
+        <div class="tile">
+          <div class="tile-label">Uncertainty, σ on Cd</div>
+          <div class="tile-value" id="sigma-value">–</div>
+          <div class="meter" id="sigma-meter" aria-hidden="true">
+            <div class="meter-fill" id="sigma-fill"></div>
+            <div class="meter-mark" id="sigma-mark"></div>
+          </div>
+          <div class="tile-delta" id="sigma-note"></div>
+        </div>
+      </div>
+
+      <div class="chart-block">
+        <div class="chart-head">
+          <h3>Mean pressure coefficient by region</h3>
+          <div class="legend" aria-hidden="true">
+            <span><i class="swatch swatch-neg"></i>Suction (Cp &lt; 0)</span>
+            <span><i class="swatch swatch-pos"></i>Pressure (Cp &gt; 0)</span>
+          </div>
+        </div>
+        <div class="pressure" id="pressure" role="table" aria-label="Mean pressure coefficient by region"></div>
+        <p class="chart-note" id="pressure-note"></p>
+      </div>
+
+      <div class="history-block">
+        <h3>This session</h3>
+        <table class="history">
+          <thead>
+            <tr><th scope="col">Design</th><th scope="col" class="num">Cd</th>
+              <th scope="col" class="num">σ</th><th scope="col">Verdict</th></tr>
+          </thead>
+          <tbody id="history"></tbody>
+        </table>
+        <p class="chart-note">Click a row to load that design again.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>
