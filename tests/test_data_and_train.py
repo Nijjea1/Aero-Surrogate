@@ -19,9 +19,15 @@ import numpy as np
 import pytest
 import torch
 
-from src.contracts import PARAM_NAMES, default_params
+from src.contracts import PARAM_NAMES
 from src.data import dataset as ds
-from src.data.synthetic import generate, params_to_synthetic_mesh
+from src.data.synthetic import (
+    SYNTH_BOUNDS,
+    SYNTH_NAMES,
+    generate,
+    params_to_synthetic_mesh,
+    synth_default_params,
+)
 from src.train.model import (
     LOGVAR_MAX,
     LOGVAR_MIN,
@@ -113,18 +119,19 @@ def test_preprocess_spec_matches_what_sample_mesh_does(cfg):
 
 def test_synthetic_meshes_are_watertight():
     """A leaky mesh makes area-weighted sampling meaningless."""
-    assert params_to_synthetic_mesh(default_params()).is_watertight
+    assert params_to_synthetic_mesh(synth_default_params()).is_watertight
 
 
 def test_geometry_responds_to_every_parameter():
-    """Each parameter must change the shape. One that does not would be
-    invisible to the point-cloud model and silently unlearnable."""
-    base = params_to_synthetic_mesh(default_params())
-    for name in PARAM_NAMES:
-        from src.contracts import PARAM_BOUNDS
+    """Each fixture parameter must change the shape. One that does not would be
+    invisible to the point-cloud model and silently unlearnable.
 
-        moved = dict(default_params())
-        lo, hi = PARAM_BOUNDS[name]
+    Uses the fixture's own space, not the contract's -- see the note at the top
+    of src/data/synthetic.py on why the two are deliberately decoupled."""
+    base = params_to_synthetic_mesh(synth_default_params())
+    for name in SYNTH_NAMES:
+        moved = dict(synth_default_params())
+        lo, hi = SYNTH_BOUNDS[name]
         moved[name] = hi
         other = params_to_synthetic_mesh(moved)
         assert not np.allclose(base.bounds, other.bounds, atol=1e-9) or not np.isclose(
@@ -352,3 +359,87 @@ def test_training_produces_a_loadable_checkpoint(cfg, tmp_path):
     cd = float(mu[0]) * norm["target_std"] + norm["target_mean"]
     assert 0.05 < cd < 1.0, f"Cd {cd} is not physically plausible"
     assert float(sigma[0]) * norm["target_std"] > 0
+
+
+# --------------------------------------------------------------------------
+# OOD detection. Load-bearing: contracts.is_in_distribution consumes it, and
+# it is what closes the hole a sigma-only gate leaves open.
+# --------------------------------------------------------------------------
+
+
+def _gaussian_cloud(n=600, p=6, seed=0):
+    rng = np.random.default_rng(seed)
+    return rng.normal(size=(n, p))
+
+
+def test_detector_passes_familiar_designs_and_flags_far_ones():
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud()
+    det = OODDetector.fit(x[:500], x_calib=x[500:], quantile=0.99)
+
+    assert det.is_in_distribution(x[500:]).mean() > 0.9
+    far = np.full((10, x.shape[1]), 25.0)
+    assert not det.is_in_distribution(far).any()
+
+
+def test_detector_flags_an_extreme_corner_that_bounds_checking_accepts():
+    """The hole this closes. Every coordinate legal, the combination absurd --
+    clamp_params accepts it and only the joint distance rejects it."""
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud(p=16)
+    det = OODDetector.fit(x[:500], x_calib=x[500:], quantile=0.99)
+
+    # Each coordinate well inside the observed per-dimension range...
+    per_dim_max = np.abs(x).max(axis=0)
+    corner = (per_dim_max * 0.9)[None, :]
+    assert (np.abs(corner) <= per_dim_max).all(), "not actually in bounds"
+    # ...yet the combination is nowhere near the data.
+    assert det.score_one(corner) > det.threshold
+
+
+def test_detector_threshold_tracks_the_quantile():
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud()
+    loose = OODDetector.fit(x[:500], x_calib=x[500:], quantile=0.999)
+    tight = OODDetector.fit(x[:500], x_calib=x[500:], quantile=0.80)
+    assert tight.threshold < loose.threshold
+
+
+def test_detector_survives_a_constant_column():
+    """A parameter the data never varied makes the covariance singular. The
+    held-out-category split produces exactly this, so it must not blow up."""
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud()
+    x[:, 0] = 0.0
+    det = OODDetector.fit(x[:500], x_calib=x[500:], quantile=0.99)
+    assert np.isfinite(det.score(x[500:])).all()
+
+
+def test_detector_round_trips_through_a_checkpoint():
+    from src.train.ood import OODDetector
+
+    x = _gaussian_cloud()
+    det = OODDetector.fit(x[:500], x_calib=x[500:], quantile=0.99)
+    back = OODDetector.from_dict(det.to_dict())
+    assert np.allclose(det.score(x[500:]), back.score(x[500:]))
+    assert back.threshold == det.threshold
+
+
+def test_detector_refuses_too_few_samples():
+    from src.train.ood import OODDetector
+
+    with pytest.raises(ValueError):
+        OODDetector.fit(_gaussian_cloud(n=4, p=8))
+
+
+def test_detection_rate_reports_a_fraction():
+    from src.train.ood import OODDetector, detection_rate
+
+    x = _gaussian_cloud()
+    det = OODDetector.fit(x[:500], x_calib=x[500:], quantile=0.99)
+    assert detection_rate(det, np.full((50, x.shape[1]), 30.0)) == 1.0
+    assert detection_rate(det, x[500:]) < 0.15

@@ -34,7 +34,39 @@ from pathlib import Path
 
 import numpy as np
 
-from src.contracts import PARAM_BOUNDS, PARAM_NAMES
+# --------------------------------------------------------------------------
+# The fixture has its OWN parameter space, deliberately not src.contracts.
+#
+# It used to import PARAM_BOUNDS, and schema 2.0.0 broke it -- correctly, but
+# for no good reason. This generator's job is to produce known-answer data that
+# exercises the loader, the cache, the trainer and the checkpoint. It does not
+# need to model the real design space, and coupling it to a contract that will
+# keep moving just means the dev loop breaks every time the contract does.
+#
+# These eight are intuitive absolute dimensions that make recognisable car
+# shapes. The real space is 16 morph deltas plus a body style; see
+# src/contracts.py. Do not confuse the two, and never report a number produced
+# from this fixture.
+# --------------------------------------------------------------------------
+
+SYNTH_BOUNDS: dict[str, tuple[float, float]] = {
+    "ride_height": (0.10, 0.20),         # m, floor to underbody
+    "rear_deck_angle": (-5.0, 20.0),     # deg, positive = upswept
+    "windscreen_rake": (25.0, 65.0),     # deg from vertical
+    "boat_tail_angle": (0.0, 18.0),      # deg, rear taper per side
+    "front_overhang": (0.70, 1.05),      # m
+    "roof_curvature": (0.00, 0.35),      # dimensionless
+    "rear_diffuser_angle": (0.0, 15.0),  # deg
+    "track_width": (1.50, 1.70),         # m
+}
+
+SYNTH_NAMES: list[str] = list(SYNTH_BOUNDS)
+
+
+def synth_default_params() -> dict[str, float]:
+    """Midpoint of every fixture bound."""
+    return {k: (lo + hi) / 2.0 for k, (lo, hi) in SYNTH_BOUNDS.items()}
+
 
 # Overall length is fixed; the parameters move everything else. Real DrivAerNet
 # variants hold wheelbase constant too.
@@ -81,10 +113,10 @@ def analytic_cd(params: dict[str, float]) -> float:
 
 
 def sample_params(rng: np.random.Generator, category: str) -> dict[str, float]:
-    """Uniform inside PARAM_BOUNDS, except the deck angle, which the category
+    """Uniform inside SYNTH_BOUNDS, except the deck angle, which the category
     pins to its own band."""
     out: dict[str, float] = {}
-    for name, (lo, hi) in PARAM_BOUNDS.items():
+    for name, (lo, hi) in SYNTH_BOUNDS.items():
         out[name] = float(rng.uniform(lo, hi))
     lo, hi = CATEGORY_DECK_RANGES[category]
     out["rear_deck_angle"] = float(rng.uniform(lo, hi))
@@ -167,7 +199,8 @@ def params_to_synthetic_mesh(params: dict[str, float]):
     """Stitch the station rings into a closed body. Returns a trimesh.Trimesh.
 
     Deliberately NOT the real params_to_mesh -- that is Paramveer's, in
-    src/geometry. This exists only so there are meshes to train on today.
+    src/geometry, and it works on the contract's parameter space, not this
+    fixture's. This exists only so there are meshes to train on today.
     """
     import trimesh
 
@@ -223,7 +256,7 @@ def generate(out_dir: Path, n: int, seed: int = 0) -> dict:
 
         cd = analytic_cd(params) + float(rng.normal(0.0, NOISE_SD))
         row = {"Design": design_id, "Average Cd": round(cd, 6), "Category": category}
-        row.update({k: round(params[k], 6) for k in PARAM_NAMES})
+        row.update({k: round(params[k], 6) for k in SYNTH_NAMES})
         row["Cd_clean"] = round(analytic_cd(params), 6)
         rows.append(row)
 
