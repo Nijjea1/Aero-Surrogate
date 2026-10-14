@@ -22,3 +22,7 @@ runs/
 node_modules/
 web/dist/
 .DS_Store
+
+# Personal planning notes (shared docs/PLAN.md stays tracked)
+docs/TRACK_B_PLAN.md
+docs/personal/
