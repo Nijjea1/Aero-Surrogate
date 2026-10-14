@@ -266,3 +266,37 @@ input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); }
   padding: 8px 10px; font-size: 12px; max-width: 240px;
 }
 .tooltip strong { display: block; margin-bottom: 2px; }
+
+/* ---------- 3D viewer ---------- */
+
+.column { display: grid; gap: 16px; min-width: 0; align-content: start; }
+
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.segmented button {
+  font: inherit; font-size: 12px; cursor: pointer; padding: 4px 10px;
+  border: 0; background: transparent; color: var(--text-secondary);
+}
+.segmented button + button { border-left: 1px solid var(--border); }
+.segmented button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+.viewer {
+  position: relative; height: 340px; border-radius: 8px; overflow: hidden;
+  background: linear-gradient(180deg, var(--page), var(--surface));
+  border: 1px solid var(--border);
+  touch-action: none;
+}
+.viewer canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.viewer canvas:active { cursor: grabbing; }
+.viewer-message {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 16px;
+  text-align: center; font-size: 13px; color: var(--text-secondary);
+}
+.viewer-message code { font-size: 12px; }
+@media (max-width: 560px) { .viewer { height: 260px; } }
+
+.viewer-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.cp-legend { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.cp-ramp { width: 120px; height: 8px; border-radius: 4px; display: inline-block;
+  background: linear-gradient(90deg, #2a78d6, #d6d5d0 50%, #e34948); }
+.dims { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.viewer-warning { color: var(--text-secondary); }

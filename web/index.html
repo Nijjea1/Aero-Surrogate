@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Aero Surrogate</title>
   <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    {"imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }}
+  </script>
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -45,6 +51,29 @@
       <p class="preset-hint" id="preset-hint"></p>
 
       <div class="sliders" id="sliders"></div>
+    </section>
+
+    <div class="column">
+    <section class="panel viewer-panel" aria-labelledby="viewer-title">
+      <div class="panel-head">
+        <h2 id="viewer-title">Shape</h2>
+        <div class="segmented" role="group" aria-label="Colour the car by" id="viewer-modes">
+          <button type="button" data-mode="field" aria-pressed="true">Pressure</button>
+          <button type="button" data-mode="regions" aria-pressed="false">Regions</button>
+          <button type="button" data-mode="plain" aria-pressed="false">Plain</button>
+        </div>
+      </div>
+      <div class="viewer" id="viewer">
+        <div class="viewer-message" id="viewer-message">Loading the 3D view…</div>
+      </div>
+      <div class="viewer-foot">
+        <div class="cp-legend" id="cp-legend" aria-hidden="true">
+          <span>Cp ≤ −0.8</span><i class="cp-ramp"></i><span>≥ +0.8</span>
+        </div>
+        <span class="dims" id="dims"></span>
+      </div>
+      <p class="chart-note" id="viewer-caption"></p>
+      <p class="chart-note viewer-warning" id="viewer-ignored" hidden></p>
     </section>
 
     <section class="panel results" aria-labelledby="results-title">
@@ -107,6 +136,7 @@
         <p class="chart-note">Click a row to load that design again.</p>
       </div>
     </section>
+    </div>
   </main>
 
   <div class="tooltip" id="tooltip" role="tooltip" hidden></div>

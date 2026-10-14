@@ -83,6 +83,16 @@ const state = {
   current: null,
   history: [],
   requestSeq: 0,
+  viewer: null,
+  viewerMode: "field",
+  meshSeq: 0,
+};
+
+const VIEWER_CAPTIONS = {
+  field: "Illustrative pressure worked out from the surface shape, not a model prediction. " +
+    "Stage 2 replaces it with predicted surface pressure.",
+  regions: "Each region painted with the mean Cp the service predicts for it. Gray surfaces belong to no region.",
+  plain: "Drag to orbit, scroll to zoom.",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -246,6 +256,7 @@ function scheduleEvaluate() {
 
 async function runEvaluate() {
   const params = { ...state.params };
+  refreshMesh(params);
   try {
     const result = await evaluate(params);
     if (!result) return;
@@ -290,6 +301,83 @@ function renderResult() {
 
   renderPressure(e.pressure_summary || {});
   renderHistory();
+  state.viewer?.setRegionValues(e.pressure_summary || {});
+}
+
+// ---------------------------------------------------------------- 3D viewer
+
+async function initViewer() {
+  const message = $("viewer-message");
+  try {
+    const { createViewer } = await import("./viewer.js");
+    state.viewer = createViewer($("viewer"), { onHover: hoverCar });
+  } catch (error) {
+    message.textContent = "The 3D view could not load (three.js comes from a CDN, so it needs a connection).";
+    console.error(error);
+    return;
+  }
+  for (const button of $("viewer-modes").querySelectorAll("button")) {
+    button.addEventListener("click", () => setViewerMode(button.dataset.mode));
+  }
+  setViewerMode(state.viewerMode);
+}
+
+function setViewerMode(mode) {
+  state.viewerMode = mode;
+  for (const button of $("viewer-modes").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+  }
+  $("cp-legend").hidden = mode === "plain";
+  $("viewer-caption").textContent = VIEWER_CAPTIONS[mode] +
+    (mode === "regions" && state.health?.synthetic ? " Values are from the synthetic stub." : "");
+  state.viewer?.setMode(mode);
+}
+
+async function refreshMesh(params) {
+  if (!state.viewer) return;
+  const seq = ++state.meshSeq;
+  const body = { params };
+  if (state.bodyStyle) body.body_style = state.bodyStyle;
+  let payload;
+  try {
+    const response = await fetch("/api/mesh", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (response.status === 404 || response.status === 501) {
+      throw new Error("Start the page with <code>python web/serve.py</code> to see the car in 3D.");
+    }
+    payload = await response.json();
+    if (!response.ok) throw new Error(escapeHtml(payload.detail || response.statusText));
+  } catch (error) {
+    if (seq === state.meshSeq) {
+      const message = $("viewer-message");
+      message.hidden = false;
+      message.innerHTML = error.message.includes("<code>") ? error.message : `No 3D view: ${escapeHtml(error.message)}`;
+    }
+    return;
+  }
+  if (seq !== state.meshSeq) return;   // a newer shape is on its way
+  $("viewer-message").hidden = true;
+  state.viewer.setMesh(payload);
+  // The prediction may have landed before the viewer finished loading.
+  state.viewer.setRegionValues(state.current?.evaluation.pressure_summary || {});
+  $("dims").textContent = `${fmt(payload.length_m, 2)} × ${fmt(payload.width_m, 2)} × ${fmt(payload.height_m, 2)} m` +
+    ` · frontal area ${fmt(payload.frontal_area_m2, 2)} m²`;
+  const ignored = payload.ignored_params || [];
+  $("viewer-ignored").hidden = !ignored.length;
+  $("viewer-ignored").textContent = ignored.length
+    ? `The service runs contracts ${state.schema.schema_version}; the 3D car follows the 2.0.0 parameters, ` +
+      "so these sliders don't reshape it yet. It shows the baseline body until 2.0.0 lands."
+    : "";
+}
+
+function hoverCar(info, event) {
+  if (!info) { hideTooltip(); return; }
+  const name = info.name ? REGION_NAMES[info.name] || info.name : "Side (no region)";
+  const value = info.value === null || info.value === undefined
+    ? (info.mode === "plain" ? "" : "no value")
+    : `Cp ${signed(info.value, 2)}${info.mode === "field" ? " (illustrative)" : ""}`;
+  showTooltip(event, `<strong>${escapeHtml(name)}</strong>${value}`);
 }
 
 function renderDelta(el, value, base, lowerIsBetter) {
@@ -450,6 +538,8 @@ async function start() {
   }
   renderService();
   buildControls();
+  // three.js comes from a CDN; never hold the first prediction for it.
+  initViewer().then(() => refreshMesh({ ...state.params }));
 
   // Baseline first, so every later design can show its delta against it.
   state.params = clampToBounds(state.schema.defaults);
