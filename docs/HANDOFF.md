@@ -1,105 +1,141 @@
 # Checkpoint handoff — training → service
 
 **From:** Avneet (`src/data`, `src/train`)
-**To:** Pranoy (`src/service`), Paramveer (`src/eval`)
-**Status:** stage 1. Written Oct 13, before the Oct 15 gate, so the format is
-settled before there is a real number in it.
+**To:** Pranoy (`src/service`), Paramveer (`src/eval`, `src/geometry`)
+**Schema:** 2.0.0 · updated Oct 14
 
-This is not a contract change. `src/contracts.py` is untouched. It documents
-the one thing `contracts.py` does not pin down and cannot be inferred from the
-checkpoint alone.
+Read this before wiring `/evaluate` to a real checkpoint. It is short on purpose.
 
 ---
 
-## The problem this solves
+## 1. The parameter space changed. Read this first.
 
-`POST /evaluate` takes `params`. The stage-1 model takes a **point cloud**. So
-the service has to do:
+`src/contracts.py` moved to **schema 2.0.0**. The old eight parameters
+(`ride_height`, `boat_tail_angle`, `roof_curvature`, …) were invented on day 0
+and the real DrivAerNet data does not have them — three had no counterpart at
+all, and the rest are morph **deltas** from a baseline body in mixed units, not
+absolute dimensions. A model trained on real data could not have been served
+behind a 1.0.0 `/evaluate`.
 
-```
-params ──> params_to_mesh ──> sample to a point cloud ──> model
-          (Paramveer)         (???)                       (Avneet)
-```
+The new space is **16 morph parameters + body style = 19 model inputs.**
 
-That middle step is not in any contract. If the service samples 1024 points
-when the model trained on 4096, or centres on the centroid when training
-centred on the bounding box, or samples vertices instead of sampling the
-surface by area, **the model still returns a confident number and that number
-is wrong**. Nothing fails. No test catches it.
+Not 23. All 23 were measured; the six side-mirror and door-handle dials plus
+the greenhouse angle contribute under 0.003 R² between them, and dropping them
+makes the model *better*:
 
-So every checkpoint carries a `preprocess` key describing exactly how its
-input was built. Read it at load time; do not hardcode the values.
+| Contract | Random R² | Held-out-category R² |
+|---|---|---|
+| all 23 + body style | 0.873 | 0.277 |
+| **16 aero + body style** | **0.875** | **0.479** |
+| 8 aero + body style | 0.845 | 0.069 |
+| 8 aero, no body style | 0.488 | 0.281 |
+
+Three things follow:
+
+- **`body_style` is a field on `Design` and `IterationRecord`**, not metadata.
+  The parameters are deltas from a *different baseline body per style*, so a
+  model that cannot tell which baseline it is perturbing loses 0.39 R².
+  `BODY_STYLES = ["fastback", "notchback", "estateback"]`.
+- **`default_params()` is all zeros** — the real baseline DrivAer body. Not the
+  midpoint of the bounds; the bounds are asymmetric, so the midpoint is a
+  different and meaningless car. Optimisation runs start at zero.
+- **Units**: degrees for angles, millimetres for lengths, dimensionless for
+  curvatures. All offsets from the baseline.
 
 ---
 
-## What is in the checkpoint
+## 2. The gate is no longer a sigma threshold
 
-```python
-ckpt = torch.load("runs/<run>/best.pt", map_location="cpu", weights_only=False)
-```
+Use **`contracts.is_in_distribution(uncertainty, ood_score, body_style)`**. It
+returns `(ok, reason)`. Put the reason in `IterationRecord.reject_reason` and in
+the agent's prompt — an agent told *why* it was rejected adapts; one told only
+"no" hammers.
 
-| Key | What it is |
+The old gate was `sigma < UNCERTAINTY_THRESHOLD`. It was measured and it does
+not work:
+
+| | cd R² | mean sigma | 1σ coverage |
+|---|---|---|---|
+| in distribution | 0.875 | 0.0072 | 0.64 |
+| body style held out | 0.479 | 0.0086 | 0.49 |
+
+Error roughly doubles; sigma widens about 20%. A sigma cutoff waves the design
+straight through. The reason is structural, not tuning: during training every
+example is familiar by definition, so the Gaussian NLL never sees an
+unfamiliar one and the variance head has no way to represent novelty. Sigma
+answers *"how noisy are the labels here"*, which is a different question from
+*"have I seen anything like this"*.
+
+So checkpoints now carry an **OOD detector** (`src/train/ood.py`): Mahalanobis
+distance from the training set in standardised parameter space, with the
+threshold calibrated so 99% of held-out real designs pass. Measured:
+
+| Shown to the detector | Flagged |
 |---|---|
-| `state_dict` | weights |
-| `config` | the full resolved training config (model shape lives here) |
-| `norm_stats` | `target_mean`, `target_std`, and for the tabular model `param_mean`, `param_std` |
-| `version` | `<run>-<date>-<git hash>` |
-| `val_metrics` | selection metrics |
-| **`preprocess`** | **how to build model input — read this** |
-| `test_metrics` | held-out metrics |
-| `held_out_category` | set when trained on the OOD split, else `None` |
-| `schema_version` | `1.0.0` |
+| ordinary designs, body style seen in training | 0.3 – 1.7% |
+| **in-bounds but jointly extreme parameter corners** | **100%** |
+| designs 2× outside `PARAM_BOUNDS` | 100% |
+| held-out body style, full 19-dim distance | 100% |
+| held-out body style, aero 16 dims only | 2.6% |
 
-The five keys the plan promised are all there; the rest is additive, so a
-loader that only reads those five still works.
+Read the last two rows together — this is the honest part. An unseen body style
+has entirely **ordinary** aero parameters (mean distance 4.04 against a 4.62
+threshold). The 100% above it comes from the body-style indicator columns,
+which `validate_body_style` already knows more cheaply.
+
+The detector's unique contribution is row 2: **designs where every coordinate
+is legal but the combination is nowhere near the training data.**
+`clamp_params` accepts those — every value is in bounds — and nothing else in
+the system rejects them. Sixteen parameters each at a legal extreme is a car
+unlike anything ever simulated, and an optimiser pushed toward low drag will
+find exactly those corners. That is the hole this closes.
 
 ---
 
-## Loading it
-
-`build_model(ckpt["config"])` reconstructs the right architecture for either
-model kind, so the service does not need to know which one it got.
+## 3. Loading a checkpoint
 
 ```python
 import torch
 from src.train.model import build_model, split_prediction
+from src.train.ood import OODDetector
 
 ckpt  = torch.load(path, map_location=device, weights_only=False)
-model = build_model(ckpt["config"])
+model = build_model(ckpt["config"])          # right architecture either kind
 model.load_state_dict(ckpt["state_dict"])
 model.eval()
 
 norm = ckpt["norm_stats"]
 spec = ckpt["preprocess"]
+ood  = OODDetector.from_dict(ckpt["ood"]) if ckpt.get("ood") else None
 ```
 
-### Point-cloud checkpoints (`preprocess["version"] == "pointcloud-v1"`)
-
-```python
-import numpy as np, trimesh
-
-def mesh_to_input(mesh: trimesh.Trimesh, spec: dict) -> np.ndarray:
-    pts, _ = trimesh.sample.sample_surface(mesh, spec["n_points"])   # area-weighted
-    pts = np.asarray(pts, dtype=np.float64)
-    if spec["normalize_geometry"]:
-        centre = mesh.bounds.mean(axis=0)                            # bbox centre
-        radius = np.linalg.norm(mesh.vertices - centre, axis=1).max()
-        pts = (pts - centre) / max(radius, 1e-9)
-    return pts.astype(np.float32)                                    # (n_points, 3)
-```
-
-All four details matter: area-weighted surface sampling, `n_points` from the
-spec, bounding-box centre (not centroid), max **vertex** radius. The canonical
-implementation is `src/data/dataset.py::sample_mesh` — if you prefer, import
-that instead of copying this.
+| Key | What |
+|---|---|
+| `state_dict`, `config`, `norm_stats`, `version`, `val_metrics` | the five originally promised |
+| `preprocess` | **how to build model input — read it, don't hardcode** |
+| `ood` | the detector, or `None` |
+| `test_metrics`, `held_out_category`, `schema_version`, `n_params` | provenance |
 
 ### Parameter checkpoints (`preprocess["version"] == "params-v1"`)
 
 ```python
-cols = spec["param_columns"]            # ORDER IS PART OF THE CONTRACT
-x = np.array([[params[c] for c in cols]], dtype=np.float32)
+cols = spec["param_columns"]        # ORDER IS PART OF THE CONTRACT
+x = np.array([[design.params[c] for c in cols if not c.startswith("cat_")]
+              + [1.0 if c == f"cat_{design.body_style}" else 0.0
+                 for c in cols if c.startswith("cat_")]], dtype=np.float32)
 x = (x - np.array(norm["param_mean"])) / np.array(norm["param_std"])
 ```
+
+Simpler and less error-prone: build the row by walking `cols` in order and
+filling each name from `params`, or `1.0/0.0` for a `cat_*` column matching
+`body_style`. Column order is what the checkpoint promises.
+
+### Point-cloud checkpoints (`preprocess["version"] == "pointcloud-v1"`)
+
+Import `src.data.dataset.sample_mesh` rather than reimplementing it. If you
+must inline it, all four details matter: area-weighted surface sampling,
+`n_points` from the spec, **bounding-box** centre (not centroid), max **vertex**
+radius for the scale.
 
 ### Predicting
 
@@ -108,91 +144,78 @@ with torch.no_grad():
     mu, sigma = split_prediction(model(torch.from_numpy(x).to(device)))
 
 cd    = float(mu[0])    * norm["target_std"] + norm["target_mean"]
-sigma = float(sigma[0]) * norm["target_std"]      # a scale: std only, no mean
+sigma = float(sigma[0]) * norm["target_std"]       # a scale: std only, no mean
+score = ood.score_one(x) if ood else None
+
+ok, reason = is_in_distribution(sigma, score, design.body_style)
 ```
 
-`split_prediction` is the only place log-variance becomes a standard
-deviation. Use it rather than reimplementing `exp(0.5 * logvar)`, so the
-conversion cannot drift between training and serving.
+`split_prediction` is the only place log-variance becomes a standard deviation.
+Use it, so the conversion cannot drift between training and serving.
 
 ---
 
-## Three things to decide together
+## 4. What stage 1 still cannot do
 
-**1. `UNCERTAINTY_THRESHOLD = 0.015` is a placeholder and currently a no-op.**
-Measured sigma on the synthetic fixture runs ~0.009, so every proposal passes
-the gate and the gate does nothing. `contracts.py` already says to calibrate it
-against the reliability diagram. That needs a real number from Paramveer's
-harness before the Oct 17 agent-loop gate — otherwise we demo a gate that
-never fires.
+**`pressure_summary` cannot be filled.** Stage 1 predicts one scalar. The eight
+`PRESSURE_REGIONS` keys arrive with surface fields in stage 2. Until then the
+service should return the stub's values, and the demo must not imply otherwise.
 
-**2. Stage 1 cannot fill `pressure_summary`.** It predicts one scalar. The
-eight `PRESSURE_REGIONS` keys arrive in stage 2 with surface fields. Until
-then the service should keep returning the stub's values and we should not
-pretend otherwise in the demo.
-
-**3. Sigma alone is NOT an OOD detector. Measured, on real data.**
-
-Trained on real DrivAerNet with one body style held out entirely:
-
-| Split | Test R² | mean sigma | 1-sigma coverage |
-|---|---|---|---|
-| random (in-distribution) | 0.873 | 0.0067 | 0.62 |
-| notchback held out (OOD) | 0.277 | 0.0081 | **0.35** |
-
-In distribution the head is well calibrated. Out of distribution R² collapses
-to 0.28 while sigma widens only 20% — so coverage falls to 0.35 where it
-should be 0.68. **The model is confidently wrong on a body style it has never
-seen**, which is exactly the failure the gate exists to prevent.
-
-So `in_distribution` cannot be `sigma < UNCERTAINTY_THRESHOLD`. It needs a
-real distribution check, and cheap options exist:
-
-- distance in standardised parameter space to the k nearest training designs
-- a density estimate on the training parameters (a Gaussian fit is enough to
-  start)
-- the explicit body-style indicator, which the model already takes as input:
-  if the requested style was not in training, say so without guessing
-
-This is good news for the submission, not bad. "We measured our own OOD
-detector and found sigma insufficient, so we added a density check" is a
-stronger story than a gate nobody stress-tested. But it has to be built.
-
-**4. The parameter spaces do not match, concretely.** `contracts.PARAM_BOUNDS`
-has 8 absolute dimensions. Real DrivAerNet has 23 morph **deltas** from a
-baseline body, in mixed units, and `ride_height`, `boat_tail_angle` and
-`roof_curvature` have no counterpart at all. Partial correspondences exist
-(`rear_diffuser_angle` ~ `B_Diffusor_Angle`, `track_width` ~ `A_Car_Width`),
-but the semantics differ — delta vs absolute — so they are not interchangeable.
-
-Two coherent routes, and this is a group decision:
-
-- **Serve the point-cloud model.** Paramveer's `params_to_mesh` then only has
-  to make plausible car shapes, not reproduce DrivAerNet's parameterisation.
-  Needs no contract change, and the OOD check above is what keeps it honest.
-- **Change the contract** to DrivAerNet's 23 parameters plus body style. More
-  faithful to the data, but all three of us have to agree and Paramveer's
-  geometry module changes.
-
-One more thing the delta parameterisation explains: without the body-style
-input, test R² is 0.60; with it, 0.873. The parameters are relative to a
-different baseline per category, so a model that cannot tell which baseline it
-is perturbing cannot resolve them. That 0.60-vs-0.87 gap is the same gap the
-literature reports between the diverse set and within-category results, and
-here it has a concrete mechanism. Report both numbers.
+**`cl` is predicted but not validated.** The data has `Average Cl`; we train on
+`Average Cd`. Treat lift as unmeasured for now.
 
 ---
 
-## What is NOT in here
+## 5. One thing that makes Paramveer's job smaller
 
-No metrics suite. `evaluate()` in `train.py` computes a quantity to early-stop
-on plus a coverage diagnostic, and that is all. Per-category R², reliability
-diagrams, OOD detection rate, data-scaling curves and the speedup number are
-Paramveer's harness, run against these checkpoints. Splits come from:
+With the **parametric** model serving `/evaluate`, `params_to_mesh` is needed
+only for the **viewer** — not for predictions. So the morph can be approximate:
+it has to look right on screen, not be numerically faithful to ANSA. The
+surrogate never sees it.
+
+That also removes the train/serve geometry mismatch entirely: the agent
+proposes parameters, the model consumes parameters, and no mesh round trip
+happens in the prediction path.
+
+If we later serve the point-cloud model instead, the mismatch comes back and
+the OOD score is what keeps it honest.
+
+---
+
+## 6. Numbers, and what to compare them against
+
+Real DrivAerNet, 4,165 designs, 19 inputs:
+
+| Split | R² | MAE | 1σ coverage | OOD flagged |
+|---|---|---|---|---|
+| random | **0.875** | 0.0062 | 0.64 | 0.3% |
+| notchback held out | 0.479 | 0.0102 | 0.49 | 100% |
+
+Per category on the random split: fastback 0.773, notchback 0.862,
+estateback 0.827.
+
+**Report R² against 0.906, not 1.0.** The dataset's `Std Cd` column is the
+solver's own run-to-run spread (mean 0.0064), which caps any model at
+
+    R²_max = 1 - mean(Std Cd²) / var(Average Cd) = 0.906
+
+So 0.875 is **96% of achievable**, and our predicted sigma (0.0072) sits on the
+solver's own noise — the model has correctly concluded most of its residual is
+label noise, not model error. A model predicting sigma well below 0.0064 would
+be overconfident by construction.
+
+---
+
+## 7. Splits
 
 ```bash
-python -m src.data.dataset --dump-splits runs/splits.json --config configs/baseline.yaml
+python -m src.data.dataset --dump-splits runs/splits.json --config configs/drivaernet.yaml
 ```
 
-which writes both the random split and the held-out-category split, plus the
-same `preprocess` spec, in one file.
+Writes the random split, the held-out-category split, and the `preprocess` spec
+in one file. No metrics suite lives in `src/train/` — `evaluate()` there
+computes only what early stopping needs plus a coverage diagnostic.
+Per-category R², reliability diagrams, OOD detection rate and the speedup
+number are the harness's job, run against these checkpoints.
+`src.train.ood.detection_rate(detector, x_ood)` is the function for that last
+one.
