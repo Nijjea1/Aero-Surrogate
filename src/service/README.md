@@ -28,7 +28,9 @@ Invoke-RestMethod http://127.0.0.1:8000/history/demo-001
 ```
 
 Use a fresh run ID each time. Existing runs are never overwritten. Ten
-iterations means ten evaluated designs, including the midpoint at iteration 0.
+iterations means ten evaluated designs, including the unmodified baseline body
+(all offsets zero) at iteration 0. `--body-style` picks fastback (default),
+notchback or estateback for the whole run.
 Iteration 1 deliberately probes the boundary and gets rejected; subsequent
 proposals return to the trusted region. `accepted` means trusted, not improved.
 `best_cd_so_far` only changes for trusted improvements.
@@ -43,8 +45,8 @@ Open `http://127.0.0.1:8000/docs` for interactive requests.
 | Endpoint | Payload/result |
 |---|---|
 | GET /health | Ready predictor, synthetic flag, schema version |
-| GET /schema | Bounds, default parameters, pressure regions, threshold |
-| POST /evaluate | `{"params": <complete parameter object>}` returns Evaluation |
+| GET /schema | Bounds, body styles, default parameters, pressure regions, thresholds |
+| POST /evaluate | `{"params": <complete parameter object>, "body_style": "fastback"}` returns Evaluation (`body_style` optional) |
 | POST /compare | `{"design_a": {"params": ...}, "design_b": {"params": ...}}` |
 | GET /history/{run_id} | Array of IterationRecord objects; 404 for an absent run |
 
@@ -65,9 +67,16 @@ Evaluations, gate reasons, and whether both are trusted. It compares scalars
 and regional summaries, not full surface fields. Missing region values appear
 in `unavailable_pressure_regions`; they are not fabricated.
 
-The shared gate rejects nonfinite predictions, negative standard deviation,
-false distribution flags, and uncertainty above the contract threshold. The
-threshold and stub distribution flags are development fixtures.
+Schema 2.0.0: sixteen DrivAerNet morph parameters, each an offset from the
+baseline body of the chosen style. All zeros is the baseline car.
+
+The shared gate rejects nonfinite predictions, negative standard deviation or
+ood_score, and false distribution flags, then applies
+`contracts.is_in_distribution`: unknown body style, uncertainty above the
+threshold, or ood_score (distance from the training set) above its threshold.
+In the stub, one parameter at its limit trips the uncertainty check and many
+parameters pushed out together trip the ood_score check; both are development
+fixtures, not calibrated detection.
 
 ## Configuration
 

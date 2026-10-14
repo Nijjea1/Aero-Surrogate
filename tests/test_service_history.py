@@ -16,7 +16,7 @@ def client(tmp_path):
 
 def test_compare_direction_and_trust(client):
     a = default_params()
-    b = dict(a, ride_height=0.14)
+    b = dict(a, B_Ramp_Angle=-3.0)
     response = client.post("/compare", json={"design_a": {"params": a}, "design_b": {"params": b}})
     assert response.status_code == 200
     result = response.json()
@@ -37,7 +37,7 @@ def test_compare_validates_both_designs(client):
 def test_history_reads_scripted_run(client, tmp_path, monkeypatch):
     monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
     predictor = StubPredictor()
-    run(10, "integration", True, evaluator=lambda params: predictor.evaluate(Design(params)).to_dict())
+    run(10, "integration", True, evaluator=lambda params, style: predictor.evaluate(Design(params, style)).to_dict())
     rows = client.get("/history/integration").json()
     assert len(rows) == 10
     assert rows[1]["accepted"] is False

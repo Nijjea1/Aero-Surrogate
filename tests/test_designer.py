@@ -3,7 +3,7 @@ import math
 import pytest
 
 from src.agent import designer
-from src.contracts import PARAM_BOUNDS, default_params
+from src.contracts import PARAM_BOUNDS, UNCERTAINTY_THRESHOLD, default_params
 from src.service.gate import rejection_reason
 from src.service.runlog import RunLog
 
@@ -18,7 +18,7 @@ def prediction(**updates):
     ({"cd": math.nan}, "finite"), ({"cl": math.inf}, "finite"),
     ({"uncertainty": -0.1}, "nonnegative"), ({"uncertainty": True}, "finite"),
     ({"in_distribution": "true"}, "boolean"), ({"in_distribution": False}, "out of distribution"),
-    ({"uncertainty": 0.0151}, "exceeds"),
+    ({"uncertainty": UNCERTAINTY_THRESHOLD + 1e-4}, "exceeds"),
     ({"cd": 10 ** 1000}, "finite"),
 ])
 def test_gate_rejects_untrusted_or_invalid_prediction(updates, fragment):
@@ -26,14 +26,14 @@ def test_gate_rejects_untrusted_or_invalid_prediction(updates, fragment):
 
 
 def test_gate_accepts_threshold_equality():
-    assert rejection_reason(prediction(uncertainty=0.015)) is None
+    assert rejection_reason(prediction(uncertainty=UNCERTAINTY_THRESHOLD)) is None
 
 
 def test_rejected_low_drag_never_updates_best_and_feedback_changes_next_proposal(tmp_path, monkeypatch):
     monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
     scored = []
 
-    def evaluate(params):
+    def evaluate(params, body_style):
         scored.append(dict(params))
         if len(scored) == 2:
             return prediction(cd=0.001, uncertainty=0.023, in_distribution=False)
@@ -56,7 +56,7 @@ def test_rejected_low_drag_never_updates_best_and_feedback_changes_next_proposal
 
 def test_all_rejected_run_has_no_best(tmp_path, monkeypatch):
     monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
-    designer.run(3, "rejected", True, evaluator=lambda _: prediction(in_distribution=False))
+    designer.run(3, "rejected", True, evaluator=lambda *_: prediction(in_distribution=False))
     records = RunLog(tmp_path).read("rejected")
     assert all(row["best_cd_so_far"] is None for row in records)
     assert records[2]["params"] == default_params()
@@ -68,7 +68,7 @@ def test_scripted_loop_integrates_with_actual_stub(tmp_path, monkeypatch):
 
     monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
     predictor = StubPredictor()
-    designer.run(25, "actual-stub", True, evaluator=lambda params: predictor.evaluate(Design(params)).to_dict())
+    designer.run(25, "actual-stub", True, evaluator=lambda params, style: predictor.evaluate(Design(params, style)).to_dict())
     records = RunLog(tmp_path).read("actual-stub")
     assert len(records) == 25
     assert records[0]["accepted"]
@@ -84,7 +84,7 @@ def test_run_refuses_reuse_even_empty(tmp_path, monkeypatch, existing):
     target = tmp_path / "existing.jsonl"
     target.write_text(existing)
     with pytest.raises(FileExistsError):
-        designer.run(2, "existing", True, evaluator=lambda _: prediction())
+        designer.run(2, "existing", True, evaluator=lambda *_: prediction())
     assert target.read_text() == existing
 
 
@@ -101,15 +101,15 @@ def test_iteration_budget_must_be_positive_integer(iterations):
         designer.run(iterations, "invalid", True)
 
 
-@pytest.mark.parametrize("bad", [{}, {**default_params(), "ride_height": True},
+@pytest.mark.parametrize("bad", [{}, {**default_params(), "B_Ramp_Angle": True},
                                    {**default_params(), "unknown": 1.0},
-                                   {**default_params(), "ride_height": math.nan}])
+                                   {**default_params(), "B_Ramp_Angle": math.nan}])
 def test_invalid_proposal_never_scored(tmp_path, monkeypatch, bad):
     monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
     monkeypatch.setattr(designer, "scripted_proposer", lambda _: {"params": bad, "reasoning": "bad"})
     scored = []
     with pytest.raises(ValueError):
-        designer.run(1, "invalid-proposal", True, evaluator=lambda params: scored.append(params))
+        designer.run(1, "invalid-proposal", True, evaluator=lambda params, _: scored.append(params))
     assert scored == []
 
 
@@ -130,5 +130,34 @@ def test_evaluate_uses_configured_url_and_finite_timeout(monkeypatch):
 
     monkeypatch.setattr(designer.requests, "post", post)
     assert designer.evaluate_design(default_params()) == prediction()
-    assert captured == {"url": "http://localhost:9999/evaluate", "json": {"params": default_params()},
+    assert captured == {"url": "http://localhost:9999/evaluate", "json": {"params": default_params(), "body_style": "fastback"},
                         "timeout": (3.05, 30), "status_checked": True}
+
+
+@pytest.mark.parametrize("updates,fragment", [
+    ({"ood_score": 99.0}, "out of distribution"),
+    ({"ood_score": -1.0}, "ood_score"),
+    ({"ood_score": math.nan}, "ood_score"),
+])
+def test_gate_uses_ood_score(updates, fragment):
+    assert fragment in rejection_reason(prediction(**updates))
+
+
+def test_gate_rejects_unknown_body_style():
+    assert "unknown body style" in rejection_reason(prediction(), body_style="hatchback")
+
+
+def test_run_records_body_style_and_ood_score(tmp_path, monkeypatch):
+    monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path))
+    styles = []
+
+    def evaluate(params, body_style):
+        styles.append(body_style)
+        return prediction(ood_score=1.5)
+
+    designer.run(3, "styled", True, evaluator=evaluate, body_style="estateback")
+    records = RunLog(tmp_path).read("styled")
+    assert styles == ["estateback"] * 3
+    assert all(row["body_style"] == "estateback" and row["ood_score"] == 1.5 for row in records)
+    with pytest.raises(ValueError, match="unknown body style"):
+        designer.run(1, "bad-style", True, evaluator=evaluate, body_style="hatchback")
