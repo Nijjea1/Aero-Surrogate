@@ -5,16 +5,32 @@
 
 WHY THIS EXISTS INSTEAD OF THE UPSTREAM SCRIPT
 
-PhysicsNeMo ships examples/cfd/external_aerodynamics/xaeronet/download_aws_dataset.sh,
-and run as shipped it does:
+Two reasons, one of them blocking.
 
-    for i in $(seq 1 500)          # every run
-    aws s3 cp .../volume_$i.vtu    # including the volumetric field
+FIRST, THE AWS SCRIPT NO LONGER WORKS. PhysicsNeMo's
+xaeronet/download_aws_dataset.sh uses `aws s3 cp --no-sign-request` against
+s3://caemldatasets, and that bucket now returns 403 Forbidden for anonymous
+access -- ListObjectsV2 is disabled outright and even HeadObject is refused.
+Verified 2026-10-14 with aws-cli 2.37. So we use the Hugging Face mirror that
+PhysicsNeMo's own domino_nim_finetuning example points at,
+huggingface.co/datasets/neashton/drivaerml, over plain HTTPS. No AWS account,
+no credentials, no CLI.
 
-That is the runaway our own CLAUDE.md warns about. The upstream script is
-correct for someone with a storage array; on a laptop with a two-week deadline
-it is a foot-gun, and remembering to edit two lines under deadline pressure is
-not a safeguard.
+SECOND, THE UPSTREAM SCRIPT IS A FOOT-GUN ON A LAPTOP. Run as shipped it does
+`for i in $(seq 1 500)` and pulls the volumetric field for every run. Measured
+per-run sizes on the mirror:
+
+    drivaer_N.stl          0.133 GB   geometry
+    boundary_N.vtp         0.614 GB   surface fields (pressure, wall shear)
+    force_mom_N.csv       ~0          the drag and lift labels
+    volume_N.vtu.*.part   50+ GB      volumetric field, in two parts
+
+    surface only   0.75 GB per run  ->  375 GB for all 500
+    with volume   51   GB per run  ->   25 TB for all 500
+
+25 TB is the runaway our own CLAUDE.md warns about, arriving by a different
+road than DrivAerNet++. Remembering to edit two lines under deadline pressure
+is not a safeguard.
 
 So this module makes the safe thing the default and the dangerous thing
 impossible to do by accident:
@@ -41,17 +57,17 @@ LICENCE: DrivAerML is CC BY-NC 4.0, non-commercial. data/ is gitignored.
 from __future__ import annotations
 
 import argparse
-import json
 import shutil
-import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
-BUCKET = "caemldatasets"
-PREFIX = "drivaer/dataset"
+HF_BASE = "https://huggingface.co/datasets/neashton/drivaerml/resolve/main"
 
-SURFACE_FILES = ("drivaer_{i}.stl", "boundary_{i}.vtp")
-VOLUME_FILES = ("volume_{i}.vtu",)
+# force_mom carries the force and moment coefficients -- the labels. Tiny, and
+# useless to skip.
+SURFACE_FILES = ("drivaer_{i}.stl", "boundary_{i}.vtp", "force_mom_{i}.csv")
+VOLUME_FILES = ("volume_{i}.vtu.00.part", "volume_{i}.vtu.01.part")
 
 # Refuse to fill more than this share of free disk, whatever the flags say.
 DISK_FRACTION = 0.25
@@ -61,46 +77,32 @@ SOFT_RUN_CAP = 60
 GB = 1024**3
 
 
-def _aws(*args: str) -> str:
-    if shutil.which("aws") is None:
-        sys.exit(
-            "aws CLI not found. Install it first:\n"
-            "    brew install awscli\n"
-            "No AWS account or credentials are needed -- the bucket is public."
-        )
-    out = subprocess.run(
-        ["aws", *args, "--no-sign-request"], capture_output=True, text=True
-    )
-    if out.returncode != 0:
-        sys.exit(f"aws failed:\n{out.stderr.strip()}")
-    return out.stdout
+def _url(i: int, name: str) -> str:
+    return f"{HF_BASE}/run_{i}/{name}"
 
 
-def list_run(i: int) -> dict[str, int]:
-    """Object name -> size in bytes, for one run."""
-    raw = _aws("s3api", "list-objects-v2", "--bucket", BUCKET,
-               "--prefix", f"{PREFIX}/run_{i}/", "--output", "json")
-    payload = json.loads(raw or "{}")
-    return {
-        Path(o["Key"]).name: int(o["Size"]) for o in payload.get("Contents", [])
-    }
+def remote_size(url: str) -> int | None:
+    """Content-Length via HEAD, following redirects. None when absent."""
+    req = urllib.request.Request(url, method="HEAD")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            length = resp.headers.get("Content-Length")
+            return int(length) if length else None
+    except Exception:  # noqa: BLE001 - a missing run is not an error
+        return None
 
 
 def plan(runs: list[int], include_volume: bool) -> tuple[list[tuple[int, str, int]], int]:
-    """Resolve what would be downloaded. Returns (items, total bytes)."""
+    """Resolve what would be downloaded, by HEAD request. Returns (items, bytes)."""
     wanted = SURFACE_FILES + (VOLUME_FILES if include_volume else ())
     items: list[tuple[int, str, int]] = []
     total = 0
     for i in runs:
-        available = list_run(i)
-        if not available:
-            print(f"  run_{i}: not found, skipping")
-            continue
         for template in wanted:
             name = template.format(i=i)
-            size = available.get(name)
+            size = remote_size(_url(i, name))
             if size is None:
-                print(f"  run_{i}: {name} missing, skipping")
+                print(f"  run_{i}: {name} unavailable, skipping")
                 continue
             items.append((i, name, size))
             total += size
@@ -114,8 +116,15 @@ def download(items: list[tuple[int, str, int]], out_dir: Path) -> None:
             print(f"  [{n}/{len(items)}] have {name}")
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        print(f"  [{n}/{len(items)}] {name}  {size / GB:.2f} GB ...", flush=True)
-        _aws("s3", "cp", f"s3://{BUCKET}/{PREFIX}/run_{i}/{name}", str(dest))
+        print(f"  [{n}/{len(items)}] {name}  {size / GB:.3f} GB ...", end="", flush=True)
+        # temp-then-rename, so an interrupted download never leaves a
+        # truncated file that the size check would later accept
+        tmp = dest.with_suffix(dest.suffix + ".part-tmp")
+        with urllib.request.urlopen(_url(i, name), timeout=120) as resp, \
+                tmp.open("wb") as fh:
+            shutil.copyfileobj(resp, fh, length=1024 * 1024)
+        tmp.replace(dest)
+        print(" done", flush=True)
 
 
 def main() -> None:
@@ -154,7 +163,7 @@ def main() -> None:
     runs = list(range(args.start, args.start + args.runs))
     out_dir = Path(args.out)
 
-    print(f"DrivAerML  (public S3, no credentials, CC BY-NC 4.0 non-commercial)")
+    print("DrivAerML  (Hugging Face mirror, no credentials, CC BY-NC 4.0 non-commercial)")
     print(f"  runs        {runs[0]}..{runs[-1]}  ({len(runs)})")
     print(f"  files       {'surface + VOLUME' if args.include_volume else 'surface only'}")
     print(f"  destination {out_dir}\n")
@@ -170,7 +179,7 @@ def main() -> None:
     print(f"\n  {len(items)} files")
     print(f"  TOTAL       {total / GB:.2f} GB   ({per_run / GB:.2f} GB per run)")
     print(f"  disk free   {free / GB:.1f} GB")
-    print(f"  all 500 runs at this rate would be {per_run * 500 / GB:.0f} GB")
+    print(f"  all 500 runs at this rate would be {per_run * 500 / GB:,.0f} GB")
 
     if total > budget:
         sys.exit(
