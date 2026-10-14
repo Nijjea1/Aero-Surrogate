@@ -301,6 +301,15 @@ def _build_profile(p: dict[str, float], body_style: str) -> dict:
         "axles": (front_axle, rear_axle),
         "wheel_y": half_width - _WHEEL_INSET,
         "length": length,
+        # Where each surface starts along x; the viewer labels regions by these.
+        "landmarks": {
+            "hood_front": _HOOD_FRONT[0] + front,
+            "cowl": cowl[0],
+            "roof_front": roof_front_x,
+            "roof_end": roof_end_x,
+            "deck_start": deck_start[0],
+            "length": length,
+        },
     }
 
 
@@ -338,8 +347,13 @@ def _half_width_at(shape: dict, z: np.ndarray) -> np.ndarray:
     return np.where(u <= 1.0, base * _half_width_scale(shape, zz), 0.0)
 
 
-def _loft(shape: dict):
-    """Close the stations into one watertight body, normals outward."""
+def _loft(shape: dict, split_caps: bool = False):
+    """Close the stations into one watertight body, normals outward.
+
+    split_caps gives the nose and tail panels their own copy of the edge ring,
+    so a renderer can shade the crease sharply. That mesh is for display only:
+    unmerged, it is not watertight.
+    """
     import trimesh
 
     n, m = _N_STATIONS, _N_RING
@@ -368,12 +382,15 @@ def _loft(shape: dict):
     sides = np.concatenate([np.stack([a, b, d], -1), np.stack([a, d, c_], -1)]).reshape(-1, 3)
 
     j = np.arange(m)
-    front_cap = np.stack([np.full(m, front_i), (j + 1) % m, j], -1)
-    last = (n - 1) * m
+    first, last = 0, (n - 1) * m
+    if split_caps:
+        first, last = len(vertices), len(vertices) + m
+        vertices = np.vstack([vertices, vertices[:m], vertices[(n - 1) * m:n * m]])
+    front_cap = np.stack([np.full(m, front_i), first + (j + 1) % m, first + j], -1)
     back_cap = np.stack([np.full(m, back_i), last + j, last + (j + 1) % m], -1)
 
     faces = np.vstack([sides, front_cap, back_cap])
-    return trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=not split_caps)
 
 
 def _wheel(x: float, y: float):
