@@ -70,8 +70,12 @@ def test_request_shape_auth_and_usage_accounting(tmp_path):
     expected = call_cost(c.model, 1000, 500)
     assert reply["cost_usd"] == pytest.approx(expected) == pytest.approx(1000 * 0.06e-6 + 500 * 0.24e-6)
     assert c.usage.calls == 1 and c.usage.cost_usd == pytest.approx(expected)
-    entry = json.loads((tmp_path / "spend.jsonl").read_text())
-    assert entry["cost_usd"] == pytest.approx(expected) and KEY not in json.dumps(entry)
+    text = (tmp_path / "spend.jsonl").read_text()
+    reserve, settle = map(json.loads, text.splitlines())
+    assert reserve["kind"] == "reserve" and settle["kind"] == "settle" and settle["id"] == reserve["id"]
+    assert settle["billed_usd"] == pytest.approx(expected)
+    assert c.ledger.total() == pytest.approx(expected)
+    assert KEY not in text
 
 
 def test_retries_are_bounded_and_then_fail(tmp_path):
@@ -134,3 +138,97 @@ def test_env_file_does_not_override_real_environment(tmp_path, monkeypatch):
     assert os.environ["AERO_TEST_A"] == "from-shell"
     assert os.environ.pop("AERO_TEST_B") == "quoted"
     assert "AERO_TEST_EMPTY" not in os.environ
+
+
+# ---------------------------------------------------- audit regressions, Oct 14
+
+
+def test_concurrent_calls_cannot_jointly_pass_the_cap(tmp_path):
+    # Audit 1: two callers both passed a check-then-spend preflight. Now each
+    # reserves its worst case atomically, so the second is refused up front.
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    barrier = Barrier(2)
+    worst_case = call_cost(provider.MODELS["nano"], 1, 40)
+    ledger = SpendLedger(tmp_path / "spend.jsonl", worst_case * 1.5)
+    clients = [TokenFactoryClient(api_key=KEY, model="nano", ledger=ledger,
+                                  session=FakeSession([completion(prompt=0, completion_tokens=40)]))
+               for _ in range(2)]
+
+    def attempt(c):
+        barrier.wait(timeout=5)
+        try:
+            c.chat([], max_tokens=40)
+            return "sent"
+        except BudgetExceeded:
+            return "refused"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = sorted(pool.map(attempt, clients))
+    assert outcomes == ["refused", "sent"]
+    assert ledger.total() <= ledger.cap_usd
+
+
+def test_reservation_is_released_when_nothing_is_billed(tmp_path):
+    c = client([FakeResponse(503)] * 3, tmp_path)
+    with pytest.raises(ProviderError):
+        c.chat([{"role": "user", "content": "hi"}])
+    assert c.ledger.total() == pytest.approx(0.0, abs=1e-15)
+
+
+def test_stale_ledger_lock_from_a_dead_process_is_broken(tmp_path):
+    import os
+
+    ledger = SpendLedger(tmp_path / "spend.jsonl", 1.0)
+    lock = tmp_path / "spend.jsonl.lock"
+    lock.write_text("held by a crashed process")
+    old = provider.time.time() - 120
+    os.utime(lock, (old, old))
+    assert ledger.total() == 0.0
+    assert not lock.exists()
+
+
+def test_unreadable_ledger_refuses_to_spend(tmp_path):
+    (tmp_path / "spend.jsonl").write_text("not json\n")
+    c = client([completion()], tmp_path)
+    with pytest.raises(ProviderError, match="unreadable"):
+        c.chat([{"role": "user", "content": "hi"}])
+    assert c.session.requests == []
+
+
+def test_billed_malformed_reply_is_still_accounted(tmp_path):
+    # Audit 6: an HTTP 200 with usage but no choices is billed by the provider.
+    c = client([FakeResponse(payload={"choices": [], "usage": {"prompt_tokens": 0,
+                                                              "completion_tokens": 40}})], tmp_path)
+    with pytest.raises(ProviderError, match="malformed"):
+        c.chat([], max_tokens=40)
+    expected = call_cost(c.model, 0, 40)
+    assert c.usage.cost_usd == pytest.approx(expected)
+    assert c.ledger.total() == pytest.approx(expected)
+
+
+def test_missing_usage_is_charged_the_reserved_maximum(tmp_path):
+    c = client([FakeResponse(payload={"choices": [{"message": {"content": "ok"}}]})], tmp_path)
+    c.chat([{"role": "user", "content": "hi"}], max_tokens=100)
+    assert c.usage.cost_usd >= call_cost(c.model, 0, 100)
+    assert "usage missing" in (tmp_path / "spend.jsonl").read_text()
+
+
+@pytest.mark.parametrize("key", ["max_tokens", "model", "messages", "tools", "stream", "n"])
+def test_extra_cannot_override_protected_fields(tmp_path, key):
+    # Audit 7: extra={"max_tokens": 1_000_000} used to bypass the reservation.
+    c = client([completion()], tmp_path)
+    with pytest.raises(ValueError, match="may not override"):
+        c.chat([], max_tokens=1, extra={key: 1_000_000})
+    assert c.session.requests == []
+    c.chat([], max_tokens=1, extra={"chat_template_kwargs": {"enable_thinking": False}})
+    assert c.session.requests[0][1]["json"]["max_tokens"] == 1
+
+
+def test_run_budget_is_checked_before_sending(tmp_path):
+    c = client([completion()] * 3, tmp_path)
+    c.chat([], max_tokens=10, budget_usd=1.0)
+    with pytest.raises(BudgetExceeded, match="run budget"):
+        c.chat([], max_tokens=10, budget_usd=c.usage.cost_usd)
+    assert len(c.session.requests) == 1

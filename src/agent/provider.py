@@ -9,7 +9,8 @@ Bearer key. Plain `requests`, no SDK, to keep the service dependencies small.
 Cost control is enforced here, not left to the caller:
 - every call is appended to a spend ledger (JSONL) with its token usage and
   price, so spend survives restarts and is reportable;
-- a call is refused once the ledger total reaches the spend cap;
+- a call reserves its worst-case cost in the ledger first, atomically across
+  threads and processes, and is refused if that would pass the spend cap;
 - max_tokens is always sent, retries are bounded, and the API key never
   appears in errors, logs or the ledger.
 """
@@ -18,8 +19,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import time
+import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
@@ -84,38 +88,97 @@ def call_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
 
 
 class SpendLedger:
-    """Append-only record of every billed call, shared by all runs."""
+    """Append-only record of every billed call, shared by all runs and processes.
 
-    _lock = Lock()
+    Each call first appends a *reservation* for its worst-case cost, under a
+    lock that spans threads and processes, and only if the total including
+    every outstanding reservation stays within the cap. After the call it
+    appends a *settlement* that corrects the reservation to the billed cost
+    (or releases it when nothing was billed). The total is the plain sum of
+    every line, so concurrent callers can never jointly overshoot the cap, and
+    a crash mid-call leaves its reservation counted, erring towards refusing.
+    """
+
+    _thread_lock = Lock()
+    _stale_lock_s = 60.0
 
     def __init__(self, path: str | os.PathLike, cap_usd: float):
-        if not cap_usd >= 0:
-            raise ValueError("spend cap must be nonnegative")
+        if not (isinstance(cap_usd, (int, float)) and math.isfinite(cap_usd) and cap_usd >= 0):
+            raise ValueError("spend cap must be a finite nonnegative number")
         self.path = Path(path)
         self.cap_usd = float(cap_usd)
 
-    def total(self) -> float:
+    @contextmanager
+    def _locked(self):
+        lock_path = self.path.with_name(self.path.name + ".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._thread_lock:
+            deadline = time.monotonic() + 10.0
+            while True:
+                try:
+                    handle = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                    break
+                except FileExistsError:
+                    try:
+                        if time.time() - lock_path.stat().st_mtime > self._stale_lock_s:
+                            lock_path.unlink(missing_ok=True)  # holder died mid-update
+                            continue
+                    except FileNotFoundError:
+                        continue
+                    if time.monotonic() > deadline:
+                        raise ProviderError(f"spend ledger is locked: {lock_path}") from None
+                    time.sleep(0.02)
+            try:
+                yield
+            finally:
+                os.close(handle)
+                lock_path.unlink(missing_ok=True)
+
+    def _total_unlocked(self) -> float:
         if not self.path.is_file():
             return 0.0
         total = 0.0
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                total += float(json.loads(line)["cost_usd"])
+        for number, line in enumerate(self.path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                cost = float(json.loads(line)["cost_usd"])
+            except (ValueError, KeyError, TypeError):
+                raise ProviderError(f"spend ledger line {number} is unreadable; refusing to spend") from None
+            if not math.isfinite(cost):
+                raise ProviderError(f"spend ledger line {number} is not finite; refusing to spend")
+            total += cost
         return total
 
-    def check(self, reserve_usd: float) -> None:
-        spent = self.total()
-        if spent + reserve_usd > self.cap_usd:
-            raise BudgetExceeded(
-                f"spend cap ${self.cap_usd:.2f} reached: ${spent:.4f} spent, "
-                f"next call could cost up to ${reserve_usd:.4f}"
-            )
+    def _append_unlocked(self, entry: dict) -> None:
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, allow_nan=False) + "\n")
 
-    def record(self, entry: dict) -> None:
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(entry, allow_nan=False) + "\n")
+    def total(self) -> float:
+        with self._locked():
+            return self._total_unlocked()
+
+    def reserve(self, amount_usd: float, **meta) -> str:
+        """Hold amount_usd against the cap, or raise BudgetExceeded."""
+        with self._locked():
+            spent = self._total_unlocked()
+            if spent + amount_usd > self.cap_usd:
+                raise BudgetExceeded(
+                    f"spend cap ${self.cap_usd:.2f} reached: ${spent:.4f} spent or reserved, "
+                    f"next call could cost up to ${amount_usd:.4f}"
+                )
+            reservation = uuid.uuid4().hex
+            self._append_unlocked({"kind": "reserve", "id": reservation, "cost_usd": amount_usd,
+                                   "time": time.strftime("%Y-%m-%dT%H:%M:%S"), **meta})
+            return reservation
+
+    def settle(self, reservation: str, reserved_usd: float, actual_usd: float, **meta) -> None:
+        """Replace a reservation with what was actually billed (0.0 releases it)."""
+        with self._locked():
+            self._append_unlocked({"kind": "settle", "id": reservation,
+                                   "cost_usd": actual_usd - reserved_usd,
+                                   "billed_usd": actual_usd,
+                                   "time": time.strftime("%Y-%m-%dT%H:%M:%S"), **meta})
 
 
 @dataclass
@@ -130,6 +193,18 @@ class Usage:
         self.prompt_tokens += prompt
         self.completion_tokens += completion
         self.cost_usd += cost
+
+
+# Request fields the client owns; `extra` may not override them, or it could
+# send a larger max_tokens than the one the spend reservation was sized for.
+_PROTECTED = frozenset({"model", "messages", "max_tokens", "max_completion_tokens", "tools",
+                        "tool_choice", "stream", "n"})
+
+
+def _token_count(value) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
 
 
 @dataclass
@@ -187,24 +262,44 @@ class TokenFactoryClient:
 
     def chat(self, messages: list[dict], *, tools: list[dict] | None = None,
              tool_choice: str | dict | None = None, max_tokens: int = 1024,
-             temperature: float = 0.6, extra: dict | None = None) -> dict:
-        """One chat completion. Returns the first choice's message plus metadata."""
-        if not isinstance(max_tokens, int) or max_tokens < 1:
+             temperature: float = 0.6, extra: dict | None = None,
+             budget_usd: float | None = None) -> dict:
+        """One chat completion. Returns the first choice's message plus metadata.
+
+        budget_usd caps what this client may spend in total (a run's budget);
+        the global cap is enforced by the ledger. Both are checked before the
+        request is sent, against the call's worst-case cost.
+        """
+        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
             raise ValueError("max_tokens must be a positive integer")
+        overridden = sorted(_PROTECTED & set(extra or {}))
+        if overridden:
+            raise ValueError(f"extra may not override {overridden}")
         prompt_chars = len(json.dumps(messages)) + len(json.dumps(tools or []))
-        # Generous estimate (~3 chars per token) so the cap check is conservative.
+        # Generous estimate (~3 chars per token) so both checks are conservative.
         reserve = call_cost(self.model, prompt_chars // 3 + 1, max_tokens)
-        if self.ledger:
-            self.ledger.check(reserve)
-        body = {"model": self.model, "messages": messages, "max_tokens": max_tokens,
-                "temperature": temperature}
+        if budget_usd is not None and self.usage.cost_usd + reserve > budget_usd:
+            raise BudgetExceeded(
+                f"run budget ${budget_usd:.4f} reached: ${self.usage.cost_usd:.4f} spent, "
+                f"next call could cost up to ${reserve:.4f}"
+            )
+        body = {**(extra or {}), "model": self.model, "messages": messages,
+                "max_tokens": max_tokens, "temperature": temperature}
         if tools:
             body["tools"] = tools
             if tool_choice is not None:
                 body["tool_choice"] = tool_choice
-        if extra:
-            body.update(extra)
+        meta = {"model": self.model, "purpose": self.purpose}
+        reservation = self.ledger.reserve(reserve, **meta) if self.ledger else None
+        billed: dict = {}  # filled by _send once a response has been billed
+        try:
+            return self._send(body, reserve, billed)
+        finally:
+            if reservation:
+                self.ledger.settle(reservation, reserve, billed.get("cost_usd", 0.0), **meta,
+                                   **billed.get("usage", {}))
 
+    def _send(self, body: dict, reserve: float, billed: dict) -> dict:
         last_error = "no attempt made"
         for attempt in range(self.max_retries + 1):
             if attempt:
@@ -225,22 +320,32 @@ class TokenFactoryClient:
                     f"HTTP {response.status_code}: {response.text[:300]}"))
             try:
                 data = response.json()
+            except ValueError:
+                data = None
+            # A 200 is billed even when its content is unusable, so account for
+            # it before validating. Unknown usage is charged the reservation.
+            usage = data.get("usage") if isinstance(data, dict) else None
+            usage = usage if isinstance(usage, dict) else {}
+            prompt_tokens = _token_count(usage.get("prompt_tokens"))
+            completion_tokens = _token_count(usage.get("completion_tokens"))
+            if prompt_tokens is None or completion_tokens is None:
+                prompt_tokens, completion_tokens, cost = prompt_tokens or 0, completion_tokens or 0, reserve
+                usage_note = "usage missing or invalid; charged the reserved maximum"
+            else:
+                cost = call_cost(self.model, prompt_tokens, completion_tokens)
+                usage_note = None
+            self.usage.add(prompt_tokens, completion_tokens, cost)
+            billed["cost_usd"] = cost
+            billed["usage"] = {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+                               "latency_s": round(latency_s, 3),
+                               **({"note": usage_note} if usage_note else {})}
+            try:
                 choice = data["choices"][0]
                 message = choice["message"]
-            except (ValueError, KeyError, IndexError, TypeError):
+                if not isinstance(message, dict):
+                    raise TypeError
+            except (KeyError, IndexError, TypeError):
                 raise ProviderError("malformed completion response") from None
-            usage = data.get("usage") or {}
-            prompt_tokens = int(usage.get("prompt_tokens", 0))
-            completion_tokens = int(usage.get("completion_tokens", 0))
-            cost = call_cost(self.model, prompt_tokens, completion_tokens)
-            self.usage.add(prompt_tokens, completion_tokens, cost)
-            if self.ledger:
-                self.ledger.record({
-                    "time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": self.model,
-                    "purpose": self.purpose, "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens, "cost_usd": cost,
-                    "latency_s": round(latency_s, 3),
-                })
             return {"message": message, "finish_reason": choice.get("finish_reason"),
                     "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
                     "cost_usd": cost, "latency_s": latency_s}
