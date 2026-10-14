@@ -431,6 +431,17 @@ def test_compare_lists_every_region_unavailable(torch_client):
     assert body["delta"]["cd"] == pytest.approx(body["design_b"]["cd"] - body["design_a"]["cd"])
 
 
+def test_compare_gates_with_the_calibrated_threshold(trained, predictor, torch_client, monkeypatch):
+    # A score between the contract fallback (3.0) and the calibrated threshold
+    # is trusted by /evaluate, so /compare must agree rather than reject it.
+    between = (OOD_SCORE_THRESHOLD + trained[1]["ood"]["threshold"]) / 2.0
+    monkeypatch.setattr(predictor._ood, "score_one", lambda x: between)
+    body = torch_client.post("/compare", json={"design_a": {"params": default_params()},
+                                               "design_b": {"params": default_params()}}).json()
+    assert body["design_a"]["in_distribution"] is True
+    assert body["trusted"] is True and body["reject_reasons"]["design_a"] is None
+
+
 def test_configured_checkpoint_is_served(trained, tmp_path, monkeypatch):
     monkeypatch.setenv("AERO_CHECKPOINT", trained[0])
     with TestClient(create_app(runlog=RunLog(str(tmp_path / "logs")))) as client:

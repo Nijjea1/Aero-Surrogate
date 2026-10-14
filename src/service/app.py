@@ -127,8 +127,10 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
     def compare(request: CompareRequest):
         a = evaluate(request.design_a).to_dict()
         b = evaluate(request.design_b).to_dict()
-        reasons = {"design_a": rejection_reason(a, body_style=request.design_a.body_style),
-                   "design_b": rejection_reason(b, body_style=request.design_b.body_style)}
+        thresholds = {"threshold": _threshold("uncertainty_threshold", UNCERTAINTY_THRESHOLD),
+                      "ood_threshold": _threshold("ood_threshold", OOD_SCORE_THRESHOLD)}
+        reasons = {"design_a": rejection_reason(a, body_style=request.design_a.body_style, **thresholds),
+                   "design_b": rejection_reason(b, body_style=request.design_b.body_style, **thresholds)}
         common = a["pressure_summary"].keys() & b["pressure_summary"].keys()
         return {
             "design_a": a, "design_b": b,
