@@ -59,6 +59,18 @@ class _HeteroscedasticRegressor(nn.Module):
         self.mean_head = nn.Linear(hidden_dim // 2, 1)
         self.logvar_head = nn.Linear(hidden_dim // 2, 1) if self.heteroscedastic else None
 
+    def features(self, x: torch.Tensor) -> torch.Tensor:
+        """The pooled representation the heads see, (B, feat_dim).
+
+        This is the space OOD distance is measured in when there is no
+        parameter vector to measure it in -- which is the whole point-cloud
+        path. A geometry has no 16 numbers to compare against the training
+        set, but it does have the encoder's own summary of it, and "far from
+        anything in training" is as meaningful there as in parameter space.
+        Subclasses override; see src/train/ood.py.
+        """
+        raise NotImplementedError
+
     def _emit(self, feats: torch.Tensor) -> torch.Tensor:
         h = self.trunk(feats)
         mean = self.mean_head(h)
@@ -132,14 +144,15 @@ class PointNetRegressor(_HeteroscedasticRegressor):
         # hidden_dim < 64 and the head would be built at the wrong width.
         self._build_heads(2 * channels[-1], self.hidden_dim, dropout, heteroscedastic)
 
-    def forward(self, points: torch.Tensor) -> torch.Tensor:
-        """points: (B, N, 3) -> (B, 1), or (B, 2) when heteroscedastic."""
+    def features(self, points: torch.Tensor) -> torch.Tensor:
         if points.dim() != 3 or points.shape[-1] != 3:
             raise ValueError(f"expected (B, N, 3), got {tuple(points.shape)}")
-
         x = self.encoder(points.transpose(1, 2))  # (B, C, N)
-        pooled = torch.cat([x.amax(dim=2), x.mean(dim=2)], dim=1)
-        return self._emit(pooled)
+        return torch.cat([x.amax(dim=2), x.mean(dim=2)], dim=1)
+
+    def forward(self, points: torch.Tensor) -> torch.Tensor:
+        """points: (B, N, 3) -> (B, 1), or (B, 2) when heteroscedastic."""
+        return self._emit(self.features(points))
 
 
 class ParamMLPRegressor(_HeteroscedasticRegressor):
@@ -197,16 +210,18 @@ class ParamMLPRegressor(_HeteroscedasticRegressor):
 
         self._build_heads(int(hidden_dim), int(hidden_dim), dropout, heteroscedastic)
 
-    def forward(self, params: torch.Tensor) -> torch.Tensor:
-        """params: (B, P) -> (B, 1), or (B, 2) when heteroscedastic."""
+    def features(self, params: torch.Tensor) -> torch.Tensor:
         if params.dim() != 2 or params.shape[-1] != self.in_dim:
             raise ValueError(f"expected (B, {self.in_dim}), got {tuple(params.shape)}")
-
         x = params
         if self.quadratic_features:
             pairs = params[:, self._pair_i] * params[:, self._pair_j]
             x = torch.cat([params, pairs], dim=1)
-        return self._emit(self.encoder(x))
+        return self.encoder(x)
+
+    def forward(self, params: torch.Tensor) -> torch.Tensor:
+        """params: (B, P) -> (B, 1), or (B, 2) when heteroscedastic."""
+        return self._emit(self.features(params))
 
 
 def split_prediction(pred: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
