@@ -232,6 +232,44 @@ def _fmt(metrics: dict) -> str:
 
 
 # --------------------------------------------------------------------------
+# Resumable state
+# --------------------------------------------------------------------------
+
+STATE_FILENAME = "last.pt"
+
+
+def _save_state(path: Path, state: dict) -> None:
+    """Write training state atomically.
+
+    temp-then-rename, because the session can die DURING the write. A
+    half-written last.pt is worse than none -- it looks resumable and is not.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent / (path.name + ".tmp")
+    torch.save(state, tmp)
+    tmp.replace(path)
+
+
+def load_state(out_dir: Path) -> dict | None:
+    """Load resumable state from out_dir, or None when there is none."""
+    path = Path(out_dir) / STATE_FILENAME
+    if not path.exists():
+        return None
+    try:
+        state = torch.load(path, map_location="cpu", weights_only=False)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARNING: {path} is unreadable ({exc}); starting fresh")
+        return None
+    if state.get("kind") != "training_state":
+        return None
+    # A kill landing mid-write leaves the partial file behind. It is never
+    # read -- that is the point of the rename -- but sweep it so the directory
+    # does not accumulate one per death.
+    (path.parent / (path.name + ".tmp")).unlink(missing_ok=True)
+    return state
+
+
+# --------------------------------------------------------------------------
 # One training phase
 # --------------------------------------------------------------------------
 
@@ -241,11 +279,19 @@ def _run_phase(
     params, epochs: int, patience: int, lr: float, weight_decay: float,
     select_key: str, mean_only: bool, beta: float,
     grad_clip: float, use_amp: bool, log_path: Path, history: list[dict],
+    state_path: Path | None = None, resume: dict | None = None,
+    done_phases: list[str] | None = None, cfg: dict | None = None,
 ) -> tuple[dict, dict]:
     """Train one phase. Returns (best_val_metrics, best_state_dict copy).
 
     select_key is the validation metric to minimise -- 'mae' for the mean
     phase, 'loss' for the variance phase.
+
+    If state_path is given, the full training state is written there after
+    EVERY epoch, and `resume` (a state dict loaded from it) restarts this
+    phase mid-flight. Kaggle sessions are killed without warning, so a run
+    that cannot resume is a run that is lost -- see the compute policy in
+    CLAUDE.md.
     """
     optimiser = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -257,11 +303,34 @@ def _run_phase(
     best_epoch = 0
     best_val: dict = {}
     best_state: dict = copy.deepcopy(model.state_dict())
+    start_epoch = 1
+
+    if resume is not None and resume.get("phase") == phase:
+        model.load_state_dict(resume["model"])
+        # The weights are what matter. Optimiser momentum, the LR schedule
+        # position and the loss scale are conveniences, and a state file
+        # written by a different torch version or truncated by the kill
+        # itself can be missing them. Losing momentum costs an epoch or two;
+        # refusing to resume costs the whole run.
+        for name, obj in (("optimiser", optimiser), ("scheduler", scheduler),
+                          ("scaler", scaler)):
+            try:
+                obj.load_state_dict(resume[name])
+            except Exception as exc:  # noqa: BLE001
+                print(f"  note: {name} state not restored ({type(exc).__name__}); "
+                      f"continuing with a fresh one")
+        best_score = resume["best_score"]
+        best_epoch = resume["best_epoch"]
+        best_val = resume["best_val"]
+        best_state = resume["best_state"]
+        start_epoch = int(resume["epoch"]) + 1
+        print(f"\n[{phase}] RESUMED at epoch {start_epoch} "
+              f"(best so far {best_epoch}: val {select_key} {best_score:.5f})")
 
     print(f"\n[{phase}] {epochs} epochs max, early stop after {patience}, "
           f"selecting on val {select_key}")
 
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         model.train()
         run_loss = 0.0
         n_seen = 0
@@ -305,6 +374,22 @@ def _run_phase(
             print(f"  {epoch:4d}  train {train_loss:8.4f}   val {_fmt(val)}"
                   f"{' *' if improved else ''}")
 
+        # Every epoch, not every improvement: resuming needs the LIVE optimiser
+        # and scheduler state, not just the best weights.
+        if state_path is not None:
+            _save_state(state_path, {
+                "kind": "training_state", "phase": phase, "epoch": epoch,
+                "model": model.state_dict(),
+                "optimiser": optimiser.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "scaler": scaler.state_dict(),
+                "best_score": best_score, "best_epoch": best_epoch,
+                "best_val": best_val, "best_state": best_state,
+                "history": history, "norm_stats": asdict(norm),
+                "done_phases": list(done_phases or []),
+                "config": cfg,
+            })
+
         if epoch - best_epoch >= patience:
             print(f"  early stop at {epoch} (best {best_epoch})")
             break
@@ -320,7 +405,8 @@ def _run_phase(
 
 
 def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
-          device_str: str | None = None, limit: int | None = None) -> dict:
+          device_str: str | None = None, limit: int | None = None,
+          resume: bool = False) -> dict:
     seed = int(cfg.get("seed", 0))
     seed_everything(seed)
     device = pick_device(device_str)
@@ -392,22 +478,51 @@ def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
     heteroscedastic = bool(cfg["model"].get("heteroscedastic", True))
     two_stage = bool(t.get("two_stage", True)) and heteroscedastic
 
-    history: list[dict] = []
+    # --- resume -----------------------------------------------------------
+    state = load_state(out_dir) if resume else None
+    done_phases: list[str] = list(state.get("done_phases", [])) if state else []
+    history: list[dict] = list(state.get("history", [])) if state else []
+
     log_path = out_dir / "metrics.jsonl"
-    log_path.write_text("")
+    state_path = out_dir / STATE_FILENAME
+    if state is None:
+        log_path.write_text("")
+    else:
+        print(f"\nresume   {state_path}")
+        print(f"         phase {state['phase']!r} epoch {state['epoch']}, "
+              f"{len(done_phases)} phase(s) already done")
+        # The variance phase trains a frozen model, so the freeze has to be in
+        # place BEFORE its weights are loaded or the state dict will not line up
+        # with a model whose mean path is still live.
+        if state["phase"] == "variance":
+            model.freeze_mean_path()
+        model.load_state_dict(state["model"])
+
     t_start = time.time()
 
     if two_stage:
-        # Phase 1: the mean alone, on MSE, selected on MAE.
-        mean_val, _ = _run_phase(
-            "mean", model, loaders, device, norm,
-            params=list(model.parameters()), epochs=epochs, patience=patience,
-            lr=lr, weight_decay=weight_decay, select_key="mae",
-            mean_only=True, beta=0.0, grad_clip=grad_clip, use_amp=use_amp,
-            log_path=log_path, history=history,
-        )
+        mean_val: dict = state.get("mean_val", {}) if state else {}
+        if "mean" not in done_phases:
+            # Phase 1: the mean alone, on MSE, selected on MAE.
+            mean_val, _ = _run_phase(
+                "mean", model, loaders, device, norm,
+                params=list(model.parameters()), epochs=epochs, patience=patience,
+                lr=lr, weight_decay=weight_decay, select_key="mae",
+                mean_only=True, beta=0.0, grad_clip=grad_clip, use_amp=use_amp,
+                log_path=log_path, history=history,
+                state_path=state_path,
+                resume=state if state and state["phase"] == "mean" else None,
+                done_phases=done_phases, cfg=cfg,
+            )
+            done_phases.append("mean")
+        else:
+            print("\n[mean] already complete, skipping")
+
         # Phase 2: the variance alone, on the NLL, against the frozen mean.
-        var_params = model.freeze_mean_path()
+        if not model._mean_path_frozen:
+            var_params = model.freeze_mean_path()
+        else:
+            var_params = [p for p in model.parameters() if p.requires_grad]
         print(f"\nfrozen   mean path; {sum(p.numel() for p in var_params)} "
               f"variance parameters remain trainable")
         best_val, _ = _run_phase(
@@ -419,7 +534,11 @@ def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
             select_key="loss", mean_only=False, beta=0.0,
             grad_clip=grad_clip, use_amp=use_amp,
             log_path=log_path, history=history,
+            state_path=state_path,
+            resume=state if state and state["phase"] == "variance" else None,
+            done_phases=done_phases, cfg=cfg,
         )
+        done_phases.append("variance")
         # The mean is frozen, so phase 2 cannot have changed R2 or MAE. If it
         # has, the freeze leaked -- fail loudly rather than ship a checkpoint
         # whose reported accuracy is not the accuracy it has.
@@ -439,6 +558,9 @@ def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
             select_key="loss" if heteroscedastic else "mae",
             mean_only=False, beta=beta, grad_clip=grad_clip, use_amp=use_amp,
             log_path=log_path, history=history,
+            state_path=state_path,
+            resume=state if state and state["phase"] == "joint" else None,
+            done_phases=done_phases, cfg=cfg,
         )
 
     wall = time.time() - t_start
@@ -526,6 +648,10 @@ def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
           + (f", 1-sigma coverage {test['coverage_1sigma']:.2f}"
              if "coverage_1sigma" in test else "") + ")")
     print(f"{'=' * 64}")
+    # The run finished, so the mid-flight state is dead weight -- and leaving
+    # it would make the next run silently resume a completed one.
+    state_path.unlink(missing_ok=True)
+
     print(f"\ncheckpoint  {ckpt_path}")
     print(f"summary     {out_dir / 'summary.json'}")
     return {"val": best_val, "test": test, "checkpoint": str(ckpt_path)}
@@ -544,6 +670,9 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=None, help="tiny smoke run")
     ap.add_argument("--single-stage", action="store_true",
                     help="train mean and variance together (the old, worse recipe)")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue from last.pt in out_dir (for Kaggle sessions "
+                         "that get killed mid-run)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -553,7 +682,7 @@ def main() -> None:
         cfg["train"]["two_stage"] = False
 
     train(cfg, split_mode=args.split, held_out=args.held_out_category,
-          device_str=args.device, limit=args.limit)
+          device_str=args.device, limit=args.limit, resume=args.resume)
 
 
 if __name__ == "__main__":

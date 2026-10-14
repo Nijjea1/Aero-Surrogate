@@ -1,0 +1,67 @@
+# Kaggle free GPU (T4 / P100, 16 GB) — the DEFAULT development target.
+#
+# Same code path as configs/baseline.yaml, smaller numbers. See the compute
+# policy in CLAUDE.md: Kaggle is where iteration happens, Nebius H100 is used
+# once at the end for the final reproducible run.
+#
+#   python -m src.train.train --config configs/kaggle.yaml
+#   python -m src.train.train --config configs/kaggle.yaml --resume   # after a kill
+#
+# Kaggle has no internet by default, so data arrives as a Kaggle Dataset
+# mounted read-only at /kaggle/input. See scripts/kaggle/README.md for how to
+# build it. Nothing here downloads at runtime.
+
+run_name: kaggle
+seed: 0
+
+data:
+  kind: pointcloud
+  # Read-only Kaggle Dataset mount. Change the slug to your dataset's.
+  labels_csv: /kaggle/input/aero-surrogate-data/drag_coefficients.csv
+  mesh_dir: /kaggle/input/aero-surrogate-data/meshes
+  mesh_glob: "*.stl"
+
+  id_column: Design
+  target_column: Average Cd
+  category_column: Category
+
+  # 2048 instead of 4096: halves the activation memory in the per-point
+  # encoder, which is what actually bounds batch size on a 16 GB T4.
+  n_points: 2048
+  normalize_geometry: true
+  # /kaggle/input is READ-ONLY, so the sampled-cloud cache must go to
+  # /kaggle/working. It does not survive the session, which is fine --
+  # re-sampling is cheap and the alternative is a crash on first epoch.
+  cache_dir: /kaggle/working/cache
+
+  val_fraction: 0.15
+  test_fraction: 0.15
+
+model:
+  kind: pointnet
+  hidden_dim: 256
+  n_layers: 4
+  dropout: 0.1
+  heteroscedastic: true
+
+train:
+  epochs: 60                   # ~30 hrs/week budget, so keep single runs short
+  batch_size: 8                # 16 GB T4, not an 80 GB H100
+  lr: 1.0e-3
+  weight_decay: 1.0e-3
+  grad_clip: 1.0
+  num_workers: 2               # Kaggle gives 2-4 vCPU; more than this thrashes
+  # AMP is fp16 autocast, supported on T4 (Turing) and P100 alike, and the
+  # trainer ignores it on CPU and MPS. No bf16 path, which Turing lacks.
+  amp: true
+
+  two_stage: true
+  variance_epochs: 150
+  variance_patience: 25
+  variance_lr: 1.0e-3
+  nll_beta: 0.5
+  patience: 20
+
+  ood_quantile: 0.99
+  # Written every epoch, and --resume reads last.pt from here.
+  out_dir: /kaggle/working/runs

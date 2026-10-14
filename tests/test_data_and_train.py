@@ -15,6 +15,8 @@ whole file is about a second and needs no download.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import torch
@@ -443,3 +445,82 @@ def test_detection_rate_reports_a_fraction():
     det = OODDetector.fit(x[:500], x_calib=x[500:], quantile=0.99)
     assert detection_rate(det, np.full((50, x.shape[1]), 30.0)) == 1.0
     assert detection_rate(det, x[500:]) < 0.15
+
+
+# --------------------------------------------------------------------------
+# Resumability. Kaggle sessions are killed without warning, so a run that
+# cannot resume is a run that is lost -- see the compute policy in CLAUDE.md.
+# --------------------------------------------------------------------------
+
+
+def _kaggle_like_cfg(cfg, tmp_path, epochs, variance_epochs):
+    cfg = dict(cfg)
+    cfg["run_name"] = "resume-test"
+    cfg["model"] = {"kind": "pointnet", "hidden_dim": 32, "n_layers": 2,
+                    "dropout": 0.0, "heteroscedastic": True}
+    cfg["train"] = {"epochs": epochs, "variance_epochs": variance_epochs,
+                    "batch_size": 2, "lr": 1e-3, "weight_decay": 1e-4,
+                    "grad_clip": 1.0, "num_workers": 0, "amp": False,
+                    "patience": 50, "variance_patience": 50,
+                    "out_dir": str(tmp_path / "runs"), "two_stage": True}
+    return cfg
+
+
+def test_state_is_written_every_epoch_and_removed_on_completion(cfg, tmp_path):
+    from src.train.train import STATE_FILENAME, load_state, train
+
+    c = _kaggle_like_cfg(cfg, tmp_path, epochs=2, variance_epochs=2)
+    out = Path(c["train"]["out_dir"]) / "resume-test-random"
+    train(c, device_str="cpu")
+
+    # A finished run must not leave state behind, or the next run silently
+    # resumes a completed one.
+    assert not (out / STATE_FILENAME).exists()
+    assert load_state(out) is None
+    assert (out / "best.pt").exists()
+
+
+def test_resume_picks_up_where_a_killed_session_stopped(cfg, tmp_path, capsys):
+    """Run two epochs, keep the state, then resume with a bigger budget and
+    confirm it continues rather than restarting from epoch 1."""
+    from src.train.train import STATE_FILENAME, load_state, train
+
+    c = _kaggle_like_cfg(cfg, tmp_path, epochs=2, variance_epochs=1)
+    out = Path(c["train"]["out_dir"]) / "resume-test-random"
+    train(c, device_str="cpu")
+
+    # Simulate a kill partway through the mean phase by restoring a state file.
+    killed = {
+        "kind": "training_state", "phase": "mean", "epoch": 2,
+        "model": torch.load(out / "best.pt", map_location="cpu",
+                            weights_only=False)["state_dict"],
+        "optimiser": {}, "scheduler": {}, "scaler": {},
+        "best_score": 1.0, "best_epoch": 1, "best_val": {"mae": 1.0},
+        "best_state": torch.load(out / "best.pt", map_location="cpu",
+                                 weights_only=False)["state_dict"],
+        "history": [{"phase": "mean", "epoch": 1}, {"phase": "mean", "epoch": 2}],
+        "done_phases": [], "config": c,
+    }
+    loaded = load_state(out)
+    assert loaded is None          # cleaned up by the finished run
+
+    import torch as _t
+    _t.save(killed, out / STATE_FILENAME)
+    assert load_state(out) is not None
+
+    c2 = _kaggle_like_cfg(cfg, tmp_path, epochs=4, variance_epochs=1)
+    capsys.readouterr()
+    train(c2, device_str="cpu", resume=True)
+    printed = capsys.readouterr().out
+
+    assert "RESUMED at epoch 3" in printed, printed[-1500:]
+    assert not (out / STATE_FILENAME).exists()
+
+
+def test_resume_without_state_starts_fresh(cfg, tmp_path):
+    """--resume on a clean directory must not fail."""
+    from src.train.train import train
+
+    c = _kaggle_like_cfg(cfg, tmp_path, epochs=1, variance_epochs=1)
+    result = train(c, device_str="cpu", resume=True)
+    assert "r2" in result["test"]
