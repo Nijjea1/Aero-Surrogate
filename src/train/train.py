@@ -54,6 +54,7 @@ from torch.utils.data import DataLoader
 
 from src.data.dataset import load_config, make_category_splits, make_splits, preprocess_spec
 from src.train.model import build_model, count_parameters, gaussian_nll, split_prediction
+from src.train.ood import OODDetector
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -442,6 +443,37 @@ def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
 
     wall = time.time() - t_start
 
+    # --- OOD detector -----------------------------------------------------
+    # Sigma answers "how noisy are the labels here", not "have I seen this".
+    # See src/train/ood.py for the measurement that forced this.
+    #
+    # Fitted on the train split, threshold calibrated on VAL -- distances to a
+    # set the detector was fitted on are optimistically small, and a threshold
+    # read off them rejects legitimate designs at serving time.
+    detector = None
+    if norm.param_mean is not None:
+        def standardised(ds_):
+            return (np.asarray(ds_.x, np.float64)
+                    - np.asarray(norm.param_mean)) / np.asarray(norm.param_std)
+
+        try:
+            detector = OODDetector.fit(
+                standardised(datasets["train"]),
+                x_calib=standardised(datasets["val"]),
+                quantile=float(t.get("ood_quantile", 0.99)),
+            )
+            print(f"\nood      Mahalanobis, threshold {detector.threshold:.3f} "
+                  f"at the {detector.quantile:.0%} quantile of val")
+            print(f"         val distances  p50 {detector.train_scores['p50']:.2f}  "
+                  f"p95 {detector.train_scores['p95']:.2f}  "
+                  f"max {detector.train_scores['max']:.2f}")
+            held_x = standardised(datasets["test"])
+            flagged = float((detector.score(held_x) > detector.threshold).mean())
+            label = "OOD designs flagged" if held else "test designs flagged (expect ~1%)"
+            print(f"         {label}: {flagged:.1%}")
+        except ValueError as exc:
+            print(f"\nood      skipped: {exc}")
+
     # --- test -------------------------------------------------------------
     test = evaluate(model, loaders["test"], device, norm)
     version = f"{run_name}-{date.today().isoformat()}-{git_hash()}"
@@ -457,6 +489,9 @@ def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
             # model input correctly without it. See preprocess_spec in
             # src/data/dataset.py and docs/HANDOFF.md.
             "preprocess": preprocess_spec(cfg),
+            # The OOD detector. contracts.is_in_distribution takes its score
+            # alongside sigma; a sigma-only gate was measured and does not work.
+            "ood": detector.to_dict() if detector is not None else None,
             "test_metrics": test,
             "schema_version": SCHEMA_VERSION,
             "held_out_category": held,

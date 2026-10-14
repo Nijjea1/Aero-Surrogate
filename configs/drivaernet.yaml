@@ -25,32 +25,28 @@ data:
   # The 23 morph parameters, in CSV order. These are DELTAS from the baseline
   # DrivAer body, not absolute dimensions, and they are NOT the same space as
   # contracts.PARAM_BOUNDS — see docs/HANDOFF.md.
+  # The 16 morph parameters of contracts.PARAM_BOUNDS, in that order, plus
+  # the three body-style indicators. Measured better than all 23: the six
+  # side-mirror and door-handle dials and the greenhouse angle contribute
+  # under 0.003 R² between them, and dropping them lifts held-out-category
+  # R² from 0.277 to 0.479. See src/contracts.py.
   param_columns:
     - B_Ramp_Angle
     - B_Diffusor_Angle
     - B_Trunklid_Angle
-    - C_Side_Mirrors_Rotation
     - D_Rear_Window_Inclination
     - D_Winscreen_Inclination
-    - C_Side_Mirrors_Translate_X
-    - C_Side_Mirrors_Translate_Z
     - D_Winscreen_Length
     - D_Rear_Window_Length
     - E_A_B_C_Pillar_Thickness
+    - E_Fenders_Arch_Offset
     - G_Trunklid_Curvature
     - G_Trunklid_Length
     - H_Front_Bumper_Curvature
     - H_Front_Bumper_Length
-    - F_Door_Handles_Thickness
-    - F_Door_Handles_Z_Position
-    - E_Fenders_Arch_Offset
     - A_Car_Length
-    - F_Door_Handles_X_Position
     - A_Car_Width
     - A_Car_Roof_Height
-    - A_Car_Green_House_Angle
-    # Body style. Worth 0.27 R² because the 23 parameters above are deltas
-    # from a different baseline body per category. See src/data/drivaernet.py.
     - cat_fastback
     - cat_notchback
     - cat_estateback
@@ -60,7 +56,7 @@ data:
 
 model:
   kind: param_mlp
-  in_dim: 26
+  in_dim: 19
   hidden_dim: 256              # 4,165 designs supports more capacity than 300 did
   n_layers: 3
   dropout: 0.1
@@ -80,5 +76,6 @@ train:
   variance_patience: 30
   variance_lr: 1.0e-3
   nll_beta: 0.5
+  ood_quantile: 0.99           # threshold = this quantile of val distances
   patience: 40
   out_dir: runs
