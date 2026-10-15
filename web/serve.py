@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import gzip
 import json
 import socket
 import sys
 import threading
 import warnings
-from functools import partial
+from functools import lru_cache, partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -30,6 +31,15 @@ sys.path.insert(0, str(WEB.parent))
 from src.geometry.viewer import mesh_payload  # noqa: E402
 
 MAX_BODY = 64 * 1024
+
+
+@lru_cache(maxsize=64)
+def _mesh_json(params: tuple, style: str) -> bytes:
+    """The encoded mesh for one design. A slider dragged back and forth, or a
+    second car of the same style in the race, is answered from memory."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")   # unknown names come back in ignored_params
+        return json.dumps(mesh_payload(dict(params), style)).encode()
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -59,18 +69,28 @@ class Handler(SimpleHTTPRequestHandler):
             ):
                 raise ValueError("params must be an object of numbers")
             style = request.get("body_style") or "fastback"
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")   # unknown names come back in ignored_params
-                payload = mesh_payload(params, style)
+            # Rounded so values that differ only in float noise share a cache entry.
+            key = tuple(sorted((k, round(float(v), 6)) for k, v in params.items()))
+            data = _mesh_json(key, str(style))
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self._json(422, {"detail": str(exc)})
             return
-        self._json(200, payload)
+        self._send(200, data)
 
     def _json(self, status: int, body: dict) -> None:
-        data = json.dumps(body).encode()
+        self._send(status, json.dumps(body).encode())
+
+    def _send(self, status: int, data: bytes) -> None:
+        # The mesh is about 0.6 MB of base64; gzip cuts it to roughly a third.
+        if len(data) > 1024 and "gzip" in self.headers.get("Accept-Encoding", ""):
+            data = gzip.compress(data, compresslevel=5)
+            encoding = "gzip"
+        else:
+            encoding = None
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        if encoding:
+            self.send_header("Content-Encoding", encoding)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()

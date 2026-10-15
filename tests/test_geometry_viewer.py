@@ -99,3 +99,25 @@ def test_shape_follows_the_parameters():
     wide = mesh_payload({"A_Car_Width": MORPH_BOUNDS["A_Car_Width"][1]}, "notchback")
     assert wide["width_m"] > base["width_m"] + 0.1
     assert wide["frontal_area_m2"] > base["frontal_area_m2"]
+
+
+def test_every_part_is_on_the_car_where_it_belongs(payload):
+    """Studio materials: glass up top, lights at the ends, tyres at the wheels."""
+    from src.geometry.params import _BELT_Z
+    from src.geometry.viewer import PARTS
+
+    assert payload["parts"] == PARTS
+    vertices = _decode(payload, "vertices", np.float32).reshape(-1, 3)
+    part = _decode(payload, "part", np.int8)
+    region = _decode(payload, "region", np.int8)
+    assert len(part) == len(vertices)
+    for i, name in enumerate(PARTS):
+        assert (part == i).sum() > 5, f"{name} is missing"
+    at = lambda name: vertices[part == PARTS.index(name)]  # noqa: E731
+    assert at("glass")[:, 2].min() > _BELT_Z - 0.05
+    length = vertices[:, 0].max() - vertices[:, 0].min()
+    x0 = vertices[:, 0].min()
+    assert at("headlight")[:, 0].max() < x0 + 0.25 * length
+    assert at("taillight")[:, 0].min() > x0 + 0.85 * length
+    assert np.all(part[region == REGIONS.index("wheel_wells")][-1:] == PARTS.index("tyre"))
+    assert np.all(region[part == PARTS.index("tyre")] == REGIONS.index("wheel_wells"))
