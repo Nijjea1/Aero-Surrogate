@@ -61,7 +61,13 @@ def fields_root(tmp_path_factory):
             "query_xyz": xyz, "query_normal": normal, "query_area": area,
             "cp": cp, "pprime2": np.abs(cp).astype(np.float32),
             "shear": rng.normal(size=(n, 3)).astype(np.float32) * 1e-3,
-            "region": rng.integers(0, len(PRESSURE_REGIONS), n).astype(np.int16),
+            # Regions assigned by POSITION, not randomly. A real car's
+            # regions are a spatial partition of its surface, and the region
+            # classifier learns exactly that structure -- a fixture with
+            # random labels would make it look broken when it is not.
+            "region": np.clip(
+                ((xyz[:, 0] + 1.0) / 2.0 * len(PRESSURE_REGIONS)).astype(np.int16),
+                0, len(PRESSURE_REGIONS) - 1),
             "cloud_xyz": xyz[: 256].copy(),
         }
         with (out / f"run_{run}.tmp").open("wb") as fh:
@@ -539,3 +545,143 @@ def test_area_scale_expands_a_subsample_to_the_whole_surface():
     large = float(integral_consistency_loss(out, target + 0.3, normal, area,
                                             a_ref, torch.tensor([10.0]), m))
     assert large > small, "the scale must actually scale the residual"
+
+
+# --------------------------------------------------------------------------
+# Region assignment at serve time. A served mesh has no solid names -- they
+# are lost by combining, and a params_to_mesh output never had them -- so
+# without this there is no route to Evaluation.pressure_summary at all.
+#
+# Hand-written geometry thresholds were tried first: 13.7% agreement, with 0%
+# recall on windscreen, rear_window and wheel_wells, and wheel_wells is 73% of
+# all cells. The learned classifier scores 98.6% on held-out cars.
+# --------------------------------------------------------------------------
+
+
+def test_region_classifier_learns_the_real_labels(fields_root):
+    from src.train.field_predict import RegionClassifier
+
+    runs = list(range(1, 9))
+    clf = RegionClassifier.fit(fields_root, runs, max_points=4000)
+    assert clf.fitted_on_runs == runs
+    assert len(clf.points) == len(clf.labels) > 0
+    assert len(clf.points[0]) == 6, "position + normal"
+
+
+def test_region_classifier_recovers_labels_it_was_fitted_on(fields_root):
+    """A sanity floor: it must at least reproduce its own reference set."""
+    from src.data.fields import load_run
+    from src.train.field_predict import RegionClassifier
+
+    clf = RegionClassifier.fit(fields_root, [1, 2, 3], max_points=3000)
+    arrays, meta = load_run(fields_root / "fields" / "run_1.npz")
+    truth = np.array([PRESSURE_REGIONS.index(meta["regions"][i])
+                      for i in arrays["region"]])
+    guess = clf.predict(arrays["query_xyz"], arrays["query_normal"])
+    assert (guess == truth).mean() > 0.5
+
+
+def test_region_classifier_round_trips_through_a_checkpoint(fields_root):
+    from src.train.field_predict import RegionClassifier
+
+    clf = RegionClassifier.fit(fields_root, [1, 2], max_points=2000)
+    back = RegionClassifier.from_dict(clf.to_dict())
+    pts = np.random.default_rng(0).normal(size=(20, 3))
+    nrm = np.random.default_rng(1).normal(size=(20, 3))
+    assert np.array_equal(clf.predict(pts, nrm), back.predict(pts, nrm))
+
+
+def test_region_classifier_always_returns_valid_region_indices(fields_root):
+    from src.train.field_predict import RegionClassifier
+
+    clf = RegionClassifier.fit(fields_root, [1, 2], max_points=2000)
+    out = clf.predict(np.random.default_rng(0).normal(size=(50, 3)) * 5,
+                      np.random.default_rng(1).normal(size=(50, 3)))
+    assert out.min() >= 0
+    assert out.max() < len(PRESSURE_REGIONS)
+
+
+def test_region_classifier_refuses_runs_with_no_labels(fields_root):
+    from src.train.field_predict import RegionClassifier
+
+    with pytest.raises(RuntimeError):
+        RegionClassifier.fit(fields_root, [9999])
+
+
+def test_field_predictor_produces_a_contract_shaped_evaluation(fields_root, tmp_path):
+    """The whole point of stage 2: geometry in, pressure_summary out, with the
+    eight contract keys present and a drag number that integrates from the
+    field rather than being predicted separately."""
+    import trimesh
+
+    from src.train.field_predict import FieldPredictor, RegionClassifier
+    from src.train.train_fields import train_fields
+
+    cfg = {
+        "run_name": "pytest-serve", "seed": 0,
+        "data": {"root": str(fields_root), "val_runs": 2, "test_runs": 2,
+                 "n_query": 128, "n_cloud": 64},
+        "model": {"latent_dim": 32, "local_k": 8, "local_dim": 16,
+                  "hidden": 32, "n_layers": 2, "dropout": 0.0,
+                  "heteroscedastic": True},
+        "train": {"epochs": 2, "variance_epochs": 2, "batch_size": 2,
+                  "lr": 1e-3, "variance_lr": 1e-3, "weight_decay": 1e-4,
+                  "grad_clip": 1.0, "patience": 5, "variance_patience": 5,
+                  "out_dir": str(tmp_path / "runs"), "integral_weight": 1.0},
+    }
+    result = train_fields(cfg, device_str="cpu")
+
+    ckpt = torch.load(result["checkpoint"], map_location="cpu", weights_only=False)
+    assert ckpt["region_classifier"] is not None, "classifier must ship with it"
+
+    predictor = FieldPredictor.load(result["checkpoint"],
+                                    device=torch.device("cpu"))
+    pred = predictor.predict(trimesh.creation.icosphere(subdivisions=3,
+                                                        radius=1.0))
+
+    assert len(pred.cp) == len(pred.sigma) == len(pred.region)
+    assert np.isfinite(pred.cp).all() and (pred.sigma >= 0).all()
+    assert set(pred.pressure_summary) == set(PRESSURE_REGIONS)
+    assert all(np.isfinite(v) for v in pred.pressure_summary.values())
+    assert np.isfinite(pred.cd) and np.isfinite(pred.cl)
+    assert pred.frontal_area_m2 > 0
+
+    payload = pred.to_dict()
+    for key in ("cd", "cl", "pressure_summary", "uncertainty"):
+        assert key in payload, key
+
+
+def test_field_predictor_normalises_independently_of_mesh_position(fields_root, tmp_path):
+    """Translating and scaling a mesh must not change the prediction: the
+    predictor normalises to the unit sphere itself, exactly as training did.
+    If it did not, a caller placing a car at a different origin would get a
+    confidently different field with no error."""
+    import trimesh
+
+    from src.train.field_predict import FieldPredictor
+    from src.train.train_fields import train_fields
+
+    cfg = {
+        "run_name": "pytest-invariance", "seed": 0,
+        "data": {"root": str(fields_root), "val_runs": 2, "test_runs": 2,
+                 "n_query": 128, "n_cloud": 64},
+        "model": {"latent_dim": 16, "local_k": 4, "local_dim": 8,
+                  "hidden": 16, "n_layers": 1, "dropout": 0.0,
+                  "heteroscedastic": True},
+        "train": {"epochs": 1, "variance_epochs": 1, "batch_size": 2,
+                  "lr": 1e-3, "variance_lr": 1e-3, "weight_decay": 1e-4,
+                  "grad_clip": 1.0, "patience": 3, "variance_patience": 3,
+                  "out_dir": str(tmp_path / "runs")},
+    }
+    result = train_fields(cfg, device_str="cpu")
+    predictor = FieldPredictor.load(result["checkpoint"],
+                                    device=torch.device("cpu"))
+
+    mesh = trimesh.creation.box(extents=(2.0, 1.0, 0.8))
+    a = predictor.predict(mesh.copy())
+    moved = mesh.copy()
+    moved.apply_translation([10.0, -4.0, 3.0])
+    moved.apply_scale(2.5)
+    b = predictor.predict(moved)
+
+    assert np.allclose(a.cp, b.cp, atol=1e-4), "prediction moved with the mesh"

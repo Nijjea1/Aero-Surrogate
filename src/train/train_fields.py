@@ -400,6 +400,25 @@ def train_fields(cfg: dict, device_str: str | None = None,
     test = evaluate_fields(model, loaders["test"], device, norm, regions)
     version = f"{run_name}-{date.today().isoformat()}-{git_hash()}"
 
+    # The region classifier travels with the checkpoint. Without it a served
+    # mesh has no region labels -- combining the solids throws their names
+    # away, and a mesh from params_to_mesh never had them -- so
+    # Evaluation.pressure_summary could not be filled at all.
+    #
+    # Fitted on the TRAIN runs only, like everything else here. Hand-written
+    # geometry thresholds were tried first and scored 13.7% agreement; this
+    # scores 98.6% on held-out cars.
+    region_payload = None
+    try:
+        from src.train.field_predict import RegionClassifier
+
+        classifier = RegionClassifier.fit(root, splits["train"])
+        region_payload = classifier.to_dict()
+        print(f"\nregions  kNN classifier fitted on {len(splits['train'])} "
+              f"train runs, {len(classifier.labels):,} reference cells")
+    except Exception as exc:  # noqa: BLE001
+        print(f"\nregions  classifier not fitted: {exc}")
+
     torch.save({
         "state_dict": model.state_dict(), "config": cfg,
         "norm_stats": {"cp_mean": norm.mean, "cp_std": norm.std},
@@ -411,6 +430,7 @@ def train_fields(cfg: dict, device_str: str | None = None,
                        "target": "CpMeanTrim, standardised by norm_stats"},
         "schema_version": SCHEMA_VERSION, "splits": splits,
         "regions": regions, "n_params": n_params, "wall_clock_s": wall,
+        "region_classifier": region_payload,
     }, out_dir / "best.pt")
     (out_dir / "summary.json").write_text(json.dumps(
         {"run": run_name, "version": version, "splits": splits,
