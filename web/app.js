@@ -109,7 +109,7 @@ const VIEWER_CAPTIONS = {
 
 const FLOW_CAPTION = "Airflow is an illustration driven by the prediction, not a simulation: the smoke " +
   "takes the predicted pressure of each region it passes (colour, and speed by Bernoulli), the wake grows " +
-  "with predicted Cd, bends with predicted lift and trembles with σ. Shown in slow motion.";
+  "with predicted Cd, bends with predicted lift when the model predicts it, and trembles with σ. Shown in slow motion.";
 
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
@@ -442,12 +442,15 @@ function renderResult() {
     `Inside the training distribution: ${distance}σ is below the ${fmt(threshold, 4)} threshold.`;
 
   $("cd-value").textContent = fmt(e.cd, 4);
-  $("cl-value").textContent = signed(e.cl, 4);
+  // A model that does not predict lift still has to fill the field; /health
+  // says so, and the page then shows no number rather than a fake zero.
+  $("cl-value").textContent = liftPredicted() ? signed(e.cl, 4) : "–";
   $("sigma-value").textContent = `± ${fmt(e.uncertainty, 4)}`;
   const baseline = state.baselines[baselineKey()];
   if (baseline === undefined) ensureBaseline();
   renderDelta($("cd-delta"), e.cd, baseline?.cd, true);
-  renderDelta($("cl-delta"), e.cl, baseline?.cl, null);
+  if (liftPredicted()) renderDelta($("cl-delta"), e.cl, baseline?.cl, null);
+  else $("cl-delta").textContent = "Not predicted by this model";
 
   // Meter spans 0 to 1.5x the threshold; the mark is the threshold itself.
   const span = threshold * 1.5;
@@ -546,7 +549,7 @@ function updateFlow() {
   const e = state.current.evaluation;
   const baseline = state.baselines[baselineKey()];
   state.flow.setPrediction({
-    cd: e.cd, cl: e.cl, sigma: e.uncertainty,
+    cd: e.cd, cl: liftPredicted() ? e.cl : 0, sigma: e.uncertainty,
     threshold: state.schema.uncertainty_threshold,
     trusted: !rejectionReason(e, state.current.bodyStyle),
     pressure: e.pressure_summary || {},
@@ -568,11 +571,18 @@ function renderHud() {
   $("hud-drag").textContent = `${fmt(now.drag, 0)} N ± ${fmt(now.dragSigma, 0)}`;
   $("hud-power").textContent = `${fmt(now.power, 1)} kW`;
   $("hud-energy").textContent = `${fmt(now.energyPer100km, 2)} kWh / 100 km`;
-  $("hud-lift").textContent = now.lift < 0 ? `${fmt(-now.lift, 0)} N down` : `${fmt(now.lift, 0)} N up`;
+  $("hud-lift").textContent = !liftPredicted() ? "not predicted"
+    : now.lift < 0 ? `${fmt(-now.lift, 0)} N down` : `${fmt(now.lift, 0)} N up`;
   hudDelta($("hud-drag-delta"), base && now.drag - base.drag, (d) => `${signed(d, 0)} N vs baseline`);
   hudDelta($("hud-energy-delta"), base && now.energyPer100km - base.energyPer100km,
     (d) => `${signed(d, 2)} kWh vs baseline`);
   $("hud-flag").hidden = !rejectionReason(e, state.current.bodyStyle);
+}
+
+// False when /health says Cl is a placeholder or missing, not a model output.
+function liftPredicted() {
+  const source = state.health?.output_provenance?.cl;
+  return source !== "placeholder" && source !== "unavailable";
 }
 
 function hudDelta(el, delta, text) {
