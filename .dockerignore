@@ -1,0 +1,25 @@
+# Keep the build context small and secret-free. Only requirements and src/ are copied.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+runs/
+data/
+.git/
+.gitignore
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.audit-track-b/
+checkpoints/
+**/checkpoints/
+*.pt
+*.ckpt
+*.npy
+web/
+docs/
+tests/
+scripts/
+configs/
+node_modules/

@@ -128,6 +128,7 @@ Open `http://127.0.0.1:8000/docs` for interactive requests.
 | Endpoint | Payload/result |
 |---|---|
 | GET /health | Ready predictor, synthetic flag, schema version, `model_version`, `checkpoint_sha256` (torch only), `output_provenance` |
+| GET /ready | `{"ready": true}`, or 503 with `problems` when the predictor is missing or the log directory is not writable (container health check) |
 | GET /schema | Bounds, body styles, default parameters, pressure regions, the thresholds the serving predictor uses |
 | POST /evaluate | `{"params": <complete parameter object>, "body_style": "fastback"}` returns Evaluation (`body_style` optional) |
 | POST /compare | `{"design_a": {"params": ...}, "design_b": {"params": ...}}` |
@@ -171,10 +172,27 @@ $env:AERO_SERVICE_URL = 'http://127.0.0.1:8000'
 $env:AERO_RUNLOG_DIR = 'runs/logs'
 ```
 
-`AERO_RUNLOG_DIR` must identify the same directory for the service and agent.
+`AERO_RUNLOG_DIR` must identify the same directory for the service and agent,
+and must be writable: the service creates it and fails startup otherwise.
 `AERO_CHECKPOINT` must be empty for the stub. A nonempty value loads that
 checkpoint with `TorchPredictor`; anything wrong with it fails startup. There
 is never a fallback to the stub.
+
+Hosting settings, read once at startup by `src/service/settings.py` (invalid
+values fail startup): `AERO_CORS_ORIGINS`, `AERO_ADMIN_TOKEN`,
+`AERO_PUBLIC_RUNS`, `AERO_MAX_CONCURRENT_RUNS`, `AERO_PUBLIC_MAX_ITERATIONS`,
+`AERO_ADMIN_MAX_ITERATIONS`, `AERO_PUBLIC_RUN_BUDGET_USD`,
+`AERO_ADMIN_RUN_BUDGET_USD`, `AERO_PUBLIC_DAILY_BUDGET_USD`,
+`AERO_RATE_LIMIT_PER_MINUTE`, `AERO_MAX_BODY_BYTES`, `AERO_RUNLOG_DIR`, plus
+`AERO_TRUST_PROXY` (read by `src/service/limits.py`). `POST /evaluate`,
+`/compare` and `/runs*` are rate limited per client IP (429 with
+`Retry-After`); bodies over the size limit get 413. `GET /ready` is the
+container health check (503 when the predictor is missing or the log
+directory is not writable); `/health` is unchanged. On startup the service
+prints one configuration line that never includes the token.
+
+Docker, a Nebius CPU VM behind Caddy, the full variable reference, token
+rotation and cost safety: **[DEPLOY.md](DEPLOY.md)**.
 
 ## Serving a real checkpoint
 
