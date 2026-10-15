@@ -260,8 +260,10 @@ function renderBenchChart() {
       <td class="num">${m.cost_usd_total == null ? "–" : `$${fmt(m.cost_usd_total, 2)}`}</td>`;
     return tr;
   }));
-  $("bench-note").textContent = agent ? ""
-    : "No live agent run in this comparison yet. The scripted agent is the offline test loop, not Nemotron.";
+  const notes = [];
+  if (!agent) notes.push("No live agent run in this comparison yet. The scripted agent is the offline test loop, not Nemotron.");
+  if (/stub|synthetic/i.test(c.surrogate || "")) notes.push("Scored by the synthetic stub: these numbers test the plumbing, not aerodynamics.");
+  $("bench-note").textContent = notes.join(" ");
 }
 
 // ---------------------------------------------------------------- charts

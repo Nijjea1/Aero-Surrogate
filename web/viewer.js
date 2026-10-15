@@ -2,8 +2,10 @@
 //
 //   const viewer = createViewer(container, { onHover })
 //   viewer.setMesh(payload)          // the design, from POST /api/mesh (src/geometry/viewer.py)
-//   viewer.setRegionValues(summary)  // Evaluation.pressure_summary
-//   viewer.setMode("plain" | "field" | "regions")
+//   viewer.setRegionValues(summary)  // region name -> mean Cp
+//   viewer.setPressureSource("illustrative" | "predicted")
+//   viewer.setField(field | null)    // a bound /fields prediction (fieldmap.js) for the car on screen
+//   viewer.setMode("plain" | "field" | "sigma" | "regions")
 //   viewer.setPaint("#c8ccd2")       // studio paint colour
 //   viewer.setStage("studio" | "none")
 //   viewer.setAnimator(fn | null)    // fn(dt, t) every frame; null renders on demand
@@ -16,9 +18,10 @@
 // Y = z, Z = -(y - cy). car.frame says what cx and cy were.
 //
 // "plain" is the studio look: real materials per part (paint, glass, tyres,
-// lights, trim). "field" and "regions" paint the whole car with a pressure
-// coefficient instead: illustrative from the shape, or the model's per-region
-// prediction.
+// lights, trim). "field" paints the whole car with the pressure coefficient:
+// predicted face by face when the service serves /fields, else illustrative
+// from the shape. "sigma" paints the field model's Cp uncertainty, and
+// "regions" each region's mean Cp.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -33,7 +36,9 @@ const COLORS = {
   neg: new THREE.Color("#3b8cff"),      // suction
   pos: new THREE.Color("#ff5a5f"),      // pressure
   mid: new THREE.Color("#a3adb8"),      // Cp = 0
-  none: new THREE.Color("#5d6672"),     // surface no region covers
+  none: new THREE.Color("#5d6672"),     // surface no region covers, or no value yet
+  sigmaLo: new THREE.Color("#3a2a0c"),  // Cp uncertainty: one amber hue, dark to light
+  sigmaHi: new THREE.Color("#ffd27a"),
 };
 export const PAINTS = {
   "Liquid silver": "#c9ced6",
@@ -114,12 +119,14 @@ export function createViewer(container, { onHover } = {}) {
   let mode = "plain";
   let paint = PAINTS["Liquid silver"];
   let regionValues = {};
+  let pressureSource = "illustrative";
 
   function setMesh(payload) {
     const next = createCar(payload, { paint });
     next.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     if (car) { scene.remove(car.group); cars.delete(car); car.dispose(); }
     car = next;
+    car.pressureSource = pressureSource;
     car.setEnvScale(envScale);
     cars.add(car);
     scene.add(car.group);
@@ -160,6 +167,22 @@ export function createViewer(container, { onHover } = {}) {
     render();
   }
 
+  // "predicted": the Pressure paint waits (grey) for setField rather than
+  // falling back to the illustrative shape pressure.
+  function setPressureSource(source) {
+    pressureSource = source;
+    for (const c of cars) c.pressureSource = source;
+    car?.apply(mode, regionValues);
+    render();
+  }
+
+  function setField(field) {
+    if (!car) return;
+    car.setField(field);
+    car.apply(mode, regionValues);
+    render();
+  }
+
   function setPaint(hex) {
     paint = hex;
     car?.setPaint(hex);
@@ -196,7 +219,7 @@ export function createViewer(container, { onHover } = {}) {
       pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(pointer, camera);
       const hit = raycaster.intersectObject(car.body, false)[0];
-      onHover(hit ? { ...car.valueAt(hit.face.a, mode, regionValues), mode, point: hit.point } : null, event);
+      onHover(hit ? { ...car.valueAt(hit.face.a, mode, regionValues, hit.faceIndex), mode, point: hit.point } : null, event);
     });
   });
   renderer.domElement.addEventListener("pointerleave", () => onHover?.(null));
@@ -318,7 +341,7 @@ export function createViewer(container, { onHover } = {}) {
 
   resize();
   const api = {
-    setMesh, addCar, removeCar, setRegionValues, setMode, setPaint, setStage, setAnimator, setView, render,
+    setMesh, addCar, removeCar, setRegionValues, setPressureSource, setField, setMode, setPaint, setStage, setAnimator, setView, render,
     resetView: () => setView("orbit", { animate: true }),
     onRender: (fn) => renderListeners.add(fn),
     onResize: (fn) => { resizeListeners.add(fn); fn(size.x * pixelRatio, size.y * pixelRatio, size.x, size.y); },
@@ -434,13 +457,26 @@ export function createCar(payload, { paint = PAINTS["Liquid silver"] } = {}) {
     if (k) fieldMeans[name] = sum / k;
   });
 
-  function valueAt(vertex, mode, regionValues) {
+  // A bound /fields prediction (fieldmap.js), or null.
+  let bound = null;
+  const self = { pressureSource: "illustrative" };
+
+  // What the paint shows at a vertex; with sortedFace (a raycast hit's
+  // faceIndex) the predicted field answers for that exact face.
+  function valueAt(vertex, mode, regionValues, sortedFace = null) {
     const r = region[vertex];
     const name = r >= 0 ? payload.regions[r] : null;
     if (mode === "regions") {
       return { name, value: name && typeof regionValues[name] === "number" ? regionValues[name] : null, source: "regions" };
     }
-    return { name, value: cp[vertex], source: "field" };
+    if (mode === "field" && self.pressureSource !== "predicted") return { name, value: cp[vertex], source: "illustrative" };
+    if (!bound) return { name, value: null, sigma: null, source: "pending" };
+    if (sortedFace !== null && sortedFace !== undefined) {
+      const f = order[sortedFace];
+      const learned = bound.regions[bound.faceRegion[f]] ?? null;
+      return { name: learned, value: finite(bound.faceCp[f]), sigma: finite(bound.faceSigma[f]), source: "predicted", face: f };
+    }
+    return { name, value: finite(bound.vertexCp[vertex]), sigma: finite(bound.vertexSigma[vertex]), source: "predicted" };
   }
 
   // The mesh grid is a few centimetres coarse, so a paint/glass edge drawn
@@ -484,9 +520,13 @@ export function createCar(payload, { paint = PAINTS["Liquid silver"] } = {}) {
       return;
     }
     const c = new THREE.Color();
+    const scale = bound?.sigmaScale > 0 ? bound.sigmaScale : 1;
     for (let v = 0; v < region.length; v++) {
-      const { value } = valueAt(v, mode, regionValues);
-      if (value === null) c.copy(COLORS.none);
+      const { value, sigma } = valueAt(v, mode, regionValues);
+      if (mode === "sigma") {
+        if (sigma === null || sigma === undefined) c.copy(COLORS.none);
+        else c.copy(COLORS.sigmaLo).lerp(COLORS.sigmaHi, Math.min(1, sigma / scale));
+      } else if (value === null) c.copy(COLORS.none);
       else diverging(value, c);
       colors.setXYZ(v, c.r, c.g, c.b);
     }
@@ -515,12 +555,16 @@ export function createCar(payload, { paint = PAINTS["Liquid silver"] } = {}) {
     for (const m of materials) m.dispose();
   }
 
-  return {
+  return Object.assign(self, {
     group, body, rims, anchors, fieldMeans, apply, setPaint, setEnvScale, spin, valueAt, dispose,
+    setField(next) { bound = next; },
+    get field() { return bound; },
     frame: { cx, cy, length: hi[0] - lo[0], height: hi[2] - lo[2], width: hi[1] - lo[1] },
     payload,
-  };
+  });
 }
+
+const finite = (x) => (Number.isFinite(x) ? x : null);
 
 function studioMaterials() {
   return [

@@ -1,9 +1,15 @@
 // Run view: the agent against the baseline optimisers.  OWNER: Paramveer.
 //
-// Reads Pranoy's run API and nothing else:
-//   GET /runs              every run in the service's log, newest first
-//   GET /runs/{id}         one run's status (live while it runs)
-//   GET /history/{id}      its IterationRecords, agent and baselines alike
+// Uses Pranoy's run API (src/service/README.md, "Run control"):
+//   GET  /runs                every run in the service's log, newest first
+//   GET  /runs/{id}           one run's status (live while it runs); polled, not streamed
+//   GET  /history/{id}        its IterationRecords, agent and baselines alike (404 before the first score)
+//   POST /runs                start a public agent run: 202 with its status and a one-time cancel_token
+//   POST /runs/{id}/cancel    with X-Cancel-Token: that token
+//
+// The cancel token is shown once, so the page keeps it: in memory, and in
+// sessionStorage so a reload of this tab can still cancel. An admin token
+// never goes in a web page, so the page only ever starts public runs.
 //
 // ?run=<id> opens with that run in focus.
 
@@ -13,13 +19,26 @@ import {
 
 const SLOTS = 4;                                  // --series-1..4, assigned in fixed order
 const LIVE = new Set(["queued", "running", "unknown"]);
+const CANCELLABLE = new Set(["queued", "running"]);
 const POLL_MS = 2000;
-// "unknown" is the service's word for a run it does not own that has not
+// Every state the service reports. "finished" means the run ended on its own
+// terms, which can be its spend budget running out, so stop_reason is shown
+// with it. "unknown" is a run this service process does not own that has not
 // finished: a CLI run still going, or one cut off and not yet closed.
-const STATE_TEXT = { unknown: "not finished", queued: "queued", running: "running" };
+const STATES = {
+  queued: { text: "Queued", cls: "", note: "Waiting for a free agent slot." },
+  running: { text: "Running", cls: "live", note: "" },
+  finished: { text: "Finished", cls: "ok", note: "" },
+  cancelled: { text: "Cancelled", cls: "", note: "" },
+  failed: { text: "Failed", cls: "no", note: "" },
+  interrupted: { text: "Interrupted", cls: "warn", note: "The service stopped or restarted mid-run." },
+  unknown: { text: "Not finished", cls: "", note: "Not run by this service process: a command-line run still going, or one cut off and not yet closed." },
+};
+const DEFAULT_ITERATIONS = { super: 25, nano: 10 };
 
 const state = {
   health: null,
+  schema: null,
   runs: [],                 // /runs summaries, newest first
   records: {},              // run id -> IterationRecords
   selected: new Map(),      // run id -> slot; a run keeps its colour while selected
@@ -27,6 +46,10 @@ const state = {
   hoverStep: null,
   openStep: null,           // logbook row shown in full
   timer: null,
+  tokens: loadTokens(),     // run id -> cancel token, for runs this tab started
+  model: "super",
+  iterationsTouched: false,
+  cancelling: new Set(),
 };
 
 const $ = (id) => document.getElementById(id);
@@ -141,7 +164,8 @@ function renderList() {
       </button>
       <span class="run-stats">
         <span>${s.best === null ? "–" : fmt(s.best, 4)}</span>
-        <small>${s.records.length}/${s.budget}${LIVE.has(run.state) ? " · live" : ""}</small>
+        <small>${s.records.length}/${s.budget}</small>
+        ${stateChip(run)}
       </span>`;
     li.querySelector("input").addEventListener("change", (event) => {
       select(run.run_id, event.target.checked);
@@ -329,9 +353,78 @@ function renderCompare() {
   }));
 }
 
+function stateChip(run) {
+  const s = STATES[run.state] || { text: run.state || "unknown", cls: "" };
+  return `<span class="chip ${s.cls}"><i></i>${escapeHtml(s.text)}</span>`;
+}
+
+// The run's state, why it stopped, and whether this page can cancel it.
+function renderRunState(run) {
+  const el = $("run-state");
+  const button = $("cancel-run");
+  if (!run) { el.innerHTML = ""; button.hidden = true; return; }
+  const info = STATES[run.state] || { note: "" };
+  const parts = [stateChip(run)];
+  if (run.stop_reason) parts.push(`${run.state === "failed" ? "Stopped because " : "Stop reason: "}${escapeHtml(run.stop_reason)}.`);
+  else if (info.note) parts.push(escapeHtml(info.note));
+  if (run.cancel_requested && CANCELLABLE.has(run.state)) {
+    parts.push("Cancel requested: it stops at its next step or when the current model call returns.");
+  } else if (CANCELLABLE.has(run.state) && !state.tokens[run.run_id]) {
+    parts.push('<span class="muted">Only the page that started a run can cancel it.</span>');
+  }
+  if (run.cost_usd != null && run.started_by) parts.push(`<span class="muted">$${fmt(run.cost_usd, 3)} spent.</span>`);
+  el.innerHTML = parts.join(" ");
+  const canCancel = CANCELLABLE.has(run.state) && Boolean(state.tokens[run.run_id]) && !run.cancel_requested;
+  button.hidden = !canCancel;
+  button.disabled = state.cancelling.has(run.run_id);
+  button.textContent = state.cancelling.has(run.run_id) ? "Cancelling…" : "Cancel run";
+}
+
+// An agent step's reasoning is one logbook line:
+//   Hypothesis: ... | Change: ... | Expected: ... | Observed: ...
+// Older runs, the baseline step and dry runs keep plain text (null here).
+const LOG_FIELDS = ["Hypothesis", "Change", "Expected", "Observed"];
+function parseLogbook(text) {
+  if (typeof text !== "string" || !/^Hypothesis: /.test(text)) return null;
+  const out = {};
+  for (const part of text.split(/ \| (?=(?:Change|Expected|Observed): )/)) {
+    const match = part.match(/^(Hypothesis|Change|Expected|Observed): ([\s\S]*)$/);
+    if (!match || match[1] in out) return null;
+    out[match[1]] = match[2];
+  }
+  return LOG_FIELDS.every((key) => key in out) ? out : null;
+}
+
+// The service's verdict on the hypothesis, at the end of Observed.
+function hypothesisVerdict(observed) {
+  const match = observed.match(/(as expected|opposite to expected|not as expected|within noise)\s*$/);
+  if (!match) return null;
+  return { text: match[1], cls: match[1] === "as expected" ? "ok" : match[1] === "within noise" ? "" : "no" };
+}
+
+function noteHtml(run, r, open) {
+  const lb = parseLogbook(r.reasoning);
+  const gate = r.reject_reason && !r.accepted ? r.reject_reason : "";
+  if (!lb) {
+    const note = [r.reasoning, gate ? `Gate: ${gate}` : ""].filter(Boolean).join(" ");
+    return `<div>${note ? escapeHtml(note) : `<span class="muted">${kindOf(run) === "agent" ? "–" : "no reasoning: an optimiser, not an agent"}</span>`}</div>`;
+  }
+  const verdict = hypothesisVerdict(lb.Observed);
+  const chip = verdict ? `<span class="chip ${verdict.cls}">${escapeHtml(verdict.text)}</span>` : "";
+  if (!open) return `<div>${chip}${escapeHtml(lb.Hypothesis)} <span class="muted">· ${escapeHtml(lb.Change)}</span></div>`;
+  // The chip carries the verdict, so it is not repeated at the end of Observed.
+  const observed = verdict ? lb.Observed.slice(0, lb.Observed.lastIndexOf(verdict.text)).replace(/[\s—–-]+$/, "") : lb.Observed;
+  const rows = LOG_FIELDS.map((key) => key === "Observed"
+    ? `<dt>${key}</dt><dd class="observed">${escapeHtml(observed)} ${chip}</dd>`
+    : `<dt>${key}</dt><dd>${escapeHtml(lb[key])}</dd>`);
+  if (gate && !isReference(r)) rows.push(`<dt>Gate</dt><dd>${escapeHtml(gate)}</dd>`);
+  return `<dl class="lb">${rows.join("")}</dl>`;
+}
+
 function renderLog() {
   const run = runOf(state.focus);
   const body = $("logbook");
+  renderRunState(run);
   if (!run) {
     body.replaceChildren();
     $("log-meta").textContent = "";
@@ -339,7 +432,7 @@ function renderLog() {
     return;
   }
   const s = summarise(run);
-  $("log-meta").textContent = `${labelOf(run)} · ${run.run_id} · ${STATE_TEXT[run.state] || run.state}${run.stop_reason ? `, ${run.stop_reason}` : ""}`;
+  $("log-meta").textContent = `${labelOf(run)} · ${run.run_id}`;
   $("t-best").textContent = s.best === null ? "–" : fmt(s.best, 4);
   $("t-best-note").textContent = s.best !== null && s.start
     ? `${signed((100 * (s.best - s.start)) / s.start, 1)}% vs the unmodified car, at step ${s.bestAt}` : "";
@@ -354,14 +447,13 @@ function renderLog() {
 
   body.replaceChildren(...s.records.map((r) => {
     const verdict = verdictOf(r);
-    const note = [r.reasoning, r.reject_reason && !r.accepted ? `Gate: ${r.reject_reason}` : ""].filter(Boolean).join(" ");
     const tr = document.createElement("tr");
     tr.dataset.step = String(r.iteration);
     tr.dataset.open = String(state.openStep === r.iteration);
     tr.dataset.best = String(r.accepted && r.iteration === s.bestAt);
     tr.innerHTML = `<td class="num">${r.iteration}</td><td class="num">${fmt(r.cd, 4)}</td>
       <td><span class="tag ${verdict.cls}"><i></i>${verdict.text}${tr.dataset.best === "true" ? " · best" : ""}</span></td>
-      <td class="note"><div>${note ? escapeHtml(note) : `<span class="muted">${kindOf(run) === "agent" ? "–" : "no reasoning: an optimiser, not an agent"}</span>`}</div></td>
+      <td class="note">${noteHtml(run, r, state.openStep === r.iteration)}</td>
       <td><a href="${pageUrl("index.html", { run: run.run_id, step: r.iteration })}">Open</a></td>`;
     tr.addEventListener("click", (event) => {
       if (event.target.closest("a")) return;
@@ -386,10 +478,138 @@ async function poll() {
       const fresh = await api(`/runs/${encodeURIComponent(run.run_id)}`);
       Object.assign(run, fresh);
       await loadRecords(run, true);
+      if (!LIVE.has(run.state)) forgetToken(run.run_id);
     }));
     showError(null);
   } catch (error) {
     showError(error);
+  }
+  render();
+}
+
+// ---------------------------------------------------------------- start & cancel
+
+function loadTokens() {
+  try {
+    return JSON.parse(sessionStorage.getItem("aero.cancelTokens") || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveTokens() {
+  try {
+    sessionStorage.setItem("aero.cancelTokens", JSON.stringify(state.tokens));
+  } catch {
+    // Storage blocked: the token still lives in memory until the tab closes.
+  }
+}
+
+function forgetToken(id) {
+  if (!(id in state.tokens)) return;
+  delete state.tokens[id];
+  saveTokens();
+}
+
+function setStartStatus(html, tone = "") {
+  $("start-status").innerHTML = html;
+  $("start-status").dataset.tone = tone;
+}
+
+function setModel(model) {
+  state.model = model;
+  for (const button of $("start-model").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.model === model));
+  }
+  if (!state.iterationsTouched) $("start-iterations").value = DEFAULT_ITERATIONS[model];
+}
+
+function buildStartForm() {
+  const styles = state.schema?.body_styles || ["fastback"];
+  $("start-style").replaceChildren(...styles.map((style) => {
+    const option = document.createElement("option");
+    option.value = option.textContent = style;
+    option.selected = style === (state.schema?.default_body_style || "fastback");
+    return option;
+  }));
+  for (const button of $("start-model").querySelectorAll("button")) {
+    button.addEventListener("click", () => setModel(button.dataset.model));
+  }
+  $("start-iterations").addEventListener("input", () => { state.iterationsTouched = true; });
+  $("start-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    startRun();
+  });
+  $("cancel-run").addEventListener("click", () => cancelRun(state.focus));
+}
+
+// What the service said no to, in words a visitor can act on.
+function startRefusal(error) {
+  const detail = escapeHtml(error.detail || "");
+  switch (error.status) {
+    case 422: return `Not started: ${detail || "the request is outside this service's limits"}.`;
+    case 429: return `The service is busy, or today's budget for public runs is used up. Try later. <span class="muted">(${detail})</span>`;
+    case 401: return "This service does not take runs from the web page: starting one needs the admin token, which never goes in a page.";
+    case 503: return `The agent is not configured on this service. <span class="muted">(${detail})</span>`;
+    default: return error instanceof ServiceError ? error.message : escapeHtml(String(error));
+  }
+}
+
+async function startRun() {
+  const iterations = Number($("start-iterations").value);
+  if (!Number.isInteger(iterations) || iterations < 2) {
+    setStartStatus("Evaluations must be a whole number of at least 2: the unmodified car plus one proposal.", "error");
+    return;
+  }
+  const constraints = $("start-constraints").value.split("\n").map((line) => line.trim()).filter(Boolean);
+  const body = { model: state.model, iterations, body_style: $("start-style").value, constraints };
+  // Nano reasons better here with thinking off (src/service/INTEGRATION.md); Super keeps the default.
+  if (state.model === "nano") body.thinking = "off";
+  const button = $("start-button");
+  button.disabled = true;
+  setStartStatus("Starting…", "wait");
+  try {
+    const started = await api("/runs", body);
+    const { cancel_token: token, ...status } = started;
+    if (token) {
+      state.tokens[status.run_id] = token;
+      saveTokens();
+    }
+    state.runs = [status, ...state.runs.filter((run) => run.run_id !== status.run_id)];
+    state.records[status.run_id] = [];
+    state.selected.clear();
+    defaultSelection(status.run_id);
+    state.openStep = null;
+    setStartStatus(`Started <strong>${escapeHtml(status.run_id)}</strong>. It is plotted against the baseline optimisers with the same style and budget.`);
+    render();
+  } catch (error) {
+    setStartStatus(startRefusal(error), "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function cancelRun(id) {
+  const run = runOf(id);
+  const token = state.tokens[id];
+  if (!run || !token) return;
+  state.cancelling.add(id);
+  renderRunState(run);
+  try {
+    const fresh = await api(`/runs/${encodeURIComponent(id)}/cancel`, {}, { headers: { "X-Cancel-Token": token } });
+    Object.assign(run, fresh);
+    showError(null);
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      forgetToken(id);
+      showError(new ServiceError("The service did not accept this page's cancel token for that run, so it keeps running."));
+    } else if (error.status === 409) {
+      showError(new ServiceError("That run is not managed by this service process, so it cannot be cancelled here."));
+    } else {
+      showError(error);
+    }
+  } finally {
+    state.cancelling.delete(id);
   }
   render();
 }
@@ -435,8 +655,9 @@ async function start() {
   $("designer-link").href = pageUrl("index.html");
   $("results-link").href = pageUrl("results.html");
   try {
-    state.health = await api("/health");
+    [state.health, state.schema] = await Promise.all([api("/health"), api("/schema")]);
     renderService();
+    buildStartForm();
     await loadRuns();
   } catch (error) {
     renderService();

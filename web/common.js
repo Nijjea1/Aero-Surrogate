@@ -7,12 +7,21 @@ export const API = (new URLSearchParams(location.search).get("api") || "http://1
 
 export const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
-export class ServiceError extends Error {}
+// message is display HTML; status (0 when unreachable) and detail (plain
+// text) let a page react to the specific refusal.
+export class ServiceError extends Error {
+  constructor(message, { status = 0, detail = "" } = {}) {
+    super(message);
+    this.status = status;
+    this.detail = detail;
+  }
+}
 
-export async function api(path, body) {
+// GET without a body, POST with one. headers are added to the request.
+export async function api(path, body, { headers = {} } = {}) {
   const options = body === undefined
-    ? {}
-    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+    ? { headers }
+    : { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) };
   let response;
   try {
     response = await fetch(API + path, options);
@@ -28,7 +37,8 @@ export async function api(path, body) {
     const detail = Array.isArray(data?.detail)
       ? data.detail.map((d) => d.msg).join("; ")
       : data?.detail || response.statusText;
-    throw new ServiceError(`The service rejected the request (${response.status}): ${escapeHtml(detail)}`);
+    throw new ServiceError(`The service rejected the request (${response.status}): ${escapeHtml(detail)}`,
+      { status: response.status, detail: String(detail) });
   }
   return data;
 }
@@ -101,6 +111,10 @@ export const INFO = {
     "The car's silhouette seen from the front, in m². Drag scales with Cd × area, so a narrower, lower car pays less even at the same Cd."],
   illustrative: ["Illustrative",
     "Worked out from the angle of each surface to the oncoming air, not predicted by the model. It shows where pressure and suction usually sit on a shape like this."],
+  predicted: ["Predicted surface pressure",
+    "Cp on every face of the car from the surface-pressure model. Predicted, not trusted: unlike Cd, no distribution check covers these values, and this generated car only approximates the CFD cars the model learned from."],
+  cpsigma: ["Pressure uncertainty, Cp σ",
+    "The surface-pressure model's own standard deviation on Cp at each face. It is not the Cd σ the gate uses, and its calibration on this geometry is not established, so read it as where the model is less sure, not as an error bar."],
   cfd: ["CFD ground truth",
     "The drag a full computational fluid dynamics simulation measured for this exact car, from the DrivAerNet dataset. The model never trained on it."],
   race: ["Equal-power race",

@@ -285,6 +285,7 @@ optgroup, option { background: var(--surface); color: var(--text-primary); }
 .chip.no { color: var(--critical-text); border-color: rgba(239, 68, 68, 0.35); background: var(--wash-critical); }
 .chip.illustrative { color: #c4b5fd; border-color: rgba(167, 139, 250, 0.35); background: rgba(167, 139, 250, 0.1); }
 .chip.model { color: var(--accent-strong); border-color: rgba(34, 211, 238, 0.35); background: var(--accent-track); }
+.chip.predicted { color: #93c5fd; border-color: rgba(147, 197, 253, 0.35); background: rgba(147, 197, 253, 0.08); }
 .chip.stub { color: var(--warning); border-color: rgba(245, 179, 1, 0.35); background: var(--wash-warning); }
 
 /* The "i" next to a stat that opens its definition. */
@@ -489,6 +490,7 @@ optgroup, option { background: var(--surface); color: var(--text-primary); }
   display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 999px; font-size: 11.5px; color: #a7b2bf; white-space: nowrap;
 }
 .cp-ramp { width: 120px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #3b8cff, #cfd6de, #ff5a5f); }
+.sigma-ramp { width: 120px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #3a2a0c, #ffd27a); }
 @media (max-width: 980px) { .stage-legend { top: auto; bottom: 120px; } }
 .stage-caption { margin: 10px 4px 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
 .stage-caption strong { color: var(--text-secondary); font-weight: 600; }
@@ -711,6 +713,44 @@ optgroup, option { background: var(--surface); color: var(--text-primary); }
 .logbook tr[data-best="true"] td:first-child { box-shadow: inset 3px 0 0 var(--good); }
 .logbook .muted { color: var(--text-muted); }
 .logbook a { color: var(--accent); font-size: 13px; }
+.logbook .note .chip { margin-right: 6px; vertical-align: 1px; }
+.lb { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+.lb dt { color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding-top: 2px; }
+.lb dd { margin: 0; color: var(--text-secondary); }
+.lb dd.observed { color: var(--text-primary); }
+
+.start-form { display: grid; gap: 12px; }
+.form-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 10px; }
+.form-col { display: grid; gap: 6px; }
+.form-row > span, .form-col > span { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+.form-col small { display: block; margin-top: 2px; font-weight: 400; color: var(--text-muted); }
+.form-col code { font: 11.5px var(--mono); }
+.start-form input, .start-form textarea {
+  width: 100%; padding: 9px 12px; border-radius: 10px; font: 13px var(--mono);
+  background: var(--surface-3); border: 1px solid var(--border); color: var(--text-primary);
+}
+.start-form textarea { resize: vertical; min-height: 54px; }
+.start-form :is(input, textarea, select, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.start-form .segmented button { font-size: 12px; }
+.start-actions { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.start-hint { font-size: 12px; color: var(--text-muted); }
+.start-status { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+.start-status:empty { display: none; }
+.start-status[data-tone="error"] { color: var(--critical-text); }
+.start-status[data-tone="wait"] { color: var(--warning); }
+.button[disabled] { opacity: 0.55; cursor: not-allowed; transform: none; }
+.button.danger { color: var(--critical-text); border-color: rgba(239, 68, 68, 0.4); background: var(--wash-critical); }
+.log-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.run-state { margin: -4px 0 12px; font-size: 13px; color: var(--text-secondary); }
+.run-state:empty { display: none; }
+.run-state .chip { margin-right: 8px; vertical-align: 1px; }
+.run-state .muted, .start-status .muted { color: var(--text-muted); }
+.run-stats .chip { justify-self: end; padding: 1px 7px; font-size: 10px; }
+.chip.live { color: var(--accent-strong); border-color: rgba(34, 211, 238, 0.35); background: var(--accent-track); }
+.chip.live i { animation: pulse 1.2s ease-in-out infinite; }
+.chip.warn { color: var(--warning); border-color: rgba(245, 179, 1, 0.35); background: var(--wash-warning); }
+@keyframes pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .chip.live i { animation: none; } }
 
 /* ---------- results ---------- */
 

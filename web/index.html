@@ -112,6 +112,10 @@
           <span>Suction</span><i class="cp-ramp"></i><span>Pressure</span>
           <button type="button" class="info" data-info="cp" aria-label="What is Cp?">i</button>
         </div>
+        <div class="stage-legend glass" id="sigma-legend" hidden>
+          <span>Cp σ 0</span><i class="sigma-ramp"></i><span id="sigma-max">–</span>
+          <button type="button" class="info" data-info="cpsigma" aria-label="What is Cp σ?">i</button>
+        </div>
 
         <div class="race-hud" id="race-hud" hidden></div>
 
@@ -127,6 +131,8 @@
           <div class="segmented" role="group" aria-label="Colour the car by" id="viewer-modes">
             <button type="button" data-mode="plain" aria-pressed="true">Studio</button>
             <button type="button" data-mode="field" aria-pressed="false">Pressure</button>
+            <button type="button" data-mode="sigma" aria-pressed="false" id="sigma-mode" hidden
+              title="The surface-pressure model's uncertainty">σ</button>
             <button type="button" data-mode="regions" aria-pressed="false">Regions</button>
           </div>
           <div class="swatches" id="swatches" role="group" aria-label="Paint colour"></div>

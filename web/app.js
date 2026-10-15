@@ -2,6 +2,8 @@
 //
 // Talks to Pranoy's service (src/service/app.py):
 //   GET /health, GET /schema, POST /evaluate
+//   POST /fields, when /health.fields says available: per-face predicted Cp and
+//   its uncertainty on the same mesh the viewer draws (bound in fieldmap.js)
 // and to web/serve.py for the 3D car (POST /api/mesh). Reads designs.json,
 // real test-set cars with their CFD Cd, written by `python -m src.eval.showcase`.
 //
@@ -16,6 +18,7 @@ import {
   REDUCED_MOTION, ServiceError, showTooltip, signed, toast,
 } from "./common.js";
 import { aeroLoads } from "./physics.js";
+import { bindField, meshIdentity } from "./fieldmap.js";
 
 // Readable names, units and one line on what each dial does to the car.
 const PARAM_INFO = {
@@ -81,11 +84,26 @@ const SCENES = {
 const FLOW_CAPTION = "<strong>Airflow is an illustration driven by the prediction, not a simulation.</strong> " +
   "The smoke takes the pressure of each region it passes (colour, and speed by Bernoulli); the wake grows with " +
   "predicted Cd, bends with predicted lift when the model predicts it, and trembles with σ. Shown in slow motion.";
-const PAINT_CAPTIONS = {
-  plain: "",
-  field: "<strong>Pressure paint is illustrative:</strong> worked out from each surface's angle to the air, not predicted. Stage 2 replaces it with predicted surface pressure.",
-  regions: "<strong>Regions</strong> are painted with the mean Cp the service predicts for each. Grey surfaces belong to no region.",
-};
+function paintCaption(mode) {
+  if (mode === "regions") {
+    const { source } = regionSummary();
+    return source === "illustrative"
+      ? "<strong>Regions</strong> are painted with the illustrative mean Cp of each: this model predicts no surface pressure. Grey surfaces belong to no region."
+      : `<strong>Regions</strong> are painted with each region's mean Cp, ${source === "predicted" ? "predicted by the surface-pressure model" : source === "stub" ? "from the synthetic stub" : "predicted by the model"}. Grey surfaces belong to no region.`;
+  }
+  if (mode === "field" && !state.fieldsAvailable) {
+    return "<strong>Pressure paint is illustrative:</strong> worked out from each surface's angle to the air, not predicted. This service does not serve surface pressure.";
+  }
+  if (mode === "field" || mode === "sigma") {
+    if (state.fieldProblem) return `<strong>Predicted pressure is not shown:</strong> ${escapeHtml(state.fieldProblem)}.`;
+    if (!state.field) return "Predicting surface pressure…";
+    return mode === "field"
+      ? "<strong>Predicted surface pressure</strong> from the field model, face by face, blended to the corners for display. " +
+        "<strong>Predicted, not trusted:</strong> no distribution check covers field predictions, and this generated car only approximates the CFD cars it learned from."
+      : "<strong>Pressure uncertainty:</strong> the field model's Cp standard deviation, face by face. It is not the Cd σ the gate uses, and it is not calibrated on this geometry.";
+  }
+  return "";
+}
 
 const state = {
   schema: null,
@@ -114,6 +132,12 @@ const state = {
   baselineArea: null, // and of the selected style's baseline body
   realCars: null,     // designs.json, when present
   reference: null,    // the real car on screen, until any dial or the style changes
+  fieldsAvailable: false,  // /health.fields.available: the service predicts surface pressure
+  fieldSeq: 0,
+  fieldResponse: null,     // { key, response | error } for the latest design asked
+  meshIdentity: null,      // { key, identity } of the car on screen
+  field: null,             // the bound field (fieldmap.js) on the car on screen, or null
+  fieldProblem: null,      // why a field could not be shown
 };
 
 const $ = (id) => document.getElementById(id);
@@ -433,6 +457,7 @@ function scheduleEvaluate() {
 async function runEvaluate({ record = true } = {}) {
   const params = { ...state.params };
   refreshMesh(params);
+  requestField(params);
   try {
     const result = await evaluate(params);
     if (!result) return;
@@ -515,10 +540,73 @@ function renderResult() {
   renderCfd();
   renderPressure(e.pressure_summary || {});
   renderHistory();
-  state.viewer?.setRegionValues(e.pressure_summary || {});
+  state.viewer?.setRegionValues(regionSummary().values);
   updatePins();
   updateFlow();
   renderHud();
+}
+
+// ---------------------------------------------------------------- surface fields
+
+const designKey = (params, style) => JSON.stringify([style || null, params]);
+
+// One field per design. Busy (503) is retried briefly; any newer design
+// supersedes the request, and its answer is dropped.
+async function requestField(params) {
+  if (!state.fieldsAvailable) return;
+  const seq = ++state.fieldSeq;
+  const key = designKey(params, state.bodyStyle);
+  const body = designRequest(params);
+  let result;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      result = { key, response: await api("/fields", body) };
+      break;
+    } catch (error) {
+      if (seq !== state.fieldSeq) return;
+      if (error.status === 503 && attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+        if (seq !== state.fieldSeq) return;
+        continue;
+      }
+      result = { key, error };
+      break;
+    }
+  }
+  if (seq !== state.fieldSeq) return;
+  state.fieldResponse = result;
+  bindFieldIfReady();
+}
+
+// Binds only when the field and the car on screen are the same design, and
+// then only when the service's mesh hash and counts match the mesh drawn.
+function bindFieldIfReady() {
+  const car = state.viewer?.car;
+  const answer = state.fieldResponse;
+  const mesh = state.meshIdentity;
+  if (!car || !answer || !mesh || answer.key !== mesh.key) return;   // waiting for the other half
+  let field = null;
+  let problem = null;
+  if (answer.error) {
+    problem = answer.error.status === 503 ? "the field model is busy; it will try again with the next change"
+      : `the service could not predict it (${answer.error.status || "unreachable"}: ${answer.error.detail || "no detail"})`;
+  } else {
+    try {
+      field = bindField(answer.response, mesh.identity, car.payload);
+    } catch (error) {
+      problem = error.message;
+    }
+  }
+  state.field = field;
+  state.fieldProblem = problem;
+  state.viewer.setField(field);
+  state.viewer.setRegionValues(regionSummary().values);
+  if (state.current) {
+    renderPressure(regionSummary().values);
+    updatePins();
+    updateFlow();
+  }
+  setViewerMode(state.viewerMode);
 }
 
 function renderDelta(el, value, base, lowerIsBetter) {
@@ -535,6 +623,7 @@ function renderDelta(el, value, base, lowerIsBetter) {
 }
 
 function renderPressure(summary) {
+  const { source } = regionSummary();
   const regions = state.schema.pressure_regions;
   const values = regions.map((r) => summary[r]).filter((v) => typeof v === "number");
   // Fixed +/-1 domain so bars stay comparable between designs; widen only if needed.
@@ -558,7 +647,7 @@ function renderPressure(summary) {
       <span class="p-track"><span class="p-bar ${value < 0 ? "neg" : "pos"}"
         style="left:${left}%;width:${half}%"></span></span>
       <span class="p-value" role="cell">${signed(value, 2)}</span>`;
-    row.addEventListener("mousemove", (event) => showTooltip(event, regionCard(region, value, pressureSource())));
+    row.addEventListener("mousemove", (event) => showTooltip(event, regionCard(region, value, source)));
     row.addEventListener("mouseleave", hideTooltip);
     return row;
   });
@@ -570,19 +659,26 @@ function renderPressure(summary) {
   $("pressure").replaceChildren(...rows, axis);
 
   const missing = regions.filter((r) => typeof summary[r] !== "number").length;
-  $("pressure-note").textContent = state.health?.synthetic
-    ? "Region values come from the synthetic stub. Real surface pressure arrives with the stage 2 model."
-    : missing === regions.length
-      ? "This model predicts drag only. The pins on the car show illustrative pressure from the shape until stage 2 serves predicted surface pressure."
-      : missing ? `${missing} region${missing > 1 ? "s" : ""} not predicted by this model.` : "";
+  const gaps = missing ? ` ${missing} region${missing > 1 ? "s" : ""} not covered.` : "";
+  $("pressure-note").textContent = {
+    model: gaps.trim(),
+    predicted: "Area-weighted means of the surface-pressure model's per-face Cp, over the regions it recognises. " +
+      `Predicted, not trusted: no distribution check covers them.${gaps}`,
+    stub: "Region values come from the synthetic stub, not a trained model.",
+    illustrative: "This model predicts drag only. The pins on the car show illustrative pressure worked out from the shape.",
+  }[source];
 }
 
-// Where the region numbers on the car come from.
-function pressureSource() {
+// Where the region numbers come from, best first: the scalar model's own
+// regional prediction, the surface-pressure model's region means, the
+// synthetic stub, or nothing (the pins then fall back to illustrative).
+function regionSummary() {
+  const e = state.current?.evaluation;
   const p = state.health?.output_provenance?.pressure_summary;
-  if (state.health?.synthetic || p === "synthetic") return "stub";
-  if (p === "model") return "model";
-  return "illustrative";
+  if (e && p === "model") return { values: e.pressure_summary || {}, source: "model" };
+  if (state.field) return { values: state.field.summary, source: "predicted" };
+  if (e && (state.health?.synthetic || p === "synthetic")) return { values: e.pressure_summary || {}, source: "stub" };
+  return { values: {}, source: "illustrative" };
 }
 
 function regionName(region) {
@@ -602,29 +698,30 @@ function cpMeaning(v) {
 
 const SOURCE_CHIPS = {
   model: '<span class="chip model"><i></i>Model</span> predicted by the surrogate',
+  predicted: '<span class="chip predicted"><i></i>Predicted</span> by the surface-pressure model; no distribution check covers it',
   stub: '<span class="chip stub"><i></i>Stub</span> a synthetic test value',
   illustrative: '<span class="chip illustrative"><i></i>Illustrative</span> from the surface shape, not predicted',
 };
 
-function regionCard(region, value, source) {
+function regionCard(region, value, source, sigma = null) {
   const has = typeof value === "number";
-  return `<strong>${escapeHtml(regionName(region))}</strong>` +
-    `<div class="tip-value">${has ? `Cp ${signed(value, 2)}` : "no value"}</div>` +
+  const spread = typeof sigma === "number" ? ` ± ${fmt(sigma, 2)}` : "";
+  return `<strong>${escapeHtml(region ? regionName(region) : "Surface")}</strong>` +
+    `<div class="tip-value">${has ? `Cp ${signed(value, 2)}${spread}` : "no value"}</div>` +
     (has ? `<div class="tip-meaning">${escapeHtml(cpMeaning(value))}</div>` : "") +
-    `<div class="tip-meaning" style="margin-top:6px">${escapeHtml(REGION_NOTES[region] || "")}</div>` +
+    (region ? `<div class="tip-meaning" style="margin-top:6px">${escapeHtml(REGION_NOTES[region] || "")}</div>` : "") +
     `<div class="tip-source">${SOURCE_CHIPS[source] || ""}</div>`;
 }
 
-// Pins show the model's region values when it predicts them, else the
-// illustrative pressure averaged over each region.
+// Pins show predicted region values when there are any (a region they do not
+// cover reads "not available"), else the illustrative pressure of each region.
 function pinValues() {
-  const summary = state.current?.evaluation.pressure_summary || {};
+  const { values: summary, source } = regionSummary();
   const car = state.viewer?.car;
-  const source = pressureSource();
   const out = {};
   for (const region of state.schema.pressure_regions) {
     if (typeof summary[region] === "number" && source !== "illustrative") out[region] = { value: summary[region], source };
-    else if (car && typeof car.fieldMeans[region] === "number") out[region] = { value: car.fieldMeans[region], source: "illustrative" };
+    else if (source === "illustrative" && car && typeof car.fieldMeans[region] === "number") out[region] = { value: car.fieldMeans[region], source: "illustrative" };
   }
   return out;
 }
@@ -649,7 +746,7 @@ function describePin(key) {
       `<div class="tip-source">at ${state.speedKmh} km/h · Cd ${fmt(e.cd, 4)} × ${fmt(state.area, 2)} m² frontal area</div>`;
   }
   const v = state.pinValues?.[key];
-  return regionCard(key, v?.value, v?.source || "illustrative");
+  return regionCard(key, v?.value, v?.source || regionSummary().source);
 }
 
 // Dragging sliders is one design being refined, so it updates one row rather
@@ -694,6 +791,7 @@ async function initViewer() {
   try {
     const viewerModule = await import("./viewer.js");
     state.viewer = viewerModule.createViewer($("viewer"), { onHover: hoverCar });
+    state.viewer.setPressureSource(state.fieldsAvailable ? "predicted" : "illustrative");
     state.paints = viewerModule.PAINTS;
     state.paint = viewerModule.PAINTS["Liquid silver"];
     const { createAnnotations } = await import("./annotations.js");
@@ -839,7 +937,7 @@ function updateFlow() {
     cd: e.cd, cl: liftPredicted() ? e.cl : 0, sigma: e.uncertainty,
     threshold: state.schema.uncertainty_threshold,
     trusted: !rejectionReason(e, state.current.bodyStyle),
-    pressure: e.pressure_summary || {},
+    pressure: regionSummary().source === "illustrative" ? e.pressure_summary || {} : regionSummary().values,
     baselineCd: baseline?.cd,
   });
 }
@@ -881,11 +979,12 @@ function setViewerMode(mode) {
   for (const button of $("viewer-modes").querySelectorAll("button")) {
     button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
   }
-  $("cp-legend").hidden = mode === "plain" || state.scene === "race";
+  $("cp-legend").hidden = !(mode === "field" || mode === "regions") || state.scene === "race";
+  $("sigma-legend").hidden = mode !== "sigma" || state.scene === "race";
+  $("sigma-max").textContent = state.field ? `${fmt(state.field.sigmaScale, 2)}+` : "–";
   const flowing = state.scene === "tunnel" || state.scene === "drive";
-  $("viewer-caption").innerHTML = [SCENES[state.scene]?.caption, PAINT_CAPTIONS[mode] +
-    (mode === "regions" && state.health?.synthetic ? " Values are from the synthetic stub." : ""),
-  flowing ? FLOW_CAPTION : ""].filter(Boolean).join(" ");
+  $("viewer-caption").innerHTML = [SCENES[state.scene]?.caption, paintCaption(mode),
+    flowing ? FLOW_CAPTION : ""].filter(Boolean).join(" ");
   state.viewer?.setMode(mode);
 }
 
@@ -921,8 +1020,23 @@ async function refreshMesh(params) {
   $("viewer-message").hidden = true;
   state.viewer.setMesh(payload);
   if (state.paint) state.viewer.setPaint(state.paint);
+  // A new car carries no field: the matching one binds once both halves are in.
+  state.field = null;
+  state.meshIdentity = null;
+  if (state.fieldsAvailable) {
+    const key = designKey(params, state.bodyStyle);
+    meshIdentity(payload).then((identity) => {
+      if (seq !== state.meshSeq) return;
+      state.meshIdentity = { key, identity };
+      bindFieldIfReady();
+    }, (error) => {
+      if (seq !== state.meshSeq) return;
+      state.fieldProblem = error.message;
+      setViewerMode(state.viewerMode);
+    });
+  }
   // The prediction may have landed before the viewer finished loading.
-  state.viewer.setRegionValues(state.current?.evaluation.pressure_summary || {});
+  state.viewer.setRegionValues(regionSummary().values);
   state.area = payload.frontal_area_m2;
   state.baselineArea = payload.baseline_frontal_area_m2 ?? null;
   state.flow?.setShape(payload.flow, state.viewer.frame);
@@ -939,12 +1053,24 @@ async function refreshMesh(params) {
 
 function hoverCar(info, event) {
   if (!info) { hideTooltip(); return; }
-  if (!info.name) {
+  if (info.source === "pending") {
+    showTooltip(event, `<strong>Surface pressure</strong><div class="tip-meaning">${escapeHtml(
+      state.fieldProblem ? `Not shown: ${state.fieldProblem}.` : "Waiting for the prediction for this shape.")}</div>`);
+    return;
+  }
+  if (info.mode === "sigma") {
+    showTooltip(event, `<strong>${escapeHtml(info.name ? regionName(info.name) : "Surface")}</strong>` +
+      `<div class="tip-value">Cp σ ${info.sigma === null ? "–" : fmt(info.sigma, 3)}</div>` +
+      `<div class="tip-meaning">How unsure the surface-pressure model is about the pressure here. Not the Cd σ the gate uses.</div>` +
+      `<div class="tip-source">${SOURCE_CHIPS.predicted}</div>`);
+    return;
+  }
+  if (!info.name && info.source !== "predicted") {
     showTooltip(event, "<strong>Side panel</strong><div class=\"tip-meaning\">No pressure region covers the sides.</div>");
     return;
   }
-  const source = info.mode === "regions" ? pressureSource() : "illustrative";
-  showTooltip(event, regionCard(info.name, info.value, source));
+  const source = info.mode === "regions" ? regionSummary().source : info.source;
+  showTooltip(event, regionCard(info.name, info.value, source, info.mode === "field" ? info.sigma : null));
 }
 
 // ---------------------------------------------------------------- service status
@@ -962,6 +1088,9 @@ function renderService() {
     `${h.synthetic ? "Synthetic stub" : `${h.predictor} · ${h.model_version || "model"}`} · schema ${h.schema_version}`;
   el.title = h.checkpoint_sha256 ? `checkpoint ${h.checkpoint_sha256}` : "";
   $("synthetic-banner").hidden = !h.synthetic;
+  state.fieldsAvailable = h.fields?.available === true;
+  $("sigma-mode").hidden = !state.fieldsAvailable;
+  state.viewer?.setPressureSource(state.fieldsAvailable ? "predicted" : "illustrative");
 }
 
 function showError(error) {

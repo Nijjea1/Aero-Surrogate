@@ -44,6 +44,39 @@
   </div>
 
   <main class="layout">
+    <div class="column">
+    <section class="panel start-panel" aria-labelledby="start-title">
+      <div class="panel-head">
+        <h2 id="start-title">Start an agent run</h2>
+      </div>
+      <form class="start-form" id="start-form" novalidate>
+        <div class="form-row">
+          <span id="start-model-label">Model</span>
+          <div class="segmented wide" role="group" aria-labelledby="start-model-label" id="start-model">
+            <button type="button" data-model="super" aria-pressed="true">Nemotron Super</button>
+            <button type="button" data-model="nano" aria-pressed="false">Nano</button>
+          </div>
+        </div>
+        <label class="form-row">
+          <span>Evaluations</span>
+          <input type="number" id="start-iterations" min="2" max="200" step="1" value="25" inputmode="numeric">
+        </label>
+        <label class="form-row">
+          <span>Body style</span>
+          <select id="start-style"></select>
+        </label>
+        <label class="form-col">
+          <span>Constraints <small>one rule per line, for example <code>A_Car_Roof_Height &gt;= 0</code></small></span>
+          <textarea id="start-constraints" rows="2" spellcheck="false" placeholder="optional"></textarea>
+        </label>
+        <div class="start-actions">
+          <button type="submit" class="button primary" id="start-button">Start run</button>
+          <span class="start-hint">Evaluations include the unmodified car at step 0.</span>
+        </div>
+        <p class="start-status" id="start-status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
     <section class="panel run-list-panel" aria-labelledby="runs-title">
       <div class="panel-head">
         <h2 id="runs-title">Runs</h2>
@@ -52,12 +85,13 @@
       <p class="preset-hint">Tick up to four runs to compare. Click a name to read its steps.</p>
       <ul class="run-list" id="run-list"></ul>
       <div class="run-empty" id="run-empty" hidden>
-        <p>No runs in this service's log yet. Start some from the repo root:</p>
+        <p>No runs in this service's log yet. Start one above, or from the repo root:</p>
         <pre>python -m src.agent.designer --model super --iterations 25
 python -m src.optim.baseline --method cmaes --iterations 25
 python -m src.optim.baseline --method random --iterations 25</pre>
       </div>
     </section>
+    </div>
 
     <div class="column">
       <section class="panel" aria-labelledby="chart-title">
@@ -86,8 +120,12 @@ python -m src.optim.baseline --method random --iterations 25</pre>
       <section class="panel" aria-labelledby="log-title">
         <div class="panel-head">
           <h2 id="log-title">Logbook</h2>
-          <span class="timing" id="log-meta"></span>
+          <div class="log-actions">
+            <span class="timing" id="log-meta"></span>
+            <button type="button" class="button danger" id="cancel-run" hidden>Cancel run</button>
+          </div>
         </div>
+        <p class="run-state" id="run-state" role="status" aria-live="polite"></p>
         <div class="tiles" id="run-tiles">
           <div class="tile">
             <div class="tile-label">Best trusted Cd</div>
@@ -114,7 +152,9 @@ python -m src.optim.baseline --method random --iterations 25</pre>
           <tbody id="logbook"></tbody>
         </table>
         </div>
-        <p class="chart-note">Click a row to read it in full. "Open" loads that design in the designer.</p>
+        <p class="chart-note">Each agent step is one logbook line: its hypothesis, the change, what it expected, and what
+          the score and the gate observed. The observation comes from the service, never from the model.
+          Click a row to read it in full. "Open" loads that design in the designer.</p>
       </section>
     </div>
   </main>
