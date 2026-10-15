@@ -125,3 +125,11 @@ def test_in_process_scoring_matches_the_service_contract(logdir):
 
     assert designer.predictor_thresholds(Calibrated()) == {"threshold": 0.013, "ood_threshold": 4.62}
     assert designer.predictor_provenance(Calibrated()) == "torch surrogate v7"
+
+
+def test_metadata_is_recorded_in_run_started(logdir):
+    designer.run(1, "tagged", True, evaluator=stub_evaluator(),
+                 metadata={"started_by": "public", "started_at": "2026-10-15T10:00:00Z"})
+    started = logdir.read_events("tagged")[0]
+    assert started["type"] == "run_started"
+    assert started["started_by"] == "public" and started["started_at"] == "2026-10-15T10:00:00Z"

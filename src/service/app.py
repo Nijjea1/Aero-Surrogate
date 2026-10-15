@@ -33,6 +33,7 @@ from src.contracts import (
 from src.service.predictor import BasePredictor, load_predictor, validate_design_params
 from src.service.gate import rejection_reason
 from src.service.runlog import RunLog
+from src.service.settings import Settings
 
 
 class DesignRequest(BaseModel):
@@ -64,17 +65,20 @@ class CompareRequest(BaseModel):
     design_b: DesignRequest
 
 
-def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = None) -> FastAPI:
-    """Inject a predictor for tests; otherwise load configuration at startup."""
+def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = None,
+               settings: Settings | None = None) -> FastAPI:
+    """Inject a predictor, log or settings for tests; otherwise read the environment."""
+    settings = settings or Settings.from_env()
     @asynccontextmanager
     async def lifespan(application):
         application.state.predictor = predictor or load_predictor(
             os.environ.get("AERO_CHECKPOINT") or None
         )
-        application.state.runlog = runlog or RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
+        application.state.runlog = runlog or RunLog(settings.runlog_dir)
         yield
 
     application = FastAPI(title="Aero Surrogate", version=SCHEMA_VERSION, lifespan=lifespan)
+    application.state.settings = settings
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -86,8 +90,8 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:5173"],
-        allow_methods=["GET", "POST"], allow_headers=["Content-Type"],
+        allow_origins=list(settings.cors_origins),
+        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization"],
     )
 
     def _threshold(name: str, default: float) -> float:

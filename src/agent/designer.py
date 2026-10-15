@@ -150,7 +150,8 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         thinking: str = "auto",
         thresholds: dict | None = None,
         should_stop: Callable[[], bool] | None = None,
-        on_step: Callable[[dict, dict], None] | None = None) -> str:
+        on_step: Callable[[dict, dict], None] | None = None,
+        metadata: dict | None = None) -> str:
     """Log up to `iterations` scored attempts, including baseline iteration zero.
 
     The body style is fixed for the run: the same offsets describe a different
@@ -164,7 +165,8 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
 
     should_stop is polled before every step and every model call; when it
     returns True the run ends with stop reason "cancelled". on_step(record,
-    timing) is called after each scored step, for live progress.
+    timing) is called after each scored step, for live progress. metadata
+    (e.g. who started the run, and when) is recorded in run_started.
     """
     if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
         raise ValueError("iterations must be a positive integer")
@@ -197,7 +199,7 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         "thinking": None if dry_run else proposer.thinking,
         "evaluation_budget": iterations, "run_budget_usd": None if dry_run else run_budget_usd,
         "constraints": [str(c) for c in constraints],
-        "surrogate": provenance, "gate_thresholds": thresholds,
+        "surrogate": provenance, "gate_thresholds": thresholds, **(metadata or {}),
     })
     state = {"history": [], "best_cd": None, "timings": []}
     try:
