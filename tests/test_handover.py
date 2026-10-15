@@ -10,6 +10,7 @@ before it reaches the harness rather than after.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -232,3 +233,39 @@ def test_handover_writes_utf8_explicitly():
     import re
     bare = re.findall(r'\(out_dir / "[^"]+"\)\.write_text\(', src)
     assert not bare, f"bare write_text calls: {bare}"
+
+
+# --------------------------------------------------------------------------
+# Track B's verifiers validate the reference packs against an EXACT key set,
+# so adding a "helpful" field to either pack breaks integration silently on
+# Pranoy's side. Pin both packs to his frozen validators here, where the
+# failure lands on me instead of on him.
+# --------------------------------------------------------------------------
+
+PACKS = REPO / "runs" / "handover"
+
+
+@pytest.mark.skipif(not (PACKS / "scalar_reference.json").exists(),
+                    reason="needs a generated scalar pack")
+def test_scalar_pack_satisfies_track_b_validator():
+    from src.service.verify_checkpoint import normalize_reference_pack
+    pack = json.loads((PACKS / "scalar_reference.json").read_text(encoding="utf-8"))
+    manifest = normalize_reference_pack(pack)      # raises on any extra/missing key
+    assert manifest["checkpoint_sha256"] == pack["checkpoint"]["sha256"]
+    # the training revision must be the checkpoint's, not this clone's HEAD
+    assert pack["training"]["git_commit"]
+    assert "@" in pack["generated_by"], "the generation revision belongs in generated_by"
+
+
+@pytest.mark.skipif(not (PACKS / "field_reference.json").exists(),
+                    reason="needs a generated field pack")
+def test_field_pack_satisfies_track_b_validator_and_names_its_source():
+    from src.service.verify_fields import _validate_manifest
+    pack = json.loads((PACKS / "field_reference.json").read_text(encoding="utf-8"))
+    _validate_manifest(pack)
+    source = pack["source"]
+    # Replay needs the original NPZ; hash it so a transferred copy is checkable
+    assert re.fullmatch(r"[0-9a-f]{64}", source["sha256"])
+    assert len(source["query_indices"]) == pack["sample"]["n_points"]
+    assert len(source["cloud_indices"]) == pack["checkpoint"]["preprocess"]["n_cloud"]
+    assert source["run"] == pack["sample"]["run"] in pack["split_ids"]["runs"]["test"]
