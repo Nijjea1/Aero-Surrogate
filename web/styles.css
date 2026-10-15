@@ -32,6 +32,9 @@
   --good: #22c55e;
   --good-text: #4ade80;
   --warning: #f5b301;
+  --warning-text: #f5b301;
+  --illustrative-text: #c4b5fd;
+  --predicted-text: #93c5fd;
   --critical: #ef4444;
   --critical-text: #ff7b7b;
   --wash-good: rgba(34, 197, 94, 0.12);
@@ -77,6 +80,9 @@
   --good-text: #067a06;
   --critical: #d03b3b;
   --critical-text: #b02a2a;
+  --warning-text: #8a5a00;
+  --illustrative-text: #6d28d9;
+  --predicted-text: #1d4ed8;
   --wash-good: rgba(12, 163, 12, 0.08);
   --wash-critical: rgba(208, 59, 59, 0.08);
   --wash-warning: rgba(250, 178, 25, 0.14);
@@ -283,10 +289,10 @@ optgroup, option { background: var(--surface); color: var(--text-primary); }
 .chip i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .chip.ok { color: var(--good-text); border-color: rgba(34, 197, 94, 0.35); background: var(--wash-good); }
 .chip.no { color: var(--critical-text); border-color: rgba(239, 68, 68, 0.35); background: var(--wash-critical); }
-.chip.illustrative { color: #c4b5fd; border-color: rgba(167, 139, 250, 0.35); background: rgba(167, 139, 250, 0.1); }
+.chip.illustrative { color: var(--illustrative-text); border-color: rgba(167, 139, 250, 0.35); background: rgba(167, 139, 250, 0.1); }
 .chip.model { color: var(--accent-strong); border-color: rgba(34, 211, 238, 0.35); background: var(--accent-track); }
-.chip.predicted { color: #93c5fd; border-color: rgba(147, 197, 253, 0.35); background: rgba(147, 197, 253, 0.08); }
-.chip.stub { color: var(--warning); border-color: rgba(245, 179, 1, 0.35); background: var(--wash-warning); }
+.chip.predicted { color: var(--predicted-text); border-color: rgba(147, 197, 253, 0.35); background: rgba(147, 197, 253, 0.08); }
+.chip.stub { color: var(--warning-text); border-color: rgba(245, 179, 1, 0.35); background: var(--wash-warning); }
 
 /* The "i" next to a stat that opens its definition. */
 .info {
@@ -621,7 +627,7 @@ optgroup, option { background: var(--surface); color: var(--text-primary); }
 .p-ticks { display: flex; justify-content: space-between; }
 
 .chart-note { margin: 8px 0 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-.viewer-warning { color: var(--warning); }
+.viewer-warning { color: var(--warning-text); }
 
 .history { width: 100%; border-collapse: collapse; font-size: 13px; }
 .history th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--grid); }
@@ -737,7 +743,7 @@ optgroup, option { background: var(--surface); color: var(--text-primary); }
 .start-status { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
 .start-status:empty { display: none; }
 .start-status[data-tone="error"] { color: var(--critical-text); }
-.start-status[data-tone="wait"] { color: var(--warning); }
+.start-status[data-tone="wait"] { color: var(--warning-text); }
 .button[disabled] { opacity: 0.55; cursor: not-allowed; transform: none; }
 .button.danger { color: var(--critical-text); border-color: rgba(239, 68, 68, 0.4); background: var(--wash-critical); }
 .log-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
@@ -748,7 +754,7 @@ optgroup, option { background: var(--surface); color: var(--text-primary); }
 .run-stats .chip { justify-self: end; padding: 1px 7px; font-size: 10px; }
 .chip.live { color: var(--accent-strong); border-color: rgba(34, 211, 238, 0.35); background: var(--accent-track); }
 .chip.live i { animation: pulse 1.2s ease-in-out infinite; }
-.chip.warn { color: var(--warning); border-color: rgba(245, 179, 1, 0.35); background: var(--wash-warning); }
+.chip.warn { color: var(--warning-text); border-color: rgba(245, 179, 1, 0.35); background: var(--wash-warning); }
 @keyframes pulse { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .chip.live i { animation: none; } }
 

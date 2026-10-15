@@ -97,9 +97,11 @@ export function faceToVertex(vertices, faces, faceCp, faceSigma) {
     const ux = vertices[b] - vertices[a], uy = vertices[b + 1] - vertices[a + 1], uz = vertices[b + 2] - vertices[a + 2];
     const vx = vertices[c] - vertices[a], vy = vertices[c + 1] - vertices[a + 1], vz = vertices[c + 2] - vertices[a + 2];
     const area = 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
-    for (const v of [a / 3, b / 3, c / 3]) {
-      cpSum[v] += area * faceCp[f];
-      sigmaSum[v] += area * faceSigma[f];
+    const cp = area * faceCp[f], sigma = area * faceSigma[f];
+    for (let k = 0; k < 3; k++) {
+      const v = faces[f * 3 + k];
+      cpSum[v] += cp;
+      sigmaSum[v] += sigma;
       weight[v] += area;
     }
   }

@@ -1,9 +1,12 @@
 """Static checks on the web pages: no missing files, no element ids the scripts
-look for that the page does not have. The browser would fail silently on both."""
+look for that the page does not have, and every module parses. The browser
+would fail silently on all three."""
 
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -42,3 +45,14 @@ def test_scripts_only_look_up_ids_the_page_has(page, scripts):
         wanted |= set(re.findall(r"""getElementById\(\s*["']([\w-]+)["']\s*\)""", text))
         missing = sorted(wanted - ids)
         assert not missing, f"{script} looks up ids {page} does not have: {missing}"
+
+
+@pytest.mark.parametrize("script", sorted(p.name for p in WEB.glob("*.js")))
+def test_every_module_parses(script):
+    """A syntax error (say, a name declared twice) stops the whole module loading."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    out = subprocess.run([node, "--input-type=module", "--check"], input=(WEB / script).read_text(encoding="utf-8"),
+                         capture_output=True, text=True, encoding="utf-8", timeout=60)
+    assert out.returncode == 0, out.stderr

@@ -540,7 +540,7 @@ function renderResult() {
   renderCfd();
   renderPressure(e.pressure_summary || {});
   renderHistory();
-  state.viewer?.setRegionValues(regionSummary().values);
+  state.viewer?.setRegionValues(paintedRegionValues());
   updatePins();
   updateFlow();
   renderHud();
@@ -600,13 +600,13 @@ function bindFieldIfReady() {
   state.field = field;
   state.fieldProblem = problem;
   state.viewer.setField(field);
-  state.viewer.setRegionValues(regionSummary().values);
+  state.viewer.setRegionValues(paintedRegionValues());
   if (state.current) {
     renderPressure(regionSummary().values);
     updatePins();
     updateFlow();
   }
-  setViewerMode(state.viewerMode);
+  renderPaintChrome();
 }
 
 function renderDelta(el, value, base, lowerIsBetter) {
@@ -667,6 +667,13 @@ function renderPressure(summary) {
     stub: "Region values come from the synthetic stub, not a trained model.",
     illustrative: "This model predicts drag only. The pins on the car show illustrative pressure worked out from the shape.",
   }[source];
+}
+
+// What the Regions paint shows: the region values, or each region's
+// illustrative mean when no model predicts any (the caption says which).
+function paintedRegionValues() {
+  const { values, source } = regionSummary();
+  return source === "illustrative" ? state.viewer?.car?.fieldMeans || {} : values;
 }
 
 // Where the region numbers come from, best first: the scalar model's own
@@ -979,13 +986,19 @@ function setViewerMode(mode) {
   for (const button of $("viewer-modes").querySelectorAll("button")) {
     button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
   }
+  renderPaintChrome();
+  state.viewer?.setMode(mode);
+}
+
+// The legend and caption for the current paint and scene.
+function renderPaintChrome() {
+  const mode = state.viewerMode;
   $("cp-legend").hidden = !(mode === "field" || mode === "regions") || state.scene === "race";
   $("sigma-legend").hidden = mode !== "sigma" || state.scene === "race";
   $("sigma-max").textContent = state.field ? `${fmt(state.field.sigmaScale, 2)}+` : "–";
   const flowing = state.scene === "tunnel" || state.scene === "drive";
   $("viewer-caption").innerHTML = [SCENES[state.scene]?.caption, paintCaption(mode),
     flowing ? FLOW_CAPTION : ""].filter(Boolean).join(" ");
-  state.viewer?.setMode(mode);
 }
 
 async function fetchMesh(params, style) {
@@ -1022,6 +1035,7 @@ async function refreshMesh(params) {
   if (state.paint) state.viewer.setPaint(state.paint);
   // A new car carries no field: the matching one binds once both halves are in.
   state.field = null;
+  state.fieldProblem = null;
   state.meshIdentity = null;
   if (state.fieldsAvailable) {
     const key = designKey(params, state.bodyStyle);
@@ -1032,11 +1046,11 @@ async function refreshMesh(params) {
     }, (error) => {
       if (seq !== state.meshSeq) return;
       state.fieldProblem = error.message;
-      setViewerMode(state.viewerMode);
+      renderPaintChrome();
     });
   }
   // The prediction may have landed before the viewer finished loading.
-  state.viewer.setRegionValues(regionSummary().values);
+  state.viewer.setRegionValues(paintedRegionValues());
   state.area = payload.frontal_area_m2;
   state.baselineArea = payload.baseline_frontal_area_m2 ?? null;
   state.flow?.setShape(payload.flow, state.viewer.frame);
