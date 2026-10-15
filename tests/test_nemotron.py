@@ -18,8 +18,10 @@ def tool_call(name, args, call_id="c1"):
     return {"id": call_id, "type": "function", "function": {"name": name, "arguments": raw}}
 
 
-def evaluate_call(changes, reasoning="Hypothesis: test. Change: test. Expect: lower Cd.", call_id="c1"):
-    return tool_call("evaluate", {"changes": changes, "reasoning": reasoning}, call_id)
+def evaluate_call(changes, hypothesis="Test hypothesis: this should reduce wake drag.", call_id="c1",
+                  expected_effect="lower_cd", **extra):
+    args = {"changes": changes, "hypothesis": hypothesis, "expected_effect": expected_effect, **extra}
+    return tool_call("evaluate", args, call_id)
 
 
 class FakeClient:
@@ -189,7 +191,9 @@ def test_live_run_feeds_rejection_into_the_next_step(tmp_path, monkeypatch):
     ]
     client, rows, events = live_run(tmp_path, monkeypatch, replies)
     assert [r["accepted"] for r in rows] == [True, True, False, True]
-    assert rows[1]["reasoning"] == "Lower the ramp to reduce base wake."
+    assert rows[1]["reasoning"].startswith("Hypothesis: Lower the ramp to reduce base wake. | Change: "
+                                           "B_Ramp_Angle 0 → -3 | Expected: lower Cd | Observed: Cd ")
+    assert rows[2]["reasoning"].endswith("— no trusted result")
     assert "uncertainty" in rows[2]["reject_reason"]
     # The rejection and its reason are in the very next model context.
     next_state = client.sent[2][1]["content"]

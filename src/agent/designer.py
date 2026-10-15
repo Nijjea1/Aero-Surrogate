@@ -7,9 +7,16 @@ The uncertainty gate is the point of this file. When the surrogate is not
 confident, the proposal is rejected and the agent is TOLD WHY, so it adapts
 instead of hammering the same region.
 
-Both modes score every design over HTTP through the service. --dry-run swaps
-Nemotron for a scripted proposer so the loop can be tested for free. Live mode
-calls Token Factory through src.agent.provider, which enforces the spend cap.
+From the command line both modes score every design over HTTP through the
+service. The service's own run API (src/service/runs.py) runs the same loop
+in-process with `predictor_evaluator`. --dry-run swaps Nemotron for a scripted
+proposer so the loop can be tested for free. Live mode calls Token Factory
+through src.agent.provider, which enforces the spend cap.
+
+Every scored step writes a `step` event with where its time went: waiting for
+the model versus scoring. run_finished carries the totals and medians, so the
+speed claim can be made honestly (a millisecond surrogate does not make a
+millisecond agent step).
 """
 
 from __future__ import annotations
@@ -17,6 +24,7 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import statistics
 import sys
 import time
 import uuid
@@ -26,13 +34,13 @@ from numbers import Real
 import requests
 
 from ..contracts import (
-    DEFAULT_BODY_STYLE, PARAM_BOUNDS, IterationRecord, default_params,
-    validate_body_style, validate_params,
+    DEFAULT_BODY_STYLE, OOD_SCORE_THRESHOLD, PARAM_BOUNDS, UNCERTAINTY_THRESHOLD, Design,
+    IterationRecord, default_params, validate_body_style, validate_params,
 )
 from ..service.gate import rejection_reason
 from ..service.runlog import RunLog
 from .constraints import Constraint, parse_constraint, violations
-from .nemotron import NemotronProposer, NoProposal
+from .nemotron import Cancelled, NemotronProposer, NoProposal, Proposal, judge, logbook_entry
 from .provider import BudgetExceeded, ProviderError, TokenFactoryClient
 
 
@@ -64,6 +72,24 @@ def service_thresholds() -> dict:
     schema = response.json()
     return {"threshold": float(schema["uncertainty_threshold"]),
             "ood_threshold": float(schema["ood_score_threshold"])}
+
+
+def predictor_evaluator(predictor) -> Callable[[dict[str, float], str], dict]:
+    """Score in-process with a service predictor instead of over HTTP."""
+    return lambda params, body_style: predictor.evaluate(Design(params, body_style)).to_dict()
+
+
+def predictor_thresholds(predictor) -> dict:
+    """The thresholds a predictor gates with, matching what /schema reports."""
+    uncertainty = getattr(predictor, "uncertainty_threshold", None)
+    ood = getattr(predictor, "ood_threshold", None)
+    return {"threshold": UNCERTAINTY_THRESHOLD if uncertainty is None else float(uncertainty),
+            "ood_threshold": OOD_SCORE_THRESHOLD if ood is None else float(ood)}
+
+
+def predictor_provenance(predictor) -> str:
+    return describe_provenance({"synthetic": predictor.name == "stub", "predictor": predictor.name,
+                                "model_version": getattr(predictor, "model_version", None)})
 
 
 def describe_provenance(health: dict) -> str:
@@ -122,7 +148,11 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         run_budget_usd: float = 0.50,
         max_consecutive_failures: int = 2,
         thinking: str = "auto",
-        thresholds: dict | None = None) -> str:
+        thresholds: dict | None = None,
+        should_stop: Callable[[], bool] | None = None,
+        on_step: Callable[[dict, dict], None] | None = None,
+        metadata: dict | None = None,
+        log: RunLog | None = None) -> str:
     """Log up to `iterations` scored attempts, including baseline iteration zero.
 
     The body style is fixed for the run: the same offsets describe a different
@@ -132,7 +162,13 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
     repeated invalid proposals, a provider failure, the global spend cap, or
     this run's own cost budget (checked before every model call). An
     exception also writes run_finished before propagating. Dry-run always
-    scores exactly `iterations`.
+    scores exactly `iterations` unless cancelled.
+
+    should_stop is polled before every step and every model call; when it
+    returns True the run ends with stop reason "cancelled". on_step(record,
+    timing) is called after each scored step, for live progress. metadata
+    (e.g. who started the run, and when) is recorded in run_started. log
+    defaults to AERO_RUNLOG_DIR; the service passes its own RunLog.
     """
     if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
         raise ValueError("iterations must be a positive integer")
@@ -150,13 +186,14 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
             proposer = NemotronProposer(client, constraints=constraints, thinking=think)
         # Enforced before every provider call, including correction rounds.
         proposer.budget_usd = run_budget_usd
+        proposer.should_stop = should_stop
     # Readiness checks come before the run is reserved, so a service that is
     # down cannot leave an orphaned, never-started run behind.
     if provenance is None:
         provenance = describe_provenance(service_health()) if evaluator is None else "injected evaluator"
     if thresholds is None:
         thresholds = service_thresholds() if evaluator is None else {}
-    log = RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
+    log = log or RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
     log.reserve(run_id)
     log.append_event(run_id, {
         "type": "run_started", "mode": "scripted" if dry_run else "nemotron",
@@ -164,13 +201,13 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         "thinking": None if dry_run else proposer.thinking,
         "evaluation_budget": iterations, "run_budget_usd": None if dry_run else run_budget_usd,
         "constraints": [str(c) for c in constraints],
-        "surrogate": provenance, "gate_thresholds": thresholds,
+        "surrogate": provenance, "gate_thresholds": thresholds, **(metadata or {}),
     })
-    state = {"history": [], "best_cd": None}
+    state = {"history": [], "best_cd": None, "timings": [], "verdicts": [], "carry": _no_carry()}
     try:
         stop_reason = _drive(state, iterations, run_id, dry_run, log, evaluator or evaluate_design,
                              body_style, proposer, constraints, provenance, thresholds,
-                             max_consecutive_failures)
+                             max_consecutive_failures, should_stop, on_step)
     except BaseException as exc:
         # Every started run gets a terminal event, even when scoring or the
         # service fails, so a reader never mistakes a dead run for a live one.
@@ -186,19 +223,89 @@ def _finish(log: RunLog, run_id: str, stop_reason: str, state: dict,
     usage = vars(proposer.client.usage).copy() if proposer is not None else None
     log.append_event(run_id, {"type": "run_finished", "stop_reason": stop_reason,
                               "scored": len(state["history"]), "best_cd": state["best_cd"],
-                              "usage": usage})
+                              "usage": usage, "timing": timing_summary(state["timings"], state["carry"]),
+                              "hypothesis_hits": hypothesis_hits(state["verdicts"])})
+
+
+def hypothesis_hits(verdicts: list[str]) -> dict:
+    """How often a trusted live step moved Cd the way the model said it would.
+    Only lower/higher expectations are judged; rejected and no_change steps
+    are left out, and a change within noise counts as a miss."""
+    judged, hits = len(verdicts), verdicts.count("as expected")
+    return {"judged": judged, "as_expected": hits, "rate": hits / judged if judged else None}
+
+
+def hypothesis_summary(hits: dict | None) -> str | None:
+    """The CLI's one-line summary of hypothesis_hits; None when nothing was judged."""
+    if not hits or not hits.get("judged"):
+        return None
+    return (f"Hypotheses: {hits['as_expected']} of {hits['judged']} trusted predictions had the "
+            f"expected direction ({hits['rate']:.0%}).")
+
+
+def _no_carry() -> dict:
+    return {"propose_s": 0.0, "model_calls": 0, "model_latency_s": 0.0, "failed_proposals": 0}
+
+
+def timing_summary(timings: list[dict], unscored: dict | None = None) -> dict | None:
+    """Totals and medians of where step time went. None before any step.
+
+    Medians describe live (model-proposed) steps when there are any, so the
+    instant scripted baseline does not halve them on a short run. Totals
+    include `unscored`: model time spent on attempts that never produced a
+    scored design (failed proposals at the end of a run).
+    """
+    unscored = unscored or _no_carry()
+    if not timings and not unscored["model_calls"]:
+        return None
+    live = [t for t in timings if t.get("live")] or timings
+    propose = [t["propose_s"] for t in timings]
+    score = [t["score_s"] for t in timings]
+    step = [t["step_s"] for t in timings]
+    surrogate = [t["surrogate_latency_ms"] for t in timings if t["surrogate_latency_ms"] is not None]
+    total = sum(step) + unscored["propose_s"]
+    waiting = sum(propose) + unscored["propose_s"]
+    return {
+        "steps": len(timings),
+        "propose_s_total": waiting, "score_s_total": sum(score), "step_s_total": total,
+        "propose_s_median": statistics.median(t["propose_s"] for t in live) if live else None,
+        "score_s_median": statistics.median(score) if score else None,
+        "step_s_median": statistics.median(t["step_s"] for t in live) if live else None,
+        "surrogate_latency_ms_median": statistics.median(surrogate) if surrogate else None,
+        "model_share": waiting / total if total > 0 else None,
+        "model_calls": sum(t["model_calls"] for t in timings) + unscored["model_calls"],
+        "failed_proposals": sum(t.get("failed_proposals", 0) for t in timings) + unscored["failed_proposals"],
+    }
+
+
+def _bank(state: dict, step_started: float, calls_before: int, latency_before: float,
+          proposer: NemotronProposer, failed: bool) -> None:
+    """Carry the time and calls of an attempt that scored nothing into the
+    next scored step (or the run's totals), so no model time goes missing."""
+    carry = state["carry"]
+    carry["propose_s"] += _now() - step_started
+    carry["model_calls"] += proposer.client.usage.calls - calls_before
+    carry["model_latency_s"] += proposer.client.usage.latency_s - latency_before
+    carry["failed_proposals"] += int(failed)
 
 
 def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog,
            evaluate: Callable[[dict[str, float], str], dict], body_style: str,
            proposer: NemotronProposer | None, constraints: list[Constraint], provenance: str,
-           thresholds: dict, max_consecutive_failures: int) -> str:
+           thresholds: dict, max_consecutive_failures: int,
+           should_stop: Callable[[], bool] | None = None,
+           on_step: Callable[[dict, dict], None] | None = None) -> str:
     """Propose, score, gate and log until done. Returns the stop reason."""
     history = state["history"]
     best_pressure = None
     failures = 0
     started = time.monotonic()
     while len(history) < iterations:
+        if should_stop is not None and should_stop():
+            return "cancelled"
+        step_started = _now()
+        calls_before = proposer.client.usage.calls if proposer is not None else 0
+        latency_before = proposer.client.usage.latency_s if proposer is not None else 0.0
         if dry_run or not history:
             proposal = scripted_proposer(history)
             params, reasoning = proposal["params"], proposal["reasoning"]
@@ -207,23 +314,31 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
                 proposal = proposer.propose(
                     history, body_style=body_style, evaluations_left=iterations - len(history),
                     total_evaluations=iterations, best_pressure=best_pressure, provenance=provenance)
+            except Cancelled:
+                _bank(state, step_started, calls_before, latency_before, proposer, failed=False)
+                return "cancelled"
             except NoProposal as exc:
+                _bank(state, step_started, calls_before, latency_before, proposer, failed=True)
                 failures += 1
                 log.append_event(run_id, {"type": "no_valid_proposal", "detail": str(exc)})
                 if failures >= max_consecutive_failures:
                     return f"{failures} consecutive steps without a valid proposal"
                 continue
             except BudgetExceeded as exc:
+                _bank(state, step_started, calls_before, latency_before, proposer, failed=False)
                 return f"budget: {exc}"
             except ProviderError as exc:
+                _bank(state, step_started, calls_before, latency_before, proposer, failed=False)
                 log.append_event(run_id, {"type": "provider_error", "detail": str(exc)})
                 return f"provider error: {exc}"
             failures = 0
-            params, reasoning = proposal.params, proposal.reasoning
+            params, reasoning = proposal.params, None  # written after scoring, from the result
             for problem in proposal.feedback:
                 log.append_event(run_id, {"type": "proposal_corrected", "detail": problem})
         _validate_proposal(params)
+        proposed = _now()
         evaluation = evaluate(params, body_style)
+        scored = _now()
         reason = rejection_reason(evaluation, body_style=body_style, **thresholds)
         # Invalid nonfinite predictions cannot be written as valid JSONL.
         if reason and reason.startswith("invalid prediction:"):
@@ -236,6 +351,15 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
         if reason is None and (state["best_cd"] is None or evaluation["cd"] < state["best_cd"]):
             state["best_cd"] = evaluation["cd"]
             best_pressure = evaluation.get("pressure_summary") or None
+        if isinstance(proposal, Proposal):
+            # The observed half of the logbook line comes from the score and
+            # the gate, never from the model.
+            reasoning = logbook_entry(proposal, evaluation["cd"], reason)
+            # Judged only against a trusted base: a gate-rejected or
+            # reference-only baseline is not a fair yardstick.
+            if (reason is None and proposal.base_cd is not None and proposal.base_trusted
+                    and proposal.expected_effect != "no_change"):
+                state["verdicts"].append(judge(proposal.expected_effect, evaluation["cd"] - proposal.base_cd))
         record = IterationRecord(
             run_id=run_id, iteration=len(history), params=dict(params), body_style=body_style,
             cd=evaluation["cd"], cl=evaluation["cl"], uncertainty=evaluation["uncertainty"],
@@ -245,7 +369,30 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
         )
         log.append(record)
         history.append(record.to_dict())
+        latency_ms = evaluation.get("latency_ms")
+        carry, state["carry"] = state["carry"], _no_carry()
+        timing = {
+            "iteration": record.iteration,
+            "live": isinstance(proposal, Proposal),
+            "propose_s": proposed - step_started + carry["propose_s"],
+            "model_calls": ((proposer.client.usage.calls - calls_before) if proposer is not None else 0)
+                           + carry["model_calls"],
+            "model_latency_s": ((proposer.client.usage.latency_s - latency_before) if proposer is not None
+                                else 0.0) + carry["model_latency_s"],
+            "failed_proposals": carry["failed_proposals"],
+            "score_s": scored - proposed,
+            "surrogate_latency_ms": float(latency_ms) if isinstance(latency_ms, (int, float)) else None,
+            "step_s": _now() - step_started + carry["propose_s"],
+        }
+        state["timings"].append(timing)
+        log.append_event(run_id, {"type": "step", **timing})
+        if on_step is not None:
+            on_step(history[-1], timing)
     return "evaluation budget used"
+
+
+# Indirection so tests can drive step timing with a fake clock.
+_now = time.perf_counter
 
 
 def main() -> None:
@@ -289,6 +436,16 @@ def main() -> None:
         usage = finished["usage"]
         print(f"Model calls {usage['calls']}, tokens {usage['prompt_tokens']}+{usage['completion_tokens']}, "
               f"cost ${usage['cost_usd']:.4f}")
+    timing = finished.get("timing")
+    if timing:
+        share = f", {timing['model_share']:.0%} of it waiting for the model" if timing["model_share"] is not None else ""
+        surrogate = timing["surrogate_latency_ms_median"]
+        print(f"Time per step (median): {timing['step_s_median']:.2f}s total, "
+              f"{timing['propose_s_median']:.2f}s proposing, {timing['score_s_median'] * 1000:.1f} ms scoring"
+              + (f" (surrogate itself {surrogate:.2f} ms)" if surrogate else "") + share + ".")
+    hypotheses = hypothesis_summary(finished.get("hypothesis_hits"))
+    if hypotheses:
+        print(hypotheses)
 
 
 if __name__ == "__main__":

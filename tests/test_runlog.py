@@ -103,3 +103,25 @@ def test_multiple_instances_concurrent_append_and_read(tmp_path):
     lines = (tmp_path / "test-run.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(lines) == 80
     assert all(isinstance(json.loads(line), dict) for line in lines)
+
+
+def test_event_log_survives_torn_and_garbled_lines(tmp_path):
+    log = RunLog(tmp_path)
+    log.append_event("evt", {"type": "run_started"})
+    path = tmp_path / "events" / "evt.jsonl"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write('{"type": "step", "x": {"y": 1}')  # a crash mid-append, ending in }
+    # The next event starts a fresh line instead of being glued onto the torn one.
+    log.append_event("evt", {"type": "run_finished"})
+    assert [e["type"] for e in log.read_events("evt")] == ["run_started", "run_finished"]
+    # A garbled line is skipped, not fatal: events are auxiliary.
+    path.write_text('{"type": "ok"}\nnot json but ends}\n{"type": "after"}\n', encoding="utf-8")
+    assert [e["type"] for e in log.read_events("evt")] == ["ok", "after"]
+
+
+def test_run_id_validation_is_public(tmp_path):
+    log = RunLog(tmp_path)
+    log.validate_run_id("agent-0123abcd")
+    for bad in ("../x", "a.b", "CON", ""):
+        with pytest.raises(ValueError):
+            log.validate_run_id(bad)
