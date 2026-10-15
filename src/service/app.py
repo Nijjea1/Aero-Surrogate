@@ -4,6 +4,7 @@
 
 Implemented endpoints:
     GET  /health              -> predictor, model version, checkpoint hash, output provenance
+    GET  /ready               -> 200 when the predictor is loaded and the log dir is writable, else 503
     GET  /schema              -> param bounds, body styles, defaults, thresholds
     POST /evaluate            -> Evaluation (the contract)
     POST /compare             -> field delta between two designs
@@ -36,6 +37,10 @@ from src.contracts import (
 )
 from src.service.predictor import BasePredictor, load_predictor, validate_design_params
 from src.service.gate import rejection_reason
+from src.service.limits import (
+    BodySizeMiddleware, RateLimiter, RateLimitMiddleware, check_writable_dir, is_writable_dir,
+    startup_summary, trust_proxy_from_env,
+)
 from src.service.runlog import RunLog
 from src.service.runs import (
     RunConflict, RunForbidden, RunLimitError, RunManager, RunNotFound, RunRequestError, RunUnavailable,
@@ -92,16 +97,21 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
                settings: Settings | None = None) -> FastAPI:
     """Inject a predictor, log or settings for tests; otherwise read the environment."""
     settings = settings or Settings.from_env()
+    trust_proxy = trust_proxy_from_env()
+
     @asynccontextmanager
     async def lifespan(application):
+        log = runlog or RunLog(settings.runlog_dir)
+        check_writable_dir(log.root)  # fail startup clearly, not on the first run
         application.state.predictor = predictor or load_predictor(
             os.environ.get("AERO_CHECKPOINT") or None
         )
-        application.state.runlog = runlog or RunLog(settings.runlog_dir)
+        application.state.runlog = log
         # A manager set before startup (tests: fake proposers, a fixed clock) is kept.
         if getattr(application.state, "run_manager", None) is None:
-            application.state.run_manager = RunManager(
-                application.state.predictor, application.state.runlog, settings)
+            application.state.run_manager = RunManager(application.state.predictor, log, settings)
+        print(startup_summary(settings, application.state.predictor, SCHEMA_VERSION,
+                              log.root, trust_proxy), flush=True)
         try:
             yield
         finally:
@@ -118,11 +128,29 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
                     "type": error["type"]} for error in exc.errors()]
         return JSONResponse(status_code=422, content={"detail": details})
 
+    # Added before CORS so CORS stays outermost and 413/429 replies carry its headers.
+    application.state.rate_limiter = RateLimiter(settings.rate_limit_per_minute)
+    application.add_middleware(BodySizeMiddleware, max_bytes=settings.max_body_bytes)
+    application.add_middleware(RateLimitMiddleware, limiter=application.state.rate_limiter,
+                               trust_proxy=trust_proxy)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization"],
     )
+
+    @application.get("/ready")
+    def ready():
+        """Container health check; /health stays a plain description."""
+        problems = []
+        if getattr(application.state, "predictor", None) is None:
+            problems.append("predictor not loaded")
+        log = getattr(application.state, "runlog", None)
+        if log is None or not is_writable_dir(log.root):
+            problems.append("run log directory not writable")
+        if problems:
+            return JSONResponse(status_code=503, content={"ready": False, "problems": problems})
+        return {"ready": True}
 
     def _threshold(name: str, default: float) -> float:
         value = getattr(application.state.predictor, name, None)
