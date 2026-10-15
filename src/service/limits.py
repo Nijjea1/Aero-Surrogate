@@ -30,7 +30,7 @@ from typing import Callable
 
 from starlette.responses import JSONResponse
 
-RATE_LIMITED_PATHS = ("/evaluate", "/compare")
+RATE_LIMITED_PATHS = ("/evaluate", "/compare", "/fields")
 # Every method under /runs: POST spends money, and GET reads run logs from
 # disk, so an unthrottled GET flood could starve the scoring endpoints.
 RATE_LIMITED_PREFIXES = ("/runs",)

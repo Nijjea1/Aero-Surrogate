@@ -11,3 +11,8 @@
 -r requirements-service.txt
 torch>=2.4
 numpy>=1.26
+
+# Optional fields-v1 serving uses the viewer's exact triangles and learned kNN
+# regions. Extraction/training-only packages such as PyVista are not required.
+trimesh>=4.0,<5
+scipy>=1.11,<2
