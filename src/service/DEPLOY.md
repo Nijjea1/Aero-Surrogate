@@ -203,15 +203,22 @@ endpoints; without those, the service spends nothing.
 |---|---|
 | `GET /health`, `/ready`, `/schema`, `/history/{run_id}` | public, not rate limited |
 | `POST /evaluate`, `/compare` | public, rate limited per client IP, body-size limited |
-| `POST /runs...` (agent runs, spend money) | rate limited; without an `Authorization` header the caller is *public* (allowed only when `AERO_PUBLIC_RUNS=1`, with public limits); `Authorization: Bearer <AERO_ADMIN_TOKEN>` gets admin limits; a wrong token is always refused, never downgraded to public |
+| `GET /runs`, `GET /runs/{run_id}` | public, rate limited. They show every run's settings, cost, stop reason and error text, admin runs included; nothing secret is stored in them |
+| `POST /runs` (agent runs, spend money) | rate limited; without an `Authorization` header the caller is *public* (allowed only when `AERO_PUBLIC_RUNS=1`, with public limits); `Authorization: Bearer <AERO_ADMIN_TOKEN>` gets admin limits; a wrong token is always refused, never downgraded to public |
+| `POST /runs/{run_id}/cancel` | admin: any run this process owns; public: only a public run, with the `X-Cancel-Token` returned when it started |
 
 Rate-limited requests get `429` with `Retry-After` (seconds); oversized bodies
 get `413`. Both carry CORS headers so the browser can show the message.
 
 ## 6. Environment variables
 
-Defaults are for local development. Settings are validated at startup;
-invalid values fail startup rather than being guessed.
+Defaults are for local development. The service settings (`AERO_*` below,
+except the spend ledger ones) are validated at startup; invalid values fail
+startup rather than being guessed. `NEBIUS_*`, `NEMOTRON_MODEL`,
+`AERO_SPEND_CAP_USD` and `AERO_SPEND_LEDGER` are read when an agent run
+starts, so a bad value there shows up as a 503 from `POST /runs`, not at
+startup. Check them with `python -m src.agent.provider --smoke` (two tiny
+billed calls) after deploying.
 
 | Variable | Default | Used by | Meaning |
 |---|---|---|---|
@@ -224,7 +231,7 @@ invalid values fail startup rather than being guessed.
 | `AERO_PUBLIC_RUN_BUDGET_USD` | `0.10` | service | spend ceiling per public run |
 | `AERO_ADMIN_RUN_BUDGET_USD` | `0.50` | service | spend ceiling per admin run |
 | `AERO_PUBLIC_DAILY_BUDGET_USD` | `1.00` | service | total public spend per UTC day |
-| `AERO_RATE_LIMIT_PER_MINUTE` | `120` | service | `POST /evaluate`, `/compare`, `/runs*` per client IP per minute; `0` = off |
+| `AERO_RATE_LIMIT_PER_MINUTE` | `120` | service | `POST /evaluate`, `/compare` and every `GET`/`POST` under `/runs`, per client IP per minute; `0` = off |
 | `AERO_MAX_BODY_BYTES` | `65536` | service | largest accepted request body (>= 1024); larger gets 413 |
 | `AERO_RUNLOG_DIR` | `runs/logs` (image: `/data/logs`) | service, agent | run logs; must be writable; same directory for service and agent |
 | `AERO_TRUST_PROXY` | `0` | service | `1` = take the client IP from the last `X-Forwarded-For` entry; only behind your own reverse proxy |

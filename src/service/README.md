@@ -133,6 +133,44 @@ Open `http://127.0.0.1:8000/docs` for interactive requests.
 | POST /evaluate | `{"params": <complete parameter object>, "body_style": "fastback"}` returns Evaluation (`body_style` optional) |
 | POST /compare | `{"design_a": {"params": ...}, "design_b": {"params": ...}}` |
 | GET /history/{run_id} | Array of IterationRecord objects; 404 for an absent run |
+| POST /runs | Start an agent run in the background (see Run control below); 202 with its status |
+| GET /runs?limit= | Recent runs, newest first (API and CLI runs alike) |
+| GET /runs/{run_id} | One run's state, progress, cost and timing |
+| POST /runs/{run_id}/cancel | Ask a run to stop at its next step or model call |
+
+### Run control
+
+`POST /runs` body: `{"model": "nano" | "super", "iterations": 25, "body_style":
+"fastback", "constraints": ["A_Car_Roof_Height >= 0"], "run_budget_usd": 0.10,
+"thinking": "auto"}`; only `model` and `iterations` are required. The run
+scores in-process with the serving model and the same gate thresholds as
+`/evaluate`, and is logged like a CLI run, so `/history/{run_id}` streams it.
+
+| Caller | How | Limits |
+|---|---|---|
+| public | no `Authorization` header (only when `AERO_PUBLIC_RUNS=1`) | `AERO_PUBLIC_MAX_ITERATIONS`, `AERO_PUBLIC_RUN_BUDGET_USD` per run, `AERO_PUBLIC_DAILY_BUDGET_USD` per UTC day |
+| admin | `Authorization: Bearer <AERO_ADMIN_TOKEN>` | `AERO_ADMIN_*` ceilings; not counted in the public daily budget |
+
+Requests above a ceiling get 422 (never silently lowered); a wrong token 401;
+too many runs, or the public daily budget used up, 429; no provider key 503.
+Public and admin runs have separate slots of `AERO_MAX_CONCURRENT_RUNS` each,
+so public traffic cannot lock the admin out.
+
+States: `queued`, `running`, then `finished` (its evaluation or spend budget
+ran out), `cancelled`, `failed` (provider error, the model kept producing no
+valid design, or an exception: read `stop_reason`), `interrupted` (the
+service stopped or restarted mid-run), or `unknown` (unfinished and not owned
+by this process, e.g. a CLI run still going).
+
+Cancelling: the admin may cancel any run this process owns. A public run's
+202 response includes a `cancel_token`, shown only then; send it as
+`X-Cancel-Token` to cancel that run. Others get 403. A run already inside a
+model call stops when that call returns (bounded by its timeout).
+
+The daily public budget is computed from the run logs, so it survives
+restarts: a finished run counts at its billed cost, an unfinished or
+unreadable one at its full run budget, and a public run still open from
+yesterday counts today too.
 
 Example evaluation:
 
@@ -185,7 +223,7 @@ values fail startup): `AERO_CORS_ORIGINS`, `AERO_ADMIN_TOKEN`,
 `AERO_ADMIN_RUN_BUDGET_USD`, `AERO_PUBLIC_DAILY_BUDGET_USD`,
 `AERO_RATE_LIMIT_PER_MINUTE`, `AERO_MAX_BODY_BYTES`, `AERO_TRUST_PROXY`,
 `AERO_RUNLOG_DIR`. `POST /evaluate`,
-`/compare` and `/runs*` are rate limited per client IP (429 with
+`/compare` and everything under `/runs` are rate limited per client IP (429 with
 `Retry-After`); bodies over the size limit get 413. `GET /ready` is the
 container health check (503 when the predictor is missing or the log
 directory is not writable); `/health` is unchanged. On startup the service
