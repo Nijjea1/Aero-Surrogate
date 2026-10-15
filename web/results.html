@@ -4,22 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Aero Surrogate Results</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="results.js"></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
+      <span class="logo" id="logo" aria-hidden="true"></span>
+      <div>
       <h1>Aero Surrogate</h1>
       <p class="tagline">How good the surrogate is, how far to trust it, and what the agent does with it.</p>
+      </div>
     </div>
     <nav class="pages" aria-label="Pages">
       <a href="index.html" id="designer-link">Designer</a>
       <a href="runs.html" id="runs-link">Runs</a>
       <a href="results.html" aria-current="page">Results</a>
     </nav>
-    <div class="service" id="source" role="status">
-      <span class="dot"></span><span class="service-text">Loading results…</span>
+    <div class="topbar-end">
+      <div class="service" id="source" role="status">
+        <span class="dot"></span><span class="service-text">Loading results…</span>
+      </div>
+      <button type="button" class="icon-button" id="theme-toggle" aria-label="Switch theme"></button>
     </div>
   </header>
 

@@ -7,7 +7,9 @@
 //
 // ?run=<id> opens with that run in focus.
 
-import { api, escapeHtml, fmt, hideTooltip, pageUrl, ServiceError, showTooltip, signed } from "./common.js";
+import {
+  api, bindInfo, escapeHtml, fmt, hideTooltip, initTheme, LOGO, pageUrl, ServiceError, showTooltip, signed,
+} from "./common.js";
 
 const SLOTS = 4;                                  // --series-1..4, assigned in fixed order
 const LIVE = new Set(["queued", "running", "unknown"]);
@@ -427,6 +429,9 @@ function showError(error) {
 // ---------------------------------------------------------------- start
 
 async function start() {
+  initTheme();
+  bindInfo();
+  $("logo").innerHTML = LOGO;
   $("designer-link").href = pageUrl("index.html");
   $("results-link").href = pageUrl("results.html");
   try {

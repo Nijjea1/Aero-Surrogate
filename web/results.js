@@ -6,7 +6,9 @@
 //
 // Every number on the page comes from those files; nothing is typed in here.
 
-import { escapeHtml, fmt, hideTooltip, pageUrl, showTooltip, signed } from "./common.js";
+import {
+  bindInfo, escapeHtml, fmt, hideTooltip, initTheme, LOGO, pageUrl, showTooltip, signed,
+} from "./common.js";
 
 const $ = (id) => document.getElementById(id);
 const SERIES = { agent: 1, cmaes: 2, random: 3, scripted: 4 };   // colour follows the method
@@ -22,6 +24,9 @@ async function load(path) {
 }
 
 async function start() {
+  initTheme();
+  bindInfo();
+  $("logo").innerHTML = LOGO;
   $("designer-link").href = pageUrl("index.html");
   $("runs-link").href = pageUrl("runs.html");
   const [metrics, bench] = await Promise.allSettled([load("results/metrics.json"), load("results/benchmark.json")]);

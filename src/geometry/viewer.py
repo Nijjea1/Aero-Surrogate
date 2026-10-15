@@ -177,8 +177,8 @@ def classify_parts(vertices: np.ndarray, normals: np.ndarray, region: np.ndarray
     out[(nx < -0.5) & (z > 0.28) & (z < 0.46) & (side_y < 0.6)] = _P["trim"]      # grille
     out[(nx > 0.5) & (z < 0.42) & (x > length - 0.3)] = _P["trim"]               # rear valance
 
-    out[(x < marks["hood_front"] + 0.18) & (z > z_top - 0.13) & (z < z_top - 0.015)
-        & (side_y > 0.42) & (side_y < 0.92) & (nx < 0)] = _P["headlight"]
+    out[(x < marks["hood_front"] + 0.14) & (z > z_top - 0.10) & (z < z_top - 0.025)
+        & (side_y > 0.5) & (side_y < 0.9) & (nx < 0)] = _P["headlight"]
     out[(x > length - 0.35) & (z > z_top - 0.20) & (z < z_top - 0.04)
         & (side_y > 0.35) & (nx > 0.05)] = _P["taillight"]
     return out

@@ -1,9 +1,9 @@
-// Aero Surrogate UI shell.  OWNER: Paramveer.
+// Aero Surrogate designer.  OWNER: Paramveer.
 //
 // Talks to Pranoy's service (src/service/app.py):
 //   GET /health, GET /schema, POST /evaluate
-// and reads designs.json, real test-set cars with their CFD Cd, written by
-// `python -m src.eval.showcase`.
+// and to web/serve.py for the 3D car (POST /api/mesh). Reads designs.json,
+// real test-set cars with their CFD Cd, written by `python -m src.eval.showcase`.
 //
 // The controls are built from /schema, so the page follows whatever parameter
 // space the service runs, without code changes here.
@@ -12,71 +12,79 @@
 // ?run=<run id>&step=<n> opens that step of an optimisation run (runs.html links here).
 
 import {
-  api, escapeHtml, fmt, hideTooltip, pageUrl, ServiceError, showTooltip, signed,
+  api, animateNumber, bindInfo, escapeHtml, fmt, hideTooltip, infoButton, infoHtml, initTheme, LOGO, pageUrl,
+  REDUCED_MOTION, ServiceError, showTooltip, signed, toast,
 } from "./common.js";
 import { aeroLoads } from "./physics.js";
 
-// Readable names and units. Anything not listed falls back to the raw name.
+// Readable names, units and one line on what each dial does to the car.
 const PARAM_INFO = {
-  // contracts 2.0.0 -- deltas from the baseline body
-  B_Ramp_Angle: ["Underbody ramp angle", "°"],
-  B_Diffusor_Angle: ["Diffuser angle", "°"],
-  B_Trunklid_Angle: ["Trunk lid angle", "°"],
-  D_Rear_Window_Inclination: ["Rear window inclination", ""],
-  D_Winscreen_Inclination: ["Windscreen inclination", ""],
-  D_Winscreen_Length: ["Windscreen length", "mm"],
-  D_Rear_Window_Length: ["Rear window length", "mm"],
-  E_A_B_C_Pillar_Thickness: ["Pillar thickness", "mm"],
-  E_Fenders_Arch_Offset: ["Fender arch offset", "mm"],
-  G_Trunklid_Curvature: ["Trunk lid curvature", ""],
-  G_Trunklid_Length: ["Trunk lid length", "mm"],
-  H_Front_Bumper_Curvature: ["Front bumper curvature", ""],
-  H_Front_Bumper_Length: ["Front bumper length", "mm"],
-  A_Car_Length: ["Car length", "mm"],
-  A_Car_Width: ["Car width", "mm"],
-  A_Car_Roof_Height: ["Roof height", "mm"],
-  // contracts 1.0.0 -- absolute values
-  ride_height: ["Ride height", "m"],
-  rear_deck_angle: ["Rear deck angle", "°"],
-  windscreen_rake: ["Windscreen rake", "°"],
-  boat_tail_angle: ["Boat-tail angle", "°"],
-  front_overhang: ["Front overhang", "m"],
-  roof_curvature: ["Roof curvature", ""],
-  rear_diffuser_angle: ["Rear diffuser angle", "°"],
-  track_width: ["Track width", "m"],
+  A_Car_Length: ["Car length", "mm", "Stretches the whole body; a longer tail lets the air close in more gently."],
+  A_Car_Width: ["Car width", "mm", "Widens the body, and with it the frontal area that every newton of drag scales with."],
+  A_Car_Roof_Height: ["Roof height", "mm", "Raises or lowers the roof line: more frontal area up, a slimmer profile down."],
+  H_Front_Bumper_Length: ["Front bumper length", "mm", "How far the nose reaches ahead of the front wheels."],
+  H_Front_Bumper_Curvature: ["Front bumper curvature", "", "How rounded the nose is in plan view. Rounder noses ease the air around the corners."],
+  D_Winscreen_Inclination: ["Windscreen rake", "", "Tilts the windscreen back. A faster rake turns the air more gently over the roof."],
+  D_Winscreen_Length: ["Windscreen length", "mm", "Moves where the glass meets the roof."],
+  E_A_B_C_Pillar_Thickness: ["Pillar thickness", "mm", "Thickens the roof pillars, pinching or widening the glasshouse."],
+  D_Rear_Window_Inclination: ["Rear window angle", "", "How steeply the rear glass drops. Too steep and the flow lets go early, growing the wake."],
+  D_Rear_Window_Length: ["Rear window length", "mm", "Lengthens the rear glass toward the tail."],
+  B_Trunklid_Angle: ["Trunk lid angle", "°", "Kicks the trunk lid up or down: a small lip can tidy the wake."],
+  G_Trunklid_Length: ["Trunk lid length", "mm", "Extends the deck behind the rear glass."],
+  G_Trunklid_Curvature: ["Trunk lid curvature", "", "How much the trunk lid crowns."],
+  B_Ramp_Angle: ["Underbody ramp", "°", "Angle of the rear underbody ramp, which starts recovering pressure under the car."],
+  B_Diffusor_Angle: ["Diffuser angle", "°", "Opens the diffuser under the tail. Moderate angles slow the underbody air gently."],
+  E_Fenders_Arch_Offset: ["Fender arch offset", "mm", "Pushes the wheel arches out or in around the tyres."],
 };
+const GROUPS = [
+  ["Proportions", ["A_Car_Length", "A_Car_Width", "A_Car_Roof_Height"]],
+  ["Front", ["H_Front_Bumper_Length", "H_Front_Bumper_Curvature", "D_Winscreen_Inclination", "D_Winscreen_Length"]],
+  ["Cabin", ["E_A_B_C_Pillar_Thickness", "D_Rear_Window_Inclination", "D_Rear_Window_Length"]],
+  ["Rear", ["B_Trunklid_Angle", "G_Trunklid_Length", "G_Trunklid_Curvature"]],
+  ["Underbody & wheels", ["B_Ramp_Angle", "B_Diffusor_Angle", "E_Fenders_Arch_Offset"]],
+];
 
-const REGION_NAMES = {
-  front_fascia: "Front fascia",
-  hood: "Hood",
-  windscreen: "Windscreen",
-  roof: "Roof",
-  rear_window: "Rear window",
-  rear_fascia: "Rear fascia",
-  underbody: "Underbody",
-  wheel_wells: "Wheel wells",
+// What each region does for drag, for the hover cards.
+const REGION_NOTES = {
+  front_fascia: "Where the oncoming air stops against the car. A rounder, lower nose lowers this pressure peak.",
+  hood: "Air accelerating up from the nose toward the windscreen.",
+  windscreen: "A steep windscreen holds pressure here; a raked one lets the air turn gently onto the roof.",
+  roof: "The fastest air on the car. Suction here mostly lifts; it only costs drag if the flow lets go.",
+  rear_window: "Where the flow decides to stay attached or separate. That decision sets the size of the wake.",
+  rear_fascia: "The base of the car. Low pressure here pulls the car backward: most of a car's drag lives here.",
+  underbody: "Air squeezed between car and road. A diffuser slows it gently and recovers pressure.",
+  wheel_wells: "Rotating wheels churn the air: a large, stubborn share of a car's drag.",
 };
 
 const PRESETS = {
-  baseline: {
-    label: "Baseline",
-    hint: "The service's default design.",
-    params: (schema) => ({ ...schema.defaults }),
-  },
+  baseline: { label: "Baseline", hint: "The unmodified body of this style.", params: (schema) => ({ ...schema.defaults }) },
   random: {
-    label: "Random",
-    hint: "A uniform draw from the design box.",
+    label: "Random", hint: "A uniform draw from the design box, like the dataset's own designs.",
     params: (schema) => mapBounds(schema, (lo, hi) => lo + Math.random() * (hi - lo)),
   },
   edge: {
     label: "Edge of the box",
-    hint: "Every dial near a limit at once: each value is legal, but the combination is unlike " +
-      "any design the model learned from, so the gate should reject it.",
+    hint: "Every dial near a limit at once: each value is legal, but the combination is unlike any design the model learned from, so the gate should reject it.",
     params: (schema) => {
       let i = 0;
       return mapBounds(schema, (lo, hi) => (i++ % 2 ? lo + 0.03 * (hi - lo) : hi - 0.03 * (hi - lo)));
     },
   },
+};
+
+const SCENES = {
+  studio: { label: "Studio", caption: "Drag to orbit, scroll to zoom. Hover a pin or the paint for what each number means." },
+  tunnel: { label: "Wind tunnel", caption: "" },
+  drive: { label: "Road", caption: "" },
+  race: { label: "Drag race", caption: "Same engine, same mass, same tyres: only the predicted drag differs. An illustration of what the prediction means, not a vehicle simulation." },
+};
+const FLOW_CAPTION = "<strong>Airflow is an illustration driven by the prediction, not a simulation.</strong> " +
+  "The smoke takes the pressure of each region it passes (colour, and speed by Bernoulli); the wake grows with " +
+  "predicted Cd, bends with predicted lift when the model predicts it, and trembles with σ. Shown in slow motion.";
+const PAINT_CAPTIONS = {
+  plain: "",
+  field: "<strong>Pressure paint is illustrative:</strong> worked out from each surface's angle to the air, not predicted. Stage 2 replaces it with predicted surface pressure.",
+  regions: "<strong>Regions</strong> are painted with the mean Cp the service predicts for each. Grey surfaces belong to no region.",
 };
 
 const state = {
@@ -86,34 +94,27 @@ const state = {
   bodyStyle: null,
   label: "Baseline",
   baselines: {},      // body style -> evaluation of the default design, for deltas
+  baselineMesh: {},   // body style -> mesh payload of the default design, for the race
   current: null,
   history: [],
   session: 0,         // bumps on each preset or history load; one slider session = one history row
   requestSeq: 0,
   viewer: null,
-  viewerMode: "field",
+  viewerMode: "plain",
   meshSeq: 0,
   flow: null,         // airflow animation (web/flow.js), once three.js has loaded
-  flowMode: "off",
+  scene: "drive",
+  paused: false,
+  pins: null,
+  race: null,
+  paint: null,
+  labels: true,
   speedKmh: 110,
   area: null,         // frontal area of the car on screen, m^2, from /api/mesh
   baselineArea: null, // and of the selected style's baseline body
   realCars: null,     // designs.json, when present
   reference: null,    // the real car on screen, until any dial or the style changes
 };
-
-const VIEWER_CAPTIONS = {
-  field: "Illustrative pressure worked out from the surface shape, not a model prediction. " +
-    "Stage 2 replaces it with predicted surface pressure.",
-  regions: "Each region painted with the mean Cp the service predicts for it. Gray surfaces belong to no region.",
-  plain: "Drag to orbit, scroll to zoom.",
-};
-
-const FLOW_CAPTION = "Airflow is an illustration driven by the prediction, not a simulation: the smoke " +
-  "takes the predicted pressure of each region it passes (colour, and speed by Bernoulli), the wake grows " +
-  "with predicted Cd, bends with predicted lift when the model predicts it, and trembles with σ. Shown in slow motion.";
-
-const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -165,13 +166,18 @@ function rejectionReason(e, bodyStyle) {
   return null;
 }
 
+// False when /health says Cl is a placeholder or missing, not a model output.
+function liftPredicted() {
+  const source = state.health?.output_provenance?.cl;
+  return source !== "placeholder" && source !== "unavailable";
+}
+
 // ---------------------------------------------------------------- controls
 
 function buildControls() {
   const { schema } = state;
 
-  const presets = $("presets");
-  presets.replaceChildren(...Object.entries(PRESETS).map(([key, preset]) => {
+  $("presets").replaceChildren(...Object.entries(PRESETS).map(([key, preset]) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "preset";
@@ -183,65 +189,123 @@ function buildControls() {
 
   const styles = schema.body_styles;
   if (Array.isArray(styles) && styles.length) {
-    const select = $("body-style");
-    select.replaceChildren(...styles.map((s) => new Option(s[0].toUpperCase() + s.slice(1), s)));
     state.bodyStyle = schema.default_body_style || styles[0];
-    select.value = state.bodyStyle;
-    select.addEventListener("change", () => {
-      state.bodyStyle = select.value;
-      state.session++;  // a different car: its own history row
-      markCustom();
-      scheduleEvaluate();
-    });
+    $("body-style").replaceChildren(...styles.map((style) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.style = style;
+      button.textContent = style[0].toUpperCase() + style.slice(1);
+      button.addEventListener("click", () => {
+        if (state.bodyStyle === style) return;
+        setStyleUi(style);
+        state.session++;  // a different car: its own history row
+        markCustom();
+        scheduleEvaluate();
+      });
+      return button;
+    }));
+    setStyleUi(state.bodyStyle);
     $("body-style-field").hidden = false;
   }
 
-  const sliders = $("sliders");
-  sliders.replaceChildren(...Object.entries(schema.param_bounds).map(([name, [lo, hi]]) => {
-    const [label, unit] = PARAM_INFO[name] || [name, ""];
-    const row = document.createElement("div");
-    row.className = "slider-row";
-    row.dataset.name = name;
-    row.innerHTML = `
-      <div class="slider-top">
-        <label class="slider-name" for="p-${name}">${escapeHtml(label)}</label>
-        <span class="slider-value" id="v-${name}"></span>
-      </div>
-      <input type="range" id="p-${name}" min="${lo}" max="${hi}" step="${(hi - lo) / 200}"
-             title="${escapeHtml(name)} · ${lo} to ${hi}${unit ? " " + unit : ""} · double-click to reset">`;
-    const input = row.querySelector("input");
-    input.addEventListener("input", () => {
-      state.params[name] = Number(input.value);
-      updateSliderLabel(name);
-      markCustom();
-      scheduleEvaluate();
-    });
-    input.addEventListener("dblclick", () => {
-      state.params[name] = schema.defaults[name];
-      markCustom();
-      syncSliders();
-      scheduleEvaluate();
-    });
-    return row;
+  // Dials grouped by part of the car; anything the groups do not name goes last.
+  const names = Object.keys(schema.param_bounds);
+  const grouped = new Set(GROUPS.flatMap(([, list]) => list));
+  const groups = [...GROUPS.map(([title, list]) => [title, list.filter((n) => n in schema.param_bounds)]),
+    ["Other", names.filter((n) => !grouped.has(n))]].filter(([, list]) => list.length);
+  $("sliders").replaceChildren(...groups.map(([title, list], k) => {
+    const details = document.createElement("details");
+    details.className = "group";
+    details.open = k < 3;
+    details.innerHTML = `<summary>${escapeHtml(title)}<span class="group-count"></span></summary>`;
+    details.append(...list.map(buildDial));
+    return details;
   }));
 
   $("reset-button").addEventListener("click", () => applyPreset("baseline"));
 }
 
-function syncSliders() {
-  for (const name of Object.keys(state.schema.param_bounds)) {
-    $(`p-${name}`).value = state.params[name];
-    updateSliderLabel(name);
+function buildDial(name) {
+  const [lo, hi] = state.schema.param_bounds[name];
+  const [label, unit, about] = PARAM_INFO[name] || [name, "", ""];
+  const step = (hi - lo) / 200;
+  const row = document.createElement("div");
+  row.className = "dial";
+  row.dataset.name = name;
+  row.innerHTML = `
+    <div class="dial-top">
+      <label class="dial-name" for="p-${name}" title="${escapeHtml(about || name)}">${escapeHtml(label)}</label>
+      <input class="dial-value" id="v-${name}" type="number" step="${decimalsStep(lo, hi)}" min="${lo}" max="${hi}"
+             aria-label="${escapeHtml(label)} value">
+      <span class="dial-unit">${escapeHtml(unit)}</span>
+      <button type="button" class="dial-reset" aria-label="Reset ${escapeHtml(label)}" title="Reset to the baseline">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      </button>
+    </div>
+    <div class="range">
+      <span class="range-track"></span><span class="range-fill"></span><span class="range-zero"></span>
+      <input type="range" id="p-${name}" min="${lo}" max="${hi}" step="${step}">
+    </div>`;
+  const slider = row.querySelector("input[type=range]");
+  const box = row.querySelector(".dial-value");
+  const set = (value) => {
+    state.params[name] = Math.min(hi, Math.max(lo, value));
+    updateDial(name);
+    markCustom();
+    scheduleEvaluate();
+  };
+  slider.addEventListener("input", () => set(Number(slider.value)));
+  box.addEventListener("change", () => { if (box.value !== "" && Number.isFinite(Number(box.value))) set(Number(box.value)); else updateDial(name); });
+  box.addEventListener("keydown", (event) => { if (event.key === "Enter") box.blur(); });
+  row.querySelector(".dial-reset").addEventListener("click", () => set(state.schema.defaults[name]));
+  slider.addEventListener("dblclick", () => set(state.schema.defaults[name]));
+  row.querySelector(".dial-name").addEventListener("pointerenter", (event) => {
+    if (about) showTooltip(event, `<strong>${escapeHtml(label)}</strong><div class="tip-meaning">${escapeHtml(about)}</div>` +
+      `<div class="tip-source">${escapeHtml(name)} · ${lo} to ${hi}${unit ? ` ${unit}` : ""}, 0 is the unmodified car</div>`);
+  });
+  row.querySelector(".dial-name").addEventListener("pointerleave", hideTooltip);
+  return row;
+}
+
+function decimalsStep(lo, hi) {
+  return 10 ** -decimalsFor(lo, hi);
+}
+
+function setStyleUi(style) {
+  state.bodyStyle = style;
+  for (const button of $("body-style").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.style === style));
   }
 }
 
-function updateSliderLabel(name) {
-  const unit = (PARAM_INFO[name] || [])[1] || "";
-  const value = state.params[name];
+function syncSliders() {
+  for (const name of Object.keys(state.schema.param_bounds)) updateDial(name);
+}
+
+// The fill runs from the baseline (0) to the value, either way, since every
+// dial is a delta from the unmodified car.
+function updateDial(name) {
   const [lo, hi] = state.schema.param_bounds[name];
-  $(`v-${name}`).textContent = `${fmt(value, decimalsFor(lo, hi))}${unit ? " " + unit : ""}`;
-  const changed = Math.abs(value - state.schema.defaults[name]) > (hi - lo) * 1e-6;
-  $(`v-${name}`).closest(".slider-row").dataset.changed = String(changed);
+  const [label, unit] = PARAM_INFO[name] || [name, ""];
+  const value = state.params[name];
+  const base = state.schema.defaults[name];
+  const row = $(`p-${name}`).closest(".dial");
+  $(`p-${name}`).value = value;
+  $(`p-${name}`).setAttribute("aria-valuetext", `${fmt(value, decimalsFor(lo, hi))}${unit ? ` ${unit}` : ""}`);
+  if (document.activeElement !== $(`v-${name}`)) $(`v-${name}`).value = fmt(value, decimalsFor(lo, hi));
+  const at = (v) => ((v - lo) / (hi - lo)) * 100;
+  const fill = row.querySelector(".range-fill");
+  fill.style.left = `${Math.min(at(value), at(base))}%`;
+  fill.style.width = `${Math.abs(at(value) - at(base))}%`;
+  row.querySelector(".range-zero").style.left = `${at(base)}%`;
+  const changed = Math.abs(value - base) > (hi - lo) * 1e-6;
+  row.dataset.changed = String(changed);
+  row.title = changed ? "" : `${label}: at the baseline`;
+  const group = row.closest(".group");
+  if (group) {
+    const count = group.querySelectorAll('.dial[data-changed="true"]').length;
+    group.querySelector(".group-count").textContent = count ? `${count} changed` : "";
+  }
 }
 
 function applyPreset(key) {
@@ -262,7 +326,7 @@ function markCustom() {
   state.label = "Custom";
   setReference(null);  // edited, so no longer the car CFD measured
   for (const button of document.querySelectorAll(".preset")) button.setAttribute("aria-pressed", "false");
-  $("preset-hint").textContent = "Your own design. Double-click a slider to reset it.";
+  $("preset-hint").textContent = "Your own design. Type a value, drag a dial, or reset it with ↺.";
 }
 
 // ---------------------------------------------------------------- real cars
@@ -303,8 +367,7 @@ function dragBand(percentile) {
 
 function applyRealCar(car) {
   state.params = clampToBounds(car.params);
-  state.bodyStyle = car.body_style;
-  $("body-style").value = car.body_style;
+  setStyleUi(car.body_style);
   state.label = car.design_id;
   state.session++;
   for (const button of document.querySelectorAll(".preset")) button.setAttribute("aria-pressed", "false");
@@ -358,6 +421,8 @@ function renderCfd() {
       ? "The gate rejected this prediction, so the agent would not have trusted it either way."
       : "A test-set car, chosen by its CFD drag, not by how well the model does on it.";
 }
+
+// ---------------------------------------------------------------- evaluation
 
 let pending = null;
 function scheduleEvaluate() {
@@ -413,15 +478,13 @@ function renderResult() {
   const verdict = $("verdict");
   verdict.dataset.state = reason ? "rejected" : "trusted";
   verdict.querySelector(".verdict-icon").textContent = reason ? "✕" : "✓";
-  $("verdict-label").textContent = reason ? "Rejected by the gate" : "Trusted";
+  $("verdict-label").innerHTML = `${reason ? "Rejected by the gate" : "Trusted by the gate"} ${infoButton("gate")}`;
   $("verdict-reason").textContent = reason ||
     `Inside the training distribution: ${distance}σ is below the ${fmt(threshold, 4)} threshold.`;
 
-  $("cd-value").textContent = fmt(e.cd, 4);
-  // A model that does not predict lift still has to fill the field; /health
-  // says so, and the page then shows no number rather than a fake zero.
+  animateNumber($("cd-value"), e.cd, (v) => fmt(v, 4));
   $("cl-value").textContent = liftPredicted() ? signed(e.cl, 4) : "–";
-  $("sigma-value").textContent = `± ${fmt(e.uncertainty, 4)}`;
+  animateNumber($("sigma-value"), e.uncertainty, (v) => `± ${fmt(v, 4)}`);
   const baseline = state.baselines[baselineKey()];
   if (baseline === undefined) ensureBaseline();
   renderDelta($("cd-delta"), e.cd, baseline?.cd, true);
@@ -430,10 +493,21 @@ function renderResult() {
 
   // Meter spans 0 to 1.5x the threshold; the mark is the threshold itself.
   const span = threshold * 1.5;
-  $("sigma-fill").style.width = `${Math.min(e.uncertainty / span, 1) * 100}%`;
-  $("sigma-mark").style.left = `calc(${(threshold / span) * 100}% - 1px)`;
-  $("sigma-meter").dataset.over = String(e.uncertainty > threshold);
+  for (const [fill, mark, meter] of [["sigma-fill", "sigma-mark", "sigma-meter"], ["hud-meter-fill", "hud-meter-mark", "hud-meter"]]) {
+    $(fill).style.width = `${Math.min(e.uncertainty / span, 1) * 100}%`;
+    $(mark).style.left = `calc(${(threshold / span) * 100}% - 1px)`;
+    $(meter).dataset.over = String(e.uncertainty > threshold);
+  }
   $("sigma-note").textContent = `Gate threshold ${fmt(threshold, 4)}`;
+
+  // The HUD on the stage.
+  $("hud-chip").dataset.state = reason ? "rejected" : "trusted";
+  $("hud-chip-text").textContent = reason ? "Gate rejected" : "Trusted";
+  $("hud-chip").title = reason || "The gate trusts this prediction.";
+  animateNumber($("hud-cd"), e.cd, (v) => fmt(v, 4));
+  renderDelta($("hud-cd-delta"), e.cd, baseline?.cd, true);
+  $("hud-sigma").textContent = fmt(e.uncertainty, 4);
+  $("hud-threshold").textContent = fmt(threshold, 4);
 
   const latency = e.latency_ms > 0 ? `model ${fmt(e.latency_ms, 1)} ms · ` : "";
   $("timing").textContent = `${latency}round trip ${fmt(roundTrip, 0)} ms · ${e.model_version}`;
@@ -442,194 +516,9 @@ function renderResult() {
   renderPressure(e.pressure_summary || {});
   renderHistory();
   state.viewer?.setRegionValues(e.pressure_summary || {});
+  updatePins();
   updateFlow();
   renderHud();
-}
-
-// ---------------------------------------------------------------- 3D viewer
-
-async function initViewer() {
-  const message = $("viewer-message");
-  try {
-    const { createViewer } = await import("./viewer.js");
-    state.viewer = createViewer($("viewer"), { onHover: hoverCar });
-  } catch (error) {
-    message.textContent = "The 3D view could not load (three.js comes from a CDN, so it needs a connection).";
-    console.error(error);
-    return;
-  }
-  for (const button of $("viewer-modes").querySelectorAll("button")) {
-    button.addEventListener("click", () => setViewerMode(button.dataset.mode));
-  }
-  setViewerMode(state.viewerMode);
-  await initFlow();
-}
-
-async function initFlow() {
-  try {
-    const { createFlow } = await import("./flow.js");
-    state.flow = createFlow(state.viewer);
-  } catch (error) {
-    console.error(error);
-    return;
-  }
-  state.flow.setSpeed(state.speedKmh);
-  // ?debug=1 exposes the page state in the console, e.g. aero.flow.stats.frameMs
-  if (new URLSearchParams(location.search).has("debug")) window.aero = state;
-  // Respect reduced motion: the airflow starts paused, one click to play.
-  if (REDUCED_MOTION) state.flow.setPaused(true);
-  for (const button of $("flow-modes").querySelectorAll("button")) {
-    button.addEventListener("click", () => setFlowMode(button.dataset.flow));
-  }
-  $("speed").addEventListener("input", () => {
-    state.speedKmh = Number($("speed").value);
-    state.flow.setSpeed(state.speedKmh);
-    renderHud();
-  });
-  $("flow-pause").addEventListener("click", () => {
-    const paused = $("flow-pause").textContent === "Pause";
-    state.flow.setPaused(paused);
-    $("flow-pause").textContent = paused ? "Play" : "Pause";
-  });
-  $("fullscreen").addEventListener("click", () => {
-    const panel = $("viewer").closest(".viewer-panel");
-    if (document.fullscreenElement) document.exitFullscreen();
-    else panel.requestFullscreen?.().catch(() => {});
-  });
-  document.addEventListener("fullscreenchange", () => {
-    $("fullscreen").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
-  });
-  updateFlow();
-  setFlowMode("drive");   // open on the car driving; "Still" is one click away
-}
-
-function setFlowMode(mode) {
-  state.flowMode = mode;
-  for (const button of $("flow-modes").querySelectorAll("button")) {
-    button.setAttribute("aria-pressed", String(button.dataset.flow === mode));
-  }
-  const on = mode !== "off";
-  $("flow-hud").hidden = !on;
-  $("flow-pause").hidden = !on;
-  $("flow-pause").textContent = REDUCED_MOTION ? "Play" : "Pause";
-  if (REDUCED_MOTION) state.flow.setPaused(true);
-  state.flow.setMode(mode);
-  setViewerMode(state.viewerMode);   // refresh the caption
-  renderHud();
-}
-
-// Hand the current prediction to the airflow. Called whenever the prediction,
-// the baseline or the shape changes.
-function updateFlow() {
-  if (!state.flow || !state.current) return;
-  const e = state.current.evaluation;
-  const baseline = state.baselines[baselineKey()];
-  state.flow.setPrediction({
-    cd: e.cd, cl: liftPredicted() ? e.cl : 0, sigma: e.uncertainty,
-    threshold: state.schema.uncertainty_threshold,
-    trusted: !rejectionReason(e, state.current.bodyStyle),
-    pressure: e.pressure_summary || {},
-    baselineCd: baseline?.cd,
-  });
-}
-
-function renderHud() {
-  if (!state.current || !state.area) return;
-  const e = state.current.evaluation;
-  const speedKmh = state.speedKmh;
-  const now = aeroLoads({ cd: e.cd, cl: e.cl, sigma: e.uncertainty, area: state.area, speedKmh });
-  const baseline = state.baselines[baselineKey()];
-  const base = baseline && state.baselineArea
-    ? aeroLoads({ cd: baseline.cd, cl: baseline.cl, area: state.baselineArea, speedKmh })
-    : null;
-  $("speed-value").textContent = `${speedKmh} km/h`;
-  $("hud-speed").textContent = `${speedKmh} km/h`;
-  $("hud-drag").textContent = `${fmt(now.drag, 0)} N ± ${fmt(now.dragSigma, 0)}`;
-  $("hud-power").textContent = `${fmt(now.power, 1)} kW`;
-  $("hud-energy").textContent = `${fmt(now.energyPer100km, 2)} kWh / 100 km`;
-  $("hud-lift").textContent = !liftPredicted() ? "not predicted"
-    : now.lift < 0 ? `${fmt(-now.lift, 0)} N down` : `${fmt(now.lift, 0)} N up`;
-  hudDelta($("hud-drag-delta"), base && now.drag - base.drag, (d) => `${signed(d, 0)} N vs baseline`);
-  hudDelta($("hud-energy-delta"), base && now.energyPer100km - base.energyPer100km,
-    (d) => `${signed(d, 2)} kWh vs baseline`);
-  $("hud-flag").hidden = !rejectionReason(e, state.current.bodyStyle);
-}
-
-// False when /health says Cl is a placeholder or missing, not a model output.
-function liftPredicted() {
-  const source = state.health?.output_provenance?.cl;
-  return source !== "placeholder" && source !== "unavailable";
-}
-
-function hudDelta(el, delta, text) {
-  const show = typeof delta === "number" && state.current.label !== "Baseline";
-  el.textContent = show ? text(delta) : "";
-  if (show && Math.abs(delta) > 1e-9) el.dataset.good = String(delta < 0);
-  else el.removeAttribute("data-good");
-}
-
-function setViewerMode(mode) {
-  state.viewerMode = mode;
-  for (const button of $("viewer-modes").querySelectorAll("button")) {
-    button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
-  }
-  $("cp-legend").hidden = mode === "plain";
-  $("viewer-caption").textContent = VIEWER_CAPTIONS[mode] +
-    (mode === "regions" && state.health?.synthetic ? " Values are from the synthetic stub." : "") +
-    (state.flowMode !== "off" ? ` ${FLOW_CAPTION}` : "");
-  state.viewer?.setMode(mode);
-}
-
-async function refreshMesh(params) {
-  if (!state.viewer) return;
-  const seq = ++state.meshSeq;
-  const body = { params };
-  if (state.bodyStyle) body.body_style = state.bodyStyle;
-  let payload;
-  try {
-    const response = await fetch("/api/mesh", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-    if (response.status === 404 || response.status === 501) {
-      throw new Error("Start the page with <code>python web/serve.py</code> to see the car in 3D.");
-    }
-    payload = await response.json();
-    if (!response.ok) throw new Error(escapeHtml(payload.detail || response.statusText));
-  } catch (error) {
-    if (seq === state.meshSeq) {
-      const message = $("viewer-message");
-      message.hidden = false;
-      message.innerHTML = error.message.includes("<code>") ? error.message : `No 3D view: ${escapeHtml(error.message)}`;
-    }
-    return;
-  }
-  if (seq !== state.meshSeq) return;   // a newer shape is on its way
-  $("viewer-message").hidden = true;
-  state.viewer.setMesh(payload);
-  // The prediction may have landed before the viewer finished loading.
-  state.viewer.setRegionValues(state.current?.evaluation.pressure_summary || {});
-  state.area = payload.frontal_area_m2;
-  state.baselineArea = payload.baseline_frontal_area_m2 ?? null;
-  state.flow?.setShape(payload.flow, state.viewer.frame);
-  updateFlow();
-  renderHud();
-  $("dims").textContent = `${fmt(payload.length_m, 2)} × ${fmt(payload.width_m, 2)} × ${fmt(payload.height_m, 2)} m` +
-    ` · frontal area ${fmt(payload.frontal_area_m2, 2)} m²`;
-  const ignored = payload.ignored_params || [];
-  $("viewer-ignored").hidden = !ignored.length;
-  $("viewer-ignored").textContent = ignored.length
-    ? `The service runs contracts ${state.schema.schema_version}; the 3D car follows the 2.0.0 parameters, ` +
-      "so these sliders don't reshape it yet. It shows the baseline body until 2.0.0 lands."
-    : "";
-}
-
-function hoverCar(info, event) {
-  if (!info) { hideTooltip(); return; }
-  const name = info.name ? REGION_NAMES[info.name] || info.name : "Side (no region)";
-  const value = info.value === null || info.value === undefined
-    ? (info.mode === "plain" ? "" : "no value")
-    : `Cp ${signed(info.value, 2)}${info.mode === "field" ? " (illustrative)" : ""}`;
-  showTooltip(event, `<strong>${escapeHtml(name)}</strong>${value}`);
 }
 
 function renderDelta(el, value, base, lowerIsBetter) {
@@ -639,8 +528,8 @@ function renderDelta(el, value, base, lowerIsBetter) {
     return;
   }
   const delta = value - base;
-  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "±";
-  el.textContent = `${sign}${fmt(Math.abs(delta), 4)} vs baseline`;
+  const pct = base ? ` (${signed((100 * delta) / base, 1)}%)` : "";
+  el.textContent = `${signed(delta, 4)}${pct} vs baseline`;
   if (lowerIsBetter === null || Math.abs(delta) < 1e-9) el.removeAttribute("data-good");
   else el.dataset.good = String(lowerIsBetter ? delta < 0 : delta > 0);
 }
@@ -656,7 +545,7 @@ function renderPressure(summary) {
     const row = document.createElement("div");
     row.className = "p-row";
     row.setAttribute("role", "row");
-    const name = REGION_NAMES[region] || region;
+    const name = regionName(region);
     if (typeof value !== "number") {
       row.classList.add("missing");
       row.innerHTML = `<span class="p-label" role="rowheader">${escapeHtml(name)}</span>
@@ -669,11 +558,7 @@ function renderPressure(summary) {
       <span class="p-track"><span class="p-bar ${value < 0 ? "neg" : "pos"}"
         style="left:${left}%;width:${half}%"></span></span>
       <span class="p-value" role="cell">${signed(value, 2)}</span>`;
-    const base = state.baselines[baselineKey()]?.pressure_summary?.[region];
-    row.addEventListener("mousemove", (event) => showTooltip(event,
-      `<strong>${escapeHtml(name)}</strong>Cp ${signed(value, 3)}` +
-      (typeof base === "number" && state.current.label !== "Baseline"
-        ? `<br>${signed(value - base, 3)} vs baseline` : "")));
+    row.addEventListener("mousemove", (event) => showTooltip(event, regionCard(region, value, pressureSource())));
     row.addEventListener("mouseleave", hideTooltip);
     return row;
   });
@@ -687,7 +572,84 @@ function renderPressure(summary) {
   const missing = regions.filter((r) => typeof summary[r] !== "number").length;
   $("pressure-note").textContent = state.health?.synthetic
     ? "Region values come from the synthetic stub. Real surface pressure arrives with the stage 2 model."
-    : missing ? `${missing} region${missing > 1 ? "s" : ""} not predicted by this model.` : "";
+    : missing === regions.length
+      ? "This model predicts drag only. The pins on the car show illustrative pressure from the shape until stage 2 serves predicted surface pressure."
+      : missing ? `${missing} region${missing > 1 ? "s" : ""} not predicted by this model.` : "";
+}
+
+// Where the region numbers on the car come from.
+function pressureSource() {
+  const p = state.health?.output_provenance?.pressure_summary;
+  if (state.health?.synthetic || p === "synthetic") return "stub";
+  if (p === "model") return "model";
+  return "illustrative";
+}
+
+function regionName(region) {
+  return {
+    front_fascia: "Front fascia", hood: "Hood", windscreen: "Windscreen", roof: "Roof",
+    rear_window: "Rear window", rear_fascia: "Rear fascia", underbody: "Underbody", wheel_wells: "Wheels",
+  }[region] || region;
+}
+
+function cpMeaning(v) {
+  if (v > 0.3) return `The air is stopping here and pushes on the panel with ${fmt(100 * v, 0)}% of the oncoming dynamic pressure.`;
+  if (v > 0.05) return "Slightly above free-stream pressure: the air is slowing as it meets the surface.";
+  if (v > -0.05) return "About free-stream pressure: the air passes without speeding up or slowing down.";
+  if (v > -0.3) return "Mild suction: the air speeds up over this surface.";
+  return `Strong suction: the air accelerates hard here, pulling on the panel with ${fmt(-100 * v, 0)}% of the dynamic pressure.`;
+}
+
+const SOURCE_CHIPS = {
+  model: '<span class="chip model"><i></i>Model</span> predicted by the surrogate',
+  stub: '<span class="chip stub"><i></i>Stub</span> a synthetic test value',
+  illustrative: '<span class="chip illustrative"><i></i>Illustrative</span> from the surface shape, not predicted',
+};
+
+function regionCard(region, value, source) {
+  const has = typeof value === "number";
+  return `<strong>${escapeHtml(regionName(region))}</strong>` +
+    `<div class="tip-value">${has ? `Cp ${signed(value, 2)}` : "no value"}</div>` +
+    (has ? `<div class="tip-meaning">${escapeHtml(cpMeaning(value))}</div>` : "") +
+    `<div class="tip-meaning" style="margin-top:6px">${escapeHtml(REGION_NOTES[region] || "")}</div>` +
+    `<div class="tip-source">${SOURCE_CHIPS[source] || ""}</div>`;
+}
+
+// Pins show the model's region values when it predicts them, else the
+// illustrative pressure averaged over each region.
+function pinValues() {
+  const summary = state.current?.evaluation.pressure_summary || {};
+  const car = state.viewer?.car;
+  const source = pressureSource();
+  const out = {};
+  for (const region of state.schema.pressure_regions) {
+    if (typeof summary[region] === "number" && source !== "illustrative") out[region] = { value: summary[region], source };
+    else if (car && typeof car.fieldMeans[region] === "number") out[region] = { value: car.fieldMeans[region], source: "illustrative" };
+  }
+  return out;
+}
+
+function updatePins() {
+  if (!state.pins) return;
+  state.pinValues = pinValues();
+  state.pins.setValues(state.pinValues);
+  if (state.current && state.area) {
+    const e = state.current.evaluation;
+    const loads = aeroLoads({ cd: e.cd, cl: e.cl, sigma: e.uncertainty, area: state.area, speedKmh: state.speedKmh });
+    state.pins.setDrag({ newtons: loads.drag, sigma: loads.dragSigma });
+  }
+}
+
+function describePin(key) {
+  if (key === "drag") {
+    const e = state.current?.evaluation;
+    if (!e || !state.area) return infoHtml("drag");
+    const loads = aeroLoads({ cd: e.cd, sigma: e.uncertainty, area: state.area, speedKmh: state.speedKmh });
+    return infoHtml("drag", `<div class="tip-value">${fmt(loads.drag, 0)} N ± ${fmt(loads.dragSigma, 0)}</div>`) +
+      `<div class="tip-source">at ${state.speedKmh} km/h · Cd ${fmt(e.cd, 4)} × ${fmt(state.area, 2)} m² frontal area</div>`;
+  }
+  const v = state.pinValues?.[key];
+  return regionCard(key, v?.value, v?.source || "illustrative");
 }
 
 // Dragging sliders is one design being refined, so it updates one row rather
@@ -715,7 +677,7 @@ function renderHistory() {
     tr.addEventListener("click", () => {
       state.params = { ...entry.params };
       state.label = entry.label;
-      if (entry.bodyStyle) { state.bodyStyle = entry.bodyStyle; $("body-style").value = entry.bodyStyle; }
+      if (entry.bodyStyle) setStyleUi(entry.bodyStyle);
       setReference(entry.reference || null);
       state.session++;
       syncSliders();
@@ -724,6 +686,268 @@ function renderHistory() {
     return tr;
   }));
 }
+
+// ---------------------------------------------------------------- 3D stage
+
+async function initViewer() {
+  const message = $("viewer-message");
+  try {
+    const viewerModule = await import("./viewer.js");
+    state.viewer = viewerModule.createViewer($("viewer"), { onHover: hoverCar });
+    state.paints = viewerModule.PAINTS;
+    state.paint = viewerModule.PAINTS["Liquid silver"];
+    const { createAnnotations } = await import("./annotations.js");
+    state.pins = createAnnotations(state.viewer, $("pins"), { describe: describePin });
+  } catch (error) {
+    message.innerHTML = "<div>The 3D view could not load. three.js comes from a CDN, so it needs a connection.</div>";
+    console.error(error);
+    return;
+  }
+  buildSwatches();
+  for (const button of $("viewer-modes").querySelectorAll("button")) {
+    button.addEventListener("click", () => setViewerMode(button.dataset.mode));
+  }
+  for (const button of $("scene-modes").querySelectorAll("button")) {
+    button.addEventListener("click", () => setScene(button.dataset.scene));
+  }
+  $("labels-toggle").addEventListener("click", () => {
+    state.labels = !state.labels;
+    $("labels-toggle").setAttribute("aria-pressed", String(state.labels));
+    state.pins.setVisible(state.labels && state.scene !== "race");
+  });
+  $("speed").addEventListener("input", () => {
+    state.speedKmh = Number($("speed").value);
+    state.flow?.setSpeed(state.speedKmh);
+    renderHud();
+    updatePins();
+  });
+  $("flow-pause").addEventListener("click", () => {
+    state.paused = !state.paused;
+    state.flow?.setPaused(state.paused);
+    syncPause();
+  });
+  $("fullscreen").addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else $("stage").requestFullscreen?.().catch(() => {});
+  });
+  // ?debug=1 exposes the page state in the console, e.g. aero.viewer.perf, aero.flow.stats
+  if (new URLSearchParams(location.search).has("debug")) window.aero = state;
+  setViewerMode(state.viewerMode);
+  try {
+    const [{ createFlow }, { createRace }] = await Promise.all([import("./flow.js"), import("./race.js")]);
+    state.flow = createFlow(state.viewer);
+    state.race = createRace(state.viewer, $("race-hud"));
+  } catch (error) {
+    console.error(error);
+  }
+  state.flow?.setSpeed(state.speedKmh);
+  // Respect reduced motion: the airflow starts paused, one click to play.
+  state.paused = REDUCED_MOTION;
+  updateFlow();
+  setScene(state.scene);
+}
+
+function buildSwatches() {
+  $("swatches").replaceChildren(...Object.entries(state.paints).map(([name, hex]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "swatch-dot";
+    button.style.background = hex;
+    button.title = name;
+    button.setAttribute("aria-label", `${name} paint`);
+    button.setAttribute("aria-pressed", String(hex === state.paint));
+    button.addEventListener("click", () => {
+      state.paint = hex;
+      state.viewer.setPaint(hex);
+      for (const b of $("swatches").children) b.setAttribute("aria-pressed", String(b === button));
+      if (state.viewerMode !== "plain") setViewerMode("plain");
+    });
+    return button;
+  }));
+}
+
+function syncPause() {
+  const button = $("flow-pause");
+  const playing = !state.paused;
+  button.setAttribute("aria-pressed", String(state.paused));
+  button.setAttribute("aria-label", playing ? "Pause the airflow" : "Play the airflow");
+  button.innerHTML = playing
+    ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  button.hidden = state.scene === "studio" || state.scene === "race";
+}
+
+function setScene(scene) {
+  if (!state.viewer) return;
+  const previous = state.scene;
+  state.scene = scene;
+  for (const button of $("scene-modes").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.scene === scene));
+  }
+  $("hud-scene").textContent = SCENES[scene].label;
+  if (previous === "race" && scene !== "race") state.race?.stop();
+  const flowMode = scene === "tunnel" ? "tunnel" : scene === "drive" ? "drive" : "off";
+  state.flow?.setMode(flowMode);
+  if (flowMode !== "off") state.flow?.setPaused(state.paused);
+  state.viewer.setStage(scene === "studio" ? "studio" : "none");
+  if (scene === "studio") {
+    state.viewer.scene.background = null;
+    state.viewer.scene.fog = null;
+    state.viewer.setView("orbit", { animate: previous !== scene });
+  }
+  state.pins?.setVisible(state.labels && scene !== "race");
+  $("hud").hidden = scene === "race";
+  $("hud-verdict").hidden = scene === "race";
+  if (scene === "race") startRace();
+  syncPause();
+  setViewerMode(state.viewerMode);
+  renderHud();
+}
+
+// The race needs the original car of this style: its mesh and its prediction.
+async function startRace() {
+  if (!state.race || !state.current || !state.area) {
+    toast("The race needs a prediction and the 3D car first.");
+    return;
+  }
+  const style = state.bodyStyle;
+  try {
+    await ensureBaseline();
+    if (!state.baselineMesh[style]) state.baselineMesh[style] = await fetchMesh(clampToBounds(state.schema.defaults), style);
+  } catch (error) {
+    toast(`No race: ${escapeHtml(error.message)}`);
+    return;
+  }
+  const base = state.baselines[baselineKey()];
+  if (!base || state.scene !== "race") return;
+  const e = state.current.evaluation;
+  state.race.start({
+    design: { cd: e.cd, area: state.area, label: state.current.label === "Baseline" ? "Design (baseline)" : "Your design",
+      trusted: !rejectionReason(e, state.current.bodyStyle) },
+    original: { cd: base.cd, area: state.baselineMesh[style].frontal_area_m2, label: "Original", payload: state.baselineMesh[style],
+      paint: state.paint === state.paints.Graphite ? state.paints["Liquid silver"] : state.paints.Graphite },
+  });
+}
+
+// Hand the current prediction to the airflow. Called whenever the prediction,
+// the baseline or the shape changes.
+function updateFlow() {
+  if (!state.flow || !state.current) return;
+  const e = state.current.evaluation;
+  const baseline = state.baselines[baselineKey()];
+  state.flow.setPrediction({
+    cd: e.cd, cl: liftPredicted() ? e.cl : 0, sigma: e.uncertainty,
+    threshold: state.schema.uncertainty_threshold,
+    trusted: !rejectionReason(e, state.current.bodyStyle),
+    pressure: e.pressure_summary || {},
+    baselineCd: baseline?.cd,
+  });
+}
+
+function renderHud() {
+  const speedKmh = state.speedKmh;
+  $("speed-value").textContent = `${speedKmh} km/h`;
+  $("hud-speed").textContent = String(speedKmh);
+  const [lo, hi] = [Number($("speed").min), Number($("speed").max)];
+  $("speed-fill").style.left = "0%";
+  $("speed-fill").style.width = `${((speedKmh - lo) / (hi - lo)) * 100}%`;
+  if (!state.current || !state.area) return;
+  const e = state.current.evaluation;
+  const now = aeroLoads({ cd: e.cd, cl: e.cl, sigma: e.uncertainty, area: state.area, speedKmh });
+  const baseline = state.baselines[baselineKey()];
+  const base = baseline && state.baselineArea
+    ? aeroLoads({ cd: baseline.cd, cl: baseline.cl, area: state.baselineArea, speedKmh })
+    : null;
+  $("hud-drag").textContent = `${fmt(now.drag, 0)} N ± ${fmt(now.dragSigma, 0)}`;
+  $("hud-power").textContent = `${fmt(now.power, 1)} kW`;
+  $("hud-energy").textContent = `${fmt(now.energyPer100km, 2)} kWh`;
+  $("hud-lift").textContent = !liftPredicted() ? "not predicted"
+    : now.lift < 0 ? `${fmt(-now.lift, 0)} N down` : `${fmt(now.lift, 0)} N up`;
+  hudDelta($("hud-drag-delta"), base && now.drag - base.drag, (d) => `${signed(d, 0)} N vs baseline`);
+  hudDelta($("hud-energy-delta"), base && now.energyPer100km - base.energyPer100km,
+    (d) => `${signed(d, 2)} kWh vs baseline`);
+  $("hud-flag").hidden = !rejectionReason(e, state.current.bodyStyle) || state.scene === "studio";
+}
+
+function hudDelta(el, delta, text) {
+  const show = typeof delta === "number" && state.current.label !== "Baseline";
+  el.textContent = show ? text(delta) : "";
+  if (show && Math.abs(delta) > 1e-9) el.dataset.good = String(delta < 0);
+  else el.removeAttribute("data-good");
+}
+
+function setViewerMode(mode) {
+  state.viewerMode = mode;
+  for (const button of $("viewer-modes").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+  }
+  $("cp-legend").hidden = mode === "plain" || state.scene === "race";
+  const flowing = state.scene === "tunnel" || state.scene === "drive";
+  $("viewer-caption").innerHTML = [SCENES[state.scene]?.caption, PAINT_CAPTIONS[mode] +
+    (mode === "regions" && state.health?.synthetic ? " Values are from the synthetic stub." : ""),
+  flowing ? FLOW_CAPTION : ""].filter(Boolean).join(" ");
+  state.viewer?.setMode(mode);
+}
+
+async function fetchMesh(params, style) {
+  const body = { params };
+  if (style) body.body_style = style;
+  const response = await fetch("/api/mesh", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (response.status === 404 || response.status === 501) {
+    throw new Error("Start the page with <code>python web/serve.py</code> to see the car in 3D.");
+  }
+  const payload = await response.json();
+  if (!response.ok) throw new Error(escapeHtml(payload.detail || response.statusText));
+  return payload;
+}
+
+async function refreshMesh(params) {
+  if (!state.viewer) return;
+  const seq = ++state.meshSeq;
+  let payload;
+  try {
+    payload = await fetchMesh(params, state.bodyStyle);
+  } catch (error) {
+    if (seq === state.meshSeq) {
+      const message = $("viewer-message");
+      message.hidden = false;
+      message.innerHTML = `<div>${error.message.includes("<code>") ? error.message : `No 3D view: ${escapeHtml(error.message)}`}</div>`;
+    }
+    return;
+  }
+  if (seq !== state.meshSeq) return;   // a newer shape is on its way
+  $("viewer-message").hidden = true;
+  state.viewer.setMesh(payload);
+  if (state.paint) state.viewer.setPaint(state.paint);
+  // The prediction may have landed before the viewer finished loading.
+  state.viewer.setRegionValues(state.current?.evaluation.pressure_summary || {});
+  state.area = payload.frontal_area_m2;
+  state.baselineArea = payload.baseline_frontal_area_m2 ?? null;
+  state.flow?.setShape(payload.flow, state.viewer.frame);
+  updateFlow();
+  updatePins();
+  renderHud();
+  const ignored = payload.ignored_params || [];
+  $("viewer-ignored").hidden = !ignored.length;
+  $("viewer-ignored").textContent = ignored.length
+    ? `The service runs contracts ${state.schema.schema_version}; the 3D car follows the 2.0.0 parameters, ` +
+      "so these sliders don't reshape it yet. It shows the baseline body until 2.0.0 lands."
+    : "";
+}
+
+function hoverCar(info, event) {
+  if (!info) { hideTooltip(); return; }
+  if (!info.name) {
+    showTooltip(event, "<strong>Side panel</strong><div class=\"tip-meaning\">No pressure region covers the sides.</div>");
+    return;
+  }
+  const source = info.mode === "regions" ? pressureSource() : "illustrative";
+  showTooltip(event, regionCard(info.name, info.value, source));
+}
+
+// ---------------------------------------------------------------- service status
 
 function renderService() {
   const el = $("service-status");
@@ -735,7 +959,8 @@ function renderService() {
   el.dataset.state = "ok";
   const h = state.health;
   el.querySelector(".service-text").textContent =
-    `Connected · ${h.predictor}${h.synthetic ? " (synthetic)" : ""} · schema ${h.schema_version}`;
+    `${h.synthetic ? "Synthetic stub" : `${h.predictor} · ${h.model_version || "model"}`} · schema ${h.schema_version}`;
+  el.title = h.checkpoint_sha256 ? `checkpoint ${h.checkpoint_sha256}` : "";
   $("synthetic-banner").hidden = !h.synthetic;
 }
 
@@ -761,20 +986,24 @@ function decimalsFor(lo, hi) {
   return span >= 50 ? 0 : span >= 5 ? 1 : span >= 0.5 ? 2 : 3;
 }
 
-
 // ---------------------------------------------------------------- start
 
 async function start() {
+  initTheme();
+  bindInfo();
+  $("logo").innerHTML = LOGO;
+  $("runs-link").href = pageUrl("runs.html");
+  $("results-link").href = pageUrl("results.html");
+  document.addEventListener("fullscreenchange", () => state.viewer?.render());
   try {
     [state.health, state.schema] = await Promise.all([api("/health"), api("/schema")]);
   } catch (error) {
     renderService();
     showError(error);
+    $("viewer-message").innerHTML = "<div>Waiting for the service.</div>";
     return;
   }
   renderService();
-  $("runs-link").href = pageUrl("runs.html");
-  $("results-link").href = pageUrl("results.html");
   buildControls();
   loadRealCars();
   // three.js comes from a CDN; never hold the first prediction for it.
@@ -793,10 +1022,7 @@ async function openRunStep(runId, step) {
     const record = (await api(`/history/${encodeURIComponent(runId)}`)).find((r) => r.iteration === step);
     if (!record) throw new ServiceError(`Run ${escapeHtml(runId)} has no step ${escapeHtml(step)}.`);
     state.params = clampToBounds(record.params);
-    if (record.body_style && state.schema.body_styles?.includes(record.body_style)) {
-      state.bodyStyle = record.body_style;
-      $("body-style").value = record.body_style;
-    }
+    if (record.body_style && state.schema.body_styles?.includes(record.body_style)) setStyleUi(record.body_style);
     state.label = `${runId} #${step}`;
     setReference(null);
     state.session++;
