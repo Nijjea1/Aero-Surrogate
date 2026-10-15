@@ -42,6 +42,7 @@ from pathlib import Path
 import torch
 
 from src.data.dataset import load_config, make_category_splits, make_splits, preprocess_spec
+from src.train.train import pick_device
 
 # Config -> what the checkpoint is for. Order is the order they are reported.
 KNOWN_RUNS: list[dict] = [
@@ -410,16 +411,178 @@ def cmd_verify(repo: Path, out_dir: Path) -> int:
     return 0
 
 
+def cmd_benchmark(repo: Path, out_dir: Path, reps: int = 50) -> int:
+    """Measure inference latency honestly, including preprocessing.
+
+    The project's thesis is a number -- "fifty milliseconds against eight hours"
+    -- and CLAUDE.md asks for the speedup measured honestly, INCLUDING
+    preprocessing. That matters because the three model kinds are not
+    comparable on a forward pass alone:
+
+      params-v1      no geometry step at all. The agent proposes 19 numbers
+                     and the model consumes them.
+      pointcloud-v1  needs a mesh sampled first, and on a 753k-face DrivAerML
+                     surface that sampling dominates the forward pass by orders
+                     of magnitude.
+      fields-v1      same mesh step, then a much larger forward pass.
+
+    Quoting the forward pass alone would be the dishonest version of this
+    number, so each row below reports preprocessing and inference separately
+    and the total is what the speedup is computed from.
+
+    The CFD reference is DrivAerML's own cost: the plan cites roughly 8 hours
+    per case on 256 cores.
+    """
+    import numpy as np
+
+    CFD_SECONDS = 8 * 3600.0
+    device = pick_device()
+    rows: list[dict] = []
+    print(f"inference latency, device {device}, {reps} reps\n")
+
+    # --- params-v1 --------------------------------------------------------
+    params_run = repo / "runs" / "drivaernet-random" / "best.pt"
+    if params_run.exists():
+        from src.contracts import PARAM_NAMES, default_params
+        from src.train.model import build_model, split_prediction
+
+        ckpt = torch.load(params_run, map_location=device, weights_only=False)
+        model = build_model(ckpt["config"])
+        try:
+            model.freeze_mean_path()
+        except Exception:  # noqa: BLE001
+            pass
+        model.load_state_dict(ckpt["state_dict"])
+        model.eval().to(device)
+        cols = ckpt["preprocess"]["param_columns"]
+        mean = np.asarray(ckpt["norm_stats"]["param_mean"])
+        std = np.asarray(ckpt["norm_stats"]["param_std"])
+
+        design = default_params()
+        import time
+
+        def once() -> None:
+            row = [[(1.0 if c == "cat_fastback" else 0.0) if c.startswith("cat_")
+                    else design[c] for c in cols]]
+            x = (np.asarray(row, dtype=np.float64) - mean) / std
+            with torch.no_grad():
+                split_prediction(model(torch.tensor(x, dtype=torch.float32,
+                                                    device=device)))
+
+        once()
+        t0 = time.perf_counter()
+        for _ in range(reps):
+            once()
+        total = (time.perf_counter() - t0) / reps
+        rows.append({"model": "params-v1", "preprocess_ms": 0.0,
+                     "inference_ms": total * 1000, "total_ms": total * 1000,
+                     "note": "no geometry step: the agent's own action space"})
+
+    # --- pointcloud-v1 and fields-v1, which both need a mesh --------------
+    mesh_dir = repo / "data" / "drivaerml" / "index" / "meshes"
+    meshes = sorted(mesh_dir.glob("*.stl")) if mesh_dir.exists() else []
+    if meshes:
+        import time
+
+        from src.data.dataset import sample_mesh
+
+        for name, run, n_points in (("pointcloud-v1", "drivaerml-random", None),
+                                    ("fields-v1", "fields", None)):
+            ckpt_path = repo / "runs" / run / "best.pt"
+            if not ckpt_path.exists():
+                continue
+            ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+            pre = ckpt.get("preprocess", {})
+
+            if name == "pointcloud-v1":
+                from src.train.model import build_model
+
+                model = build_model(ckpt["config"])
+                try:
+                    model.freeze_mean_path()
+                except Exception:  # noqa: BLE001
+                    pass
+                pts = int(pre["n_points"])
+            else:
+                from src.train.train_fields import build_model_from_cfg
+
+                model = build_model_from_cfg(ckpt["config"])
+                model.freeze_mean_path()
+                pts = int(pre.get("n_cloud", 2048))
+            model.load_state_dict(ckpt["state_dict"])
+            model.eval().to(device)
+
+            # preprocessing: sample the mesh, as the service would
+            t0 = time.perf_counter()
+            cloud = sample_mesh(meshes[0], pts, True)
+            pre_s = time.perf_counter() - t0
+
+            x = torch.tensor(cloud, device=device).unsqueeze(0)
+            if name == "pointcloud-v1":
+                def once() -> None:
+                    with torch.no_grad():
+                        model(x)
+            else:
+                q = x[:, : min(4096, x.shape[1])]
+                def once() -> None:
+                    with torch.no_grad():
+                        model(x, q, q)
+
+            once()
+            t0 = time.perf_counter()
+            for _ in range(max(5, reps // 5)):
+                once()
+            inf_s = (time.perf_counter() - t0) / max(5, reps // 5)
+            rows.append({
+                "model": name, "preprocess_ms": pre_s * 1000,
+                "inference_ms": inf_s * 1000,
+                "total_ms": (pre_s + inf_s) * 1000,
+                "note": f"includes sampling {pts:,} points from a "
+                        f"{meshes[0].name} surface",
+            })
+
+    if not rows:
+        print("nothing to benchmark -- train a checkpoint first")
+        return 1
+
+    print(f"{'model':16} {'preprocess':>11} {'inference':>10} {'total':>9} "
+          f"{'speedup vs CFD':>15}")
+    for r in rows:
+        r["speedup_vs_cfd"] = CFD_SECONDS / (r["total_ms"] / 1000.0)
+        print(f"  {r['model']:14} {r['preprocess_ms']:9.2f}ms "
+              f"{r['inference_ms']:8.2f}ms {r['total_ms']:7.2f}ms "
+              f"{r['speedup_vs_cfd']:14,.0f}x")
+    for r in rows:
+        print(f"\n  {r['model']}: {r['note']}")
+
+    payload = {"device": str(device), "reps": reps,
+               "cfd_reference_seconds": CFD_SECONDS,
+               "cfd_reference_note": "DrivAerML, ~8 h per case on 256 cores",
+               "rows": rows}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "latency.json").write_text(json.dumps(payload, indent=2))
+    print(f"\nwrote {out_dir / 'latency.json'}")
+    print("\nThe thesis number is the params-v1 total: that is what the agent")
+    print("actually calls. The mesh-based rows are slower because sampling a")
+    print("753k-face surface dominates, which is the honest caveat.")
+    return 0
+
+
 def main() -> int:
     repo = Path(__file__).resolve().parents[2]
     ap = argparse.ArgumentParser(description="Package checkpoints and splits")
     ap.add_argument("--out", default=str(repo / "runs" / "handover"))
     ap.add_argument("--verify", action="store_true")
+    ap.add_argument("--benchmark", action="store_true",
+                    help="measure inference latency including preprocessing")
+    ap.add_argument("--reps", type=int, default=50)
     args = ap.parse_args()
 
     out_dir = Path(args.out)
     if args.verify:
         return cmd_verify(repo, out_dir)
+    if args.benchmark:
+        return cmd_benchmark(repo, out_dir, reps=args.reps)
     return cmd_build(repo, out_dir)
 
 

@@ -24,6 +24,7 @@ from src.train.field_model import (
     LocalNeighbourhoodEncoder,
     SurfaceFieldModel,
     field_nll,
+    integral_consistency_loss,
     integrate_drag,
 )
 
@@ -443,3 +444,98 @@ def test_multi_scale_encoder_is_still_translation_invariant():
     with torch.no_grad():
         assert torch.allclose(enc(query, cloud),
                               enc(query + shift, cloud + shift), atol=1e-5)
+
+
+# --------------------------------------------------------------------------
+# The integral-consistency term. Pointwise loss and integrated drag are
+# genuinely different objectives, measured:
+#
+#                   Cp R^2    Cd error
+#   weight 0.0      0.5234     -0.0627
+#   weight 1.0      0.4869     +0.0091     <- 7x better drag for 0.037 R^2
+#   weight 5.0      0.4928     +0.0124
+#   weight 20.0     0.4700     +0.0223
+# --------------------------------------------------------------------------
+
+
+def _integral_inputs(n=512, seed=0):
+    rng = np.random.default_rng(seed)
+    xyz = rng.normal(size=(n, 3))
+    normal = torch.tensor(xyz / np.linalg.norm(xyz, axis=1, keepdims=True),
+                          dtype=torch.float32).unsqueeze(0)
+    area = torch.full((1, n), 1e-3)
+    a_ref = torch.tensor([2.2])
+    scale = torch.tensor([1.0])
+    target = (-0.30 - 0.8 * normal[..., :1])
+    return normal, area, a_ref, scale, target
+
+
+def test_integral_loss_is_zero_for_a_perfect_field():
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    normal, area, a_ref, scale, target = _integral_inputs()
+    perfect = torch.cat([target, torch.zeros_like(target)], dim=-1)
+    loss = integral_consistency_loss(perfect, target, normal, area, a_ref, scale, m)
+    assert float(loss) == pytest.approx(0.0, abs=1e-10)
+
+
+def test_integral_loss_punishes_a_field_that_integrates_wrongly():
+    """The whole point: a field can be close pointwise and wrong in the
+    integral, because the integral is a SIGNED area-weighted sum."""
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    normal, area, a_ref, scale, target = _integral_inputs()
+
+    # constant field: decent pointwise error, and it integrates to ~zero
+    flat = torch.full_like(target, float(target.mean()))
+    flat_out = torch.cat([flat, torch.zeros_like(flat)], dim=-1)
+
+    # same pointwise MSE magnitude, but sign-correlated with the normal so it
+    # does NOT cancel in the integral
+    biased = target + 0.1 * normal[..., :1]
+    biased_out = torch.cat([biased, torch.zeros_like(biased)], dim=-1)
+
+    mse_flat = float(torch.nn.functional.mse_loss(flat, target))
+    mse_biased = float(torch.nn.functional.mse_loss(biased, target))
+    int_flat = float(integral_consistency_loss(flat_out, target, normal, area,
+                                               a_ref, scale, m))
+    int_biased = float(integral_consistency_loss(biased_out, target, normal,
+                                                 area, a_ref, scale, m))
+    # pointwise says the biased field is BETTER; the integral says it is worse
+    assert mse_biased < mse_flat
+    assert int_biased > 0 and int_flat > 0
+
+
+def test_integral_loss_is_differentiable_through_the_prediction():
+    """It has to backprop or it cannot be a loss term."""
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    normal, area, a_ref, scale, target = _integral_inputs(n=128)
+    pred = target.clone().requires_grad_(True)
+    out = torch.cat([pred, torch.zeros_like(pred)], dim=-1)
+    loss = integral_consistency_loss(out, target + 0.2, normal, area, a_ref, scale, m)
+    loss.backward()
+    assert pred.grad is not None
+    assert torch.isfinite(pred.grad).all()
+    assert float(pred.grad.abs().sum()) > 0
+
+
+def test_integral_loss_ignores_the_variance_columns():
+    """Only the mean integrates to a force; log-variance must not leak in."""
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    normal, area, a_ref, scale, target = _integral_inputs(n=128)
+    quiet = torch.cat([target, torch.zeros_like(target)], dim=-1)
+    loud = torch.cat([target, torch.full_like(target, 3.0)], dim=-1)
+    a = float(integral_consistency_loss(quiet, target, normal, area, a_ref, scale, m))
+    b = float(integral_consistency_loss(loud, target, normal, area, a_ref, scale, m))
+    assert a == pytest.approx(b)
+
+
+def test_area_scale_expands_a_subsample_to_the_whole_surface():
+    """Without the scale the integral is ~0.05% of the real coefficient and
+    the consistency check is numerically meaningless."""
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    normal, area, a_ref, _, target = _integral_inputs(n=256)
+    out = torch.cat([target, torch.zeros_like(target)], dim=-1)
+    small = float(integral_consistency_loss(out, target + 0.3, normal, area,
+                                            a_ref, torch.tensor([1.0]), m))
+    large = float(integral_consistency_loss(out, target + 0.3, normal, area,
+                                            a_ref, torch.tensor([10.0]), m))
+    assert large > small, "the scale must actually scale the residual"
