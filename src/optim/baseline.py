@@ -12,7 +12,9 @@ the agent (src.agent.designer):
                       CMA-ES centres its first generation there
     scoring           the same HTTP /evaluate call (or an injected evaluator)
     gate              the same rejection_reason with the service's thresholds;
-                      a gated design scores as infinitely bad
+                      a gated design scores as infinitely bad, and a gated
+                      baseline stops the run there, incomplete, as the agent's
+                      comparison seam (src.agent.comparison) does
     constraints       the same rules; the search box is narrowed so no
                       proposal breaks one, as the agent's are refused unscored
     run log           the same IterationRecords and run events, with
@@ -240,17 +242,19 @@ def run(method: str, iterations: int, run_id: str, seed: int = 0, *,
     })
     state = {"scored": 0, "best_cd": None, "timings": []}
     try:
-        _drive(state, optimiser, iterations, run_id, log, evaluate, body_style, constraints, thresholds)
+        stop_reason = _drive(state, optimiser, iterations, run_id, log, evaluate, body_style, constraints,
+                             thresholds)
     except BaseException as exc:
         _finish(log, run_id, f"error: {type(exc).__name__}: {exc}", state)
         raise
-    _finish(log, run_id, "evaluation budget used", state)
+    _finish(log, run_id, stop_reason, state)
     return run_id
 
 
 def _drive(state: dict, optimiser, iterations: int, run_id: str, log: RunLog,
            evaluate: Callable[[dict[str, float], str], dict], body_style: str,
-           constraints: list[Constraint], thresholds: dict) -> None:
+           constraints: list[Constraint], thresholds: dict) -> str:
+    """Score the run; return why it stopped."""
     started = time.monotonic()
     for iteration in range(iterations):
         step_started = time.perf_counter()
@@ -289,6 +293,10 @@ def _drive(state: dict, optimiser, iterations: int, run_id: str, log: RunLog,
         }
         state["timings"].append(timing)
         log.append_event(run_id, {"type": "step", **timing})
+        if x is None and reason and not reason.startswith("reference only"):
+            # No trusted start means nothing fair to improve on.
+            return f"baseline rejected: {reason}"
+    return "evaluation budget used"
 
 
 def _finish(log: RunLog, run_id: str, stop_reason: str, state: dict) -> None:

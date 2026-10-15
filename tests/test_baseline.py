@@ -120,6 +120,19 @@ def test_gated_designs_never_count_and_never_steer(tmp_path):
     assert {row["best_cd_so_far"] for row in rows} == {rows[0]["cd"]}
 
 
+@pytest.mark.parametrize("method", baseline.METHODS)
+def test_a_gated_baseline_stops_the_run_incomplete(tmp_path, method):
+    """Same rule as the agent's comparison seam: no trusted start, no search."""
+    def evaluate(params, body_style):
+        return dict(EVALUATE(params, body_style), uncertainty=0.5)
+
+    rows, events = run(tmp_path, method, iterations=25, evaluator=evaluate)
+    assert len(rows) == 1 and not rows[0]["accepted"]
+    finished = events[-1]
+    assert finished["scored"] == 1 and finished["best_cd"] is None
+    assert finished["stop_reason"].startswith("baseline rejected: ")
+
+
 def test_cmaes_halves_its_step_when_a_generation_is_all_gated():
     rng = np.random.default_rng(0)
     cma = baseline.CMAES(np.full(4, 0.5), 0.2, np.zeros(4), np.ones(4), rng, popsize=6)
