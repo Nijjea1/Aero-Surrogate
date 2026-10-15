@@ -72,14 +72,11 @@ def trained(tmp_path_factory):
     cfg["model"].update(hidden_dim=32, n_layers=2, dropout=0.0)
     cfg["train"].update(epochs=40, variance_epochs=40, patience=1000, variance_patience=1000,
                         lr=3e-3, variance_lr=3e-3, batch_size=64, out_dir=str(root / "runs"))
-    # KNOWN GAP (Avneet): src/train/train.py hardcodes SCHEMA_VERSION = "1.0.0"
-    # while training the 2.0.0 parameter space, so as of 47ab1c7 every real
-    # checkpoint is stamped 1.0.0 and TorchPredictor rightly refuses it. Patch
-    # the stamp here to what train.py should import from src.contracts.
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr("src.train.train.SCHEMA_VERSION", SCHEMA_VERSION)
-        result = train(cfg, device_str="cpu")
+    # Exercise the real trainer's imported schema stamp. A local monkeypatch
+    # would hide a regression in the training-to-serving handoff.
+    result = train(cfg, device_str="cpu")
     ckpt = torch.load(result["checkpoint"], map_location="cpu", weights_only=False)
+    assert ckpt["schema_version"] == SCHEMA_VERSION
     assert ckpt["preprocess"]["version"] == "params-v1"
     assert ckpt["ood"] is not None
     return result["checkpoint"], ckpt
