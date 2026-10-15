@@ -39,7 +39,7 @@ from src.service.predictor import BasePredictor, load_predictor, validate_design
 from src.service.gate import rejection_reason
 from src.service.limits import (
     BodySizeMiddleware, RateLimiter, RateLimitMiddleware, check_writable_dir, is_writable_dir,
-    startup_summary, trust_proxy_from_env,
+    startup_summary,
 )
 from src.service.runlog import RunLog
 from src.service.runs import (
@@ -97,7 +97,7 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
                settings: Settings | None = None) -> FastAPI:
     """Inject a predictor, log or settings for tests; otherwise read the environment."""
     settings = settings or Settings.from_env()
-    trust_proxy = trust_proxy_from_env()
+    trust_proxy = settings.trust_proxy
 
     @asynccontextmanager
     async def lifespan(application):

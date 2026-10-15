@@ -88,6 +88,10 @@ class RunLog:
         with _LOCK:
             return self._read_path(self._path(run_id), run_id)
 
+    def validate_run_id(self, run_id: str) -> None:
+        """Raise ValueError unless run_id is a safe run identifier."""
+        self._path(run_id)
+
     def _event_path(self, run_id: str) -> Path:
         # A subdirectory, so list_runs' *.jsonl glob only ever sees scored runs.
         return self._path(run_id).parent / "events" / f"{run_id}.jsonl"
@@ -111,8 +115,18 @@ class RunLog:
         with _LOCK:
             if not path.exists():
                 return []
-            return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
-                    if line.endswith("}")]
+            events = []
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if not line.endswith("}"):
+                    continue  # an interrupted append, not a committed event
+                try:
+                    event = json.loads(line)
+                except ValueError as exc:
+                    raise ValueError(f"Malformed run log {run_id} events, line {number}: {exc}") from None
+                if not isinstance(event, dict):
+                    raise ValueError(f"Malformed run log {run_id} events, line {number}: not an object")
+                events.append(event)
+            return events
 
     def list_runs(self) -> list[dict]:
         """Return sorted run IDs and their counts of completed records.

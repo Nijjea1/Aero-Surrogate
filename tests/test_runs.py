@@ -291,11 +291,17 @@ def test_provider_not_configured_is_503_and_leaves_nothing_behind(logdir):
     assert list(logdir.rglob("*.jsonl")) == []
 
 
-def test_log_directory_mismatch_is_refused(logdir, monkeypatch, tmp_path_factory):
-    monkeypatch.setenv("AERO_RUNLOG_DIR", str(tmp_path_factory.mktemp("elsewhere")))
+def test_runs_are_written_to_the_services_log_whatever_the_environment_says(
+        logdir, monkeypatch, tmp_path_factory):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    monkeypatch.setenv("AERO_RUNLOG_DIR", str(elsewhere))
     with TestClient(make_app(logdir)) as client:
         response = start(client)
-        assert response.status_code == 503 and "run log mismatch" in response.json()["detail"]
+        assert response.status_code == 202
+        run_id = response.json()["run_id"]
+        wait_for(client, run_id)
+    assert (logdir / f"{run_id}.jsonl").exists()
+    assert not list(elsewhere.rglob("*.jsonl"))
 
 
 def test_exception_in_the_run_thread_marks_it_failed(logdir):

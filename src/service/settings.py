@@ -15,6 +15,7 @@ baked into an image). Invalid values fail startup rather than being guessed.
     AERO_PUBLIC_DAILY_BUDGET_USD total public spend per UTC day
     AERO_RATE_LIMIT_PER_MINUTE   scoring requests per client IP per minute (0 = off)
     AERO_MAX_BODY_BYTES          largest accepted request body
+    AERO_TRUST_PROXY             1/0: trust X-Forwarded-For (only behind your own proxy)
     AERO_RUNLOG_DIR              run logs (put on a persistent volume when hosted)
 """
 
@@ -64,6 +65,7 @@ class Settings:
     public_daily_budget_usd: float = 1.00
     rate_limit_per_minute: int = 120
     max_body_bytes: int = 65536
+    trust_proxy: bool = False
     runlog_dir: str = "runs/logs"
 
     @classmethod
@@ -99,5 +101,6 @@ class Settings:
                                           integer=True),
             max_body_bytes=_number(env, "AERO_MAX_BODY_BYTES", default.max_body_bytes, integer=True,
                                    minimum=1024),
+            trust_proxy=_flag(env, "AERO_TRUST_PROXY", default.trust_proxy),
             runlog_dir=(env.get("AERO_RUNLOG_DIR") or "").strip() or default.runlog_dir,
         )

@@ -32,19 +32,6 @@ from starlette.responses import JSONResponse
 
 RATE_LIMITED_PATHS = ("/evaluate", "/compare")
 RATE_LIMITED_PREFIXES = ("/runs",)
-_TRUE = {"1", "true", "yes", "on"}
-_FALSE = {"0", "false", "no", "off", ""}
-
-
-def trust_proxy_from_env(env: dict | None = None) -> bool:
-    """AERO_TRUST_PROXY as a bool; anything unrecognised fails startup."""
-    raw = (os.environ if env is None else env).get("AERO_TRUST_PROXY")
-    value = (raw or "").strip().lower()
-    if value in _TRUE:
-        return True
-    if value in _FALSE:
-        return False
-    raise ValueError(f"AERO_TRUST_PROXY must be 1/0 or true/false, got {raw!r}")
 
 
 def is_rate_limited(method: str, path: str) -> bool:

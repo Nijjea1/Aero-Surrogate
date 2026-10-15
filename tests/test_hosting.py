@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from src.contracts import default_params
 from src.service.app import create_app
-from src.service.limits import BodySizeMiddleware, RateLimiter, is_rate_limited, trust_proxy_from_env
+from src.service.limits import BodySizeMiddleware, RateLimiter, is_rate_limited
 from src.service.predictor import StubPredictor
 from src.service.runlog import RunLog
 from src.service.settings import Settings
@@ -104,9 +104,8 @@ def test_runs_paths_are_limited_once_they_exist():
 
 
 @pytest.mark.parametrize("trust, expect_second", [("0", 429), ("1", 200)])
-def test_forwarded_for_only_with_trusted_proxy(tmp_path, monkeypatch, trust, expect_second):
-    monkeypatch.setenv("AERO_TRUST_PROXY", trust)
-    client, _ = make_client(tmp_path, rate_limit_per_minute=1)
+def test_forwarded_for_only_with_trusted_proxy(tmp_path, trust, expect_second):
+    client, _ = make_client(tmp_path, rate_limit_per_minute=1, trust_proxy=trust == "1")
     with client:
         first = client.post("/evaluate", json=body(), headers={"X-Forwarded-For": "9.9.9.9, 1.1.1.1"})
         second = client.post("/evaluate", json=body(), headers={"X-Forwarded-For": "9.9.9.9, 2.2.2.2"})
@@ -118,10 +117,10 @@ def test_forwarded_for_only_with_trusted_proxy(tmp_path, monkeypatch, trust, exp
 
 
 def test_trust_proxy_flag_parsing():
-    assert trust_proxy_from_env({}) is False
-    assert trust_proxy_from_env({"AERO_TRUST_PROXY": "true"}) is True
+    assert Settings.from_env({}).trust_proxy is False
+    assert Settings.from_env({"AERO_TRUST_PROXY": "true"}).trust_proxy is True
     with pytest.raises(ValueError, match="AERO_TRUST_PROXY"):
-        trust_proxy_from_env({"AERO_TRUST_PROXY": "maybe"})
+        Settings.from_env({"AERO_TRUST_PROXY": "maybe"})
 
 
 def test_429_keeps_cors_headers(tmp_path):

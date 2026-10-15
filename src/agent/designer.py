@@ -151,7 +151,8 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         thresholds: dict | None = None,
         should_stop: Callable[[], bool] | None = None,
         on_step: Callable[[dict, dict], None] | None = None,
-        metadata: dict | None = None) -> str:
+        metadata: dict | None = None,
+        log: RunLog | None = None) -> str:
     """Log up to `iterations` scored attempts, including baseline iteration zero.
 
     The body style is fixed for the run: the same offsets describe a different
@@ -166,7 +167,8 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
     should_stop is polled before every step and every model call; when it
     returns True the run ends with stop reason "cancelled". on_step(record,
     timing) is called after each scored step, for live progress. metadata
-    (e.g. who started the run, and when) is recorded in run_started.
+    (e.g. who started the run, and when) is recorded in run_started. log
+    defaults to AERO_RUNLOG_DIR; the service passes its own RunLog.
     """
     if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
         raise ValueError("iterations must be a positive integer")
@@ -191,7 +193,7 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         provenance = describe_provenance(service_health()) if evaluator is None else "injected evaluator"
     if thresholds is None:
         thresholds = service_thresholds() if evaluator is None else {}
-    log = RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
+    log = log or RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
     log.reserve(run_id)
     log.append_event(run_id, {
         "type": "run_started", "mode": "scripted" if dry_run else "nemotron",

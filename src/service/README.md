@@ -183,8 +183,8 @@ values fail startup): `AERO_CORS_ORIGINS`, `AERO_ADMIN_TOKEN`,
 `AERO_PUBLIC_RUNS`, `AERO_MAX_CONCURRENT_RUNS`, `AERO_PUBLIC_MAX_ITERATIONS`,
 `AERO_ADMIN_MAX_ITERATIONS`, `AERO_PUBLIC_RUN_BUDGET_USD`,
 `AERO_ADMIN_RUN_BUDGET_USD`, `AERO_PUBLIC_DAILY_BUDGET_USD`,
-`AERO_RATE_LIMIT_PER_MINUTE`, `AERO_MAX_BODY_BYTES`, `AERO_RUNLOG_DIR`, plus
-`AERO_TRUST_PROXY` (read by `src/service/limits.py`). `POST /evaluate`,
+`AERO_RATE_LIMIT_PER_MINUTE`, `AERO_MAX_BODY_BYTES`, `AERO_TRUST_PROXY`,
+`AERO_RUNLOG_DIR`. `POST /evaluate`,
 `/compare` and `/runs*` are rate limited per client IP (429 with
 `Retry-After`); bodies over the size limit get 413. `GET /ready` is the
 container health check (503 when the predictor is missing or the log

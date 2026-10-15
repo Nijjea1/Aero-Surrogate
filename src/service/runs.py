@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import threading
 import time
 import uuid
@@ -179,13 +178,10 @@ class RunManager:
         return self.runlog.root / "events"
 
     def _check_id(self, run_id: str) -> None:
-        self.runlog._path(run_id)  # the canonical validator; raises ValueError
+        self.runlog.validate_run_id(run_id)
 
     def _events(self, run_id: str) -> list[dict]:
-        try:
-            return self.runlog.read_events(run_id)
-        except ValueError as exc:  # a corrupt line; the id was already checked
-            raise ValueError(f"Malformed run log {run_id} events: {exc}") from None
+        return self.runlog.read_events(run_id)
 
     def _records(self, run_id: str) -> list[dict]:
         try:
@@ -289,15 +285,6 @@ class RunManager:
         return {"model": model, "iterations": iterations, "body_style": body_style,
                 "constraints": constraints, "run_budget_usd": float(budget), "thinking": thinking}
 
-    def _check_log_root(self) -> None:
-        # designer.run writes to AERO_RUNLOG_DIR, not to an injected RunLog.
-        # If the two differ, a run would be invisible to this manager.
-        target = Path(os.environ.get("AERO_RUNLOG_DIR", "runs/logs")).resolve()
-        if target != self.runlog.root:
-            raise RunUnavailable(
-                f"run log mismatch: the agent writes to {target} but the service reads {self.runlog.root}; "
-                "set AERO_RUNLOG_DIR to the service's log directory")
-
     def public_spend_today(self) -> float:
         """Today's (UTC) public spend, reserved budgets included. Call under _lock."""
         today = self.clock().astimezone(timezone.utc).strftime("%Y-%m-%d")
@@ -326,7 +313,6 @@ class RunManager:
     def start(self, request: Mapping, role: str) -> dict:
         """Validate, check limits and start a run in the background."""
         spec = self._validate(request, role)
-        self._check_log_root()
         try:
             proposer = self.proposer_factory(spec["model"], spec["constraints"], spec["thinking"])
         except Exception as exc:  # e.g. ProviderError: NEBIUS_API_KEY is not set
@@ -378,6 +364,7 @@ class RunManager:
                 proposer=run.proposer, constraints=constraints, body_style=run.body_style,
                 run_budget_usd=run.run_budget_usd, should_stop=run.stop.is_set, on_step=on_step,
                 metadata={"started_by": run.role, "started_at": run.started_at, "requested_via": "api"},
+                log=self.runlog,
             )
         except BaseException as exc:  # never let a run thread die silently
             log.exception("agent run %s failed", run.run_id)
