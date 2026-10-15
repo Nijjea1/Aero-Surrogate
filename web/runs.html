@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aero Surrogate Runs</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="runs.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Aero Surrogate</h1>
+      <p class="tagline">The design agent against the optimisers it has to beat, on the same budget and the same gate.</p>
+    </div>
+    <nav class="pages" aria-label="Pages">
+      <a href="index.html" id="designer-link">Designer</a>
+      <a href="runs.html" aria-current="page">Runs</a>
+    </nav>
+    <div class="service" id="service-status" role="status">
+      <span class="dot"></span><span class="service-text">Connecting to the service…</span>
+    </div>
+  </header>
+
+  <div class="banner banner-warning" id="synthetic-banner" hidden>
+    <span class="banner-icon" aria-hidden="true">!</span>
+    <span><strong>Synthetic predictions.</strong> The service is running the stub, so these runs test the
+      plumbing, not aerodynamics.</span>
+  </div>
+
+  <div class="banner banner-critical" id="error-banner" hidden>
+    <span class="banner-icon" aria-hidden="true">✕</span>
+    <span id="error-text"></span>
+  </div>
+
+  <main class="layout">
+    <section class="panel run-list-panel" aria-labelledby="runs-title">
+      <div class="panel-head">
+        <h2 id="runs-title">Runs</h2>
+        <button type="button" class="link-button" id="refresh">Refresh</button>
+      </div>
+      <p class="preset-hint">Tick up to four runs to compare. Click a name to read its steps.</p>
+      <ul class="run-list" id="run-list"></ul>
+      <div class="run-empty" id="run-empty" hidden>
+        <p>No runs in this service's log yet. Start some from the repo root:</p>
+        <pre>python -m src.agent.designer --model super --iterations 25
+python -m src.optim.baseline --method cmaes --iterations 25
+python -m src.optim.baseline --method random --iterations 25</pre>
+      </div>
+    </section>
+
+    <div class="column">
+      <section class="panel" aria-labelledby="chart-title">
+        <div class="panel-head">
+          <h2 id="chart-title">Best trusted drag so far</h2>
+          <span class="timing" id="chart-meta"></span>
+        </div>
+        <div class="legend run-legend" id="legend"></div>
+        <div class="chart" id="chart" role="img" aria-label="Best trusted Cd so far against evaluations, one line per run"></div>
+        <p class="chart-note" id="chart-note">Each line steps down when a run finds a lower Cd that the gate trusts.
+          Gated designs never count, so they appear only as × in the top lane.</p>
+        <p class="chart-note viewer-warning" id="mix-warning" hidden></p>
+
+        <div class="table-scroll">
+        <table class="history compare" id="compare">
+          <thead>
+            <tr><th scope="col">Run</th><th scope="col" class="num">Evaluations</th>
+              <th scope="col" class="num">Best Cd</th><th scope="col" class="num">vs unmodified</th>
+              <th scope="col" class="num">Found at</th><th scope="col" class="num">Gated</th></tr>
+          </thead>
+          <tbody id="compare-body"></tbody>
+        </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="log-title">
+        <div class="panel-head">
+          <h2 id="log-title">Logbook</h2>
+          <span class="timing" id="log-meta"></span>
+        </div>
+        <div class="tiles" id="run-tiles">
+          <div class="tile">
+            <div class="tile-label">Best trusted Cd</div>
+            <div class="tile-value" id="t-best">–</div>
+            <div class="tile-delta" id="t-best-note"></div>
+          </div>
+          <div class="tile">
+            <div class="tile-label">Gate rejections</div>
+            <div class="tile-value" id="t-gated">–</div>
+            <div class="tile-delta" id="t-gated-note"></div>
+          </div>
+          <div class="tile">
+            <div class="tile-label">Time per step</div>
+            <div class="tile-value" id="t-time">–</div>
+            <div class="tile-delta" id="t-time-note"></div>
+          </div>
+        </div>
+        <div class="table-scroll">
+        <table class="history logbook">
+          <thead>
+            <tr><th scope="col" class="num">#</th><th scope="col" class="num">Cd</th>
+              <th scope="col">Verdict</th><th scope="col">Reasoning and gate feedback</th><th scope="col"></th></tr>
+          </thead>
+          <tbody id="logbook"></tbody>
+        </table>
+        </div>
+        <p class="chart-note">Click a row to read it in full. "Open" loads that design in the designer.</p>
+      </section>
+    </div>
+  </main>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

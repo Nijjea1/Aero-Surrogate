@@ -9,10 +9,12 @@
 // space the service runs, without code changes here.
 //
 // Point it at another service with ?api=http://host:port
+// ?run=<run id>&step=<n> opens that step of an optimisation run (runs.html links here).
 
+import {
+  api, escapeHtml, fmt, hideTooltip, pageUrl, ServiceError, showTooltip, signed,
+} from "./common.js";
 import { aeroLoads } from "./physics.js";
-
-const API = (new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 // Readable names and units. Anything not listed falls back to the raw name.
 const PARAM_INFO = {
@@ -116,32 +118,6 @@ const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").m
 const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------- service
-
-async function api(path, body) {
-  const options = body === undefined
-    ? {}
-    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
-  let response;
-  try {
-    response = await fetch(API + path, options);
-  } catch {
-    throw new ServiceError(
-      `Can't reach the service at ${API}. Start it with ` +
-      "<code>uvicorn src.service.app:app --port 8000</code> and open this page at " +
-      "<code>http://localhost:5173</code>.",
-    );
-  }
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const detail = Array.isArray(data?.detail)
-      ? data.detail.map((d) => d.msg).join("; ")
-      : data?.detail || response.statusText;
-    throw new ServiceError(`The service rejected the request (${response.status}): ${escapeHtml(detail)}`);
-  }
-  return data;
-}
-
-class ServiceError extends Error {}
 
 function designRequest(params) {
   const body = { params };
@@ -768,19 +744,6 @@ function showError(error) {
   if (error) $("error-text").innerHTML = error instanceof ServiceError ? error.message : escapeHtml(String(error));
 }
 
-function showTooltip(event, html) {
-  const tip = $("tooltip");
-  tip.innerHTML = html;
-  tip.hidden = false;
-  const pad = 14;
-  const { innerWidth: w } = window;
-  const rect = tip.getBoundingClientRect();
-  tip.style.left = `${Math.min(event.clientX + pad, w - rect.width - 8)}px`;
-  tip.style.top = `${event.clientY + pad}px`;
-}
-
-function hideTooltip() { $("tooltip").hidden = true; }
-
 // ---------------------------------------------------------------- helpers
 
 function mapBounds(schema, fn) {
@@ -798,18 +761,6 @@ function decimalsFor(lo, hi) {
   return span >= 50 ? 0 : span >= 5 ? 1 : span >= 0.5 ? 2 : 3;
 }
 
-function fmt(value, decimals) {
-  return Number(value).toFixed(decimals);
-}
-
-function signed(value, decimals) {
-  const text = Math.abs(value).toFixed(decimals);
-  return value < 0 && Number(text) !== 0 ? `−${text}` : value > 0 && Number(text) !== 0 ? `+${text}` : text;
-}
-
-function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-}
 
 // ---------------------------------------------------------------- start
 
@@ -822,6 +773,7 @@ async function start() {
     return;
   }
   renderService();
+  $("runs-link").href = pageUrl("runs.html");
   buildControls();
   loadRealCars();
   // three.js comes from a CDN; never hold the first prediction for it.
@@ -831,6 +783,30 @@ async function start() {
   state.params = clampToBounds(state.schema.defaults);
   await ensureBaseline();
   applyPreset("baseline");
+  const query = new URLSearchParams(location.search);
+  if (query.has("run")) openRunStep(query.get("run"), Number(query.get("step")));
+}
+
+async function openRunStep(runId, step) {
+  try {
+    const record = (await api(`/history/${encodeURIComponent(runId)}`)).find((r) => r.iteration === step);
+    if (!record) throw new ServiceError(`Run ${escapeHtml(runId)} has no step ${escapeHtml(step)}.`);
+    state.params = clampToBounds(record.params);
+    if (record.body_style && state.schema.body_styles?.includes(record.body_style)) {
+      state.bodyStyle = record.body_style;
+      $("body-style").value = record.body_style;
+    }
+    state.label = `${runId} #${step}`;
+    setReference(null);
+    state.session++;
+    for (const button of document.querySelectorAll(".preset")) button.setAttribute("aria-pressed", "false");
+    $("preset-hint").innerHTML = `Step ${escapeHtml(step)} of run ${escapeHtml(runId)}. ` +
+      `<a href="${pageUrl("runs.html", { run: runId })}">Back to the run</a>`;
+    syncSliders();
+    runEvaluate();
+  } catch (error) {
+    showError(error);
+  }
 }
 
 start();

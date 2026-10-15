@@ -107,3 +107,27 @@ the page state as `aero` in the console. For example,
 Moving sliders updates one row of the session history rather than adding a
 row per pause. A preset, a body-style change or a reloaded row starts a new
 row. Deltas are against the baseline design of the selected body style.
+
+## Runs
+
+**http://localhost:5173/runs.html** compares optimisation runs. It shows the
+design agent (`src/agent/designer.py`) against the CMA-ES and random-search
+baselines (`src/optim/baseline.py`). It reads the service's run log through
+`GET /runs`, `GET /runs/{id}` and `GET /history/{id}`, so any run the service
+can see shows up: CLI runs and runs started through the API.
+
+- **Best trusted drag so far:** one line per selected run, with up to four
+  runs in a fixed colour order. A line only steps down when the gate trusts
+  the lower Cd. Every evaluation of the run in focus is a dot. Gated designs
+  appear as × in a lane above the plot, because their Cd never counts.
+- **Comparison table:** for each run, its best Cd, the change against the
+  unmodified car, which evaluation found it, and how many designs the gate
+  rejected.
+- **Logbook:** every step of the run in focus, with its Cd, the gate's verdict
+  and the agent's reasoning or the gate's feedback. **Open** loads that step
+  in the designer (`index.html?run=<id>&step=<n>`).
+- **Live:** an unfinished run refreshes every 2 seconds until it ends.
+
+By default the page selects the newest agent run, plus the newest CMA-ES and
+random runs with the same body style and budget. A warning appears when the
+selected runs differ in style or budget, because then they don't compare.
