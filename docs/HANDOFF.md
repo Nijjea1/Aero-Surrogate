@@ -319,6 +319,25 @@ not predict the viscous term, which is ~8% of total Cd):
 Mean absolute error 0.032, so roughly 12% per car. A real result, not a good
 one yet.
 
+### Lift: measured, and not usable
+
+`integral_consistency_loss` had a bug (both `integrate_drag` calls omitted
+`axis=axis`, so the loop constrained drag twice and lift never). Found in
+review by Pranoy, fixed, and lift is now both constrained and measured:
+
+| | model MAE | trivial baseline |
+|---|---|---|
+| Cd | **0.0326** | 0.0496 (predict the mean) |
+| Cl | 0.0802 | 0.1043 (predict zero) |
+
+Drag beats its baseline by 34% — real skill. Lift beats its baseline by 23%
+**and gets the sign wrong on 1 of 5 held-out cars** (run 12: true +0.1285,
+predicted −0.0189). **Do not use Cl for decisions.** Stage 1 returning `cl` as
+a placeholder `0.0` remains the honest default.
+
+Fixing the bug did not change drag accuracy (0.0326 vs 0.0328 before), so no
+retraining was required for the drag claims — only a narrower lift claim.
+
 **Still judge the field by its integral, not by Cp R².** A model predicting the
 mean Cp everywhere gets a respectable MAE and integrates to **zero** drag,
 because the normals cancel — there is a test asserting exactly that.

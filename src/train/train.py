@@ -52,11 +52,15 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
+from src.contracts import SCHEMA_VERSION
 from src.data.dataset import load_config, make_category_splits, make_splits, preprocess_spec
 from src.train.model import build_model, count_parameters, gaussian_nll, split_prediction
 from src.train.ood import OODDetector
 
-SCHEMA_VERSION = "1.0.0"
+# SCHEMA_VERSION is imported from src.contracts, never redeclared here. It was
+# hardcoded to "1.0.0" and left behind when the contract moved to 2.0.0, so
+# every params-v1 checkpoint carried a stamp that disagreed with the contract
+# it was actually trained against. Found in review by Pranoy.
 
 
 # --------------------------------------------------------------------------
@@ -646,6 +650,13 @@ def train(cfg: dict, split_mode: str = "random", held_out: str | None = None,
             "ood": detector.to_dict() if detector is not None else None,
             "test_metrics": test,
             "schema_version": SCHEMA_VERSION,
+            # Provenance, so a checkpoint is attributable without the repo.
+            "git_commit": git_hash(),
+            "trained_body_styles": sorted(
+                {c for c in (datasets["train"].categories or []) if c}) or None,
+            # Exact design ids per split, so a result is reproducible without
+            # re-deriving the split and hoping the seed still matches.
+            "splits": {k: list(v) for k, v in splits.items()},
             "held_out_category": held,
             "wall_clock_s": wall,
             "n_params": n_params,

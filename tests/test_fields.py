@@ -685,3 +685,55 @@ def test_field_predictor_normalises_independently_of_mesh_position(fields_root, 
     b = predictor.predict(moved)
 
     assert np.allclose(a.cp, b.cp, atol=1e-4), "prediction moved with the mesh"
+
+
+def test_integral_loss_constrains_lift_not_only_drag():
+    """Regression test for a real bug found in review by Pranoy.
+
+    integral_consistency_loss loops over axes (0, 2) but both integrate_drag
+    calls omitted `axis=axis`, so each iteration used the default axis=0. The
+    loop computed DRAG twice and averaged it with itself, and the lift term was
+    never constrained: a field wrong only in lift scored a loss of exactly 0.
+
+    The assertion below is the one that failed before the fix.
+    """
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    n = 400
+    g = torch.Generator().manual_seed(0)
+    xyz = torch.randn(n, 3, generator=g)
+    normal = (xyz / xyz.norm(dim=1, keepdim=True)).unsqueeze(0)
+    area = torch.full((1, n), 1e-3)
+    a_ref = torch.tensor([2.2])
+    scale = torch.tensor([1.0])
+    target = -0.3 - 0.8 * normal[..., :1]
+
+    # wrong ONLY along the lift axis: drag is essentially exact
+    wrong_lift = target + 0.5 * normal[..., 2:3]
+    out = torch.cat([wrong_lift, torch.zeros_like(wrong_lift)], dim=-1)
+
+    cd_err = abs(float(integrate_drag(wrong_lift, normal, area, a_ref, axis=0)
+                       - integrate_drag(target, normal, area, a_ref, axis=0)))
+    cl_err = abs(float(integrate_drag(wrong_lift, normal, area, a_ref, axis=2)
+                       - integrate_drag(target, normal, area, a_ref, axis=2)))
+    assert cd_err < 1e-3, "fixture should be near-exact in drag"
+    assert cl_err > 1e-2, "fixture should be wrong in lift"
+
+    loss = float(integral_consistency_loss(out, target, normal, area, a_ref,
+                                           scale, m))
+    assert loss > 1e-6, (
+        "a field wrong only in lift scored zero loss -- the lift axis is not "
+        "being constrained")
+    assert loss == pytest.approx((cd_err**2 + cl_err**2) / 2, rel=0.05)
+
+
+def test_integral_loss_axes_argument_is_honoured():
+    """Asking for drag only must differ from asking for drag and lift."""
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    normal, area, a_ref, scale, target = _integral_inputs(n=256)
+    wrong = target + 0.4 * normal[..., 2:3]
+    out = torch.cat([wrong, torch.zeros_like(wrong)], dim=-1)
+    drag_only = float(integral_consistency_loss(out, target, normal, area,
+                                                a_ref, scale, m, axes=(0,)))
+    both = float(integral_consistency_loss(out, target, normal, area, a_ref,
+                                           scale, m, axes=(0, 2)))
+    assert both > drag_only

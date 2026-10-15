@@ -100,20 +100,30 @@ def test_stage2_splits_are_by_run_not_by_point():
 
 
 def test_build_writes_a_complete_package(tmp_path):
+    """Runs on a fresh clone: the files must appear even with no checkpoints
+    trained locally, and the detail assertions only apply to what is there."""
     out = tmp_path / "handover"
     assert cmd_build(REPO, out) == 0
 
     for name in ("splits.json", "manifest.json", "README.md"):
         assert (out / name).exists(), name
 
-    manifest = json.loads((out / "manifest.json").read_text())
-    assert manifest["checkpoints"], "no checkpoints described"
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    if not manifest["checkpoints"]:
+        pytest.skip("no checkpoints trained locally; build-only path verified")
     for e in manifest["checkpoints"]:
         assert e["kind"] != "unknown", f"{e['name']} has no preprocess version"
         assert "safe_to_report" in e
         assert e["role"].strip()
         # Anything with a detector must say which space it measures, because
         # scoring the wrong space is silent noise.
+        if e["kind"] == "ensemble":
+            # five files, so five hashes rather than one
+            hashes = e.get("member_sha256") or {}
+            assert hashes, f"{e['name']} has no member hashes"
+            assert all(len(h) == 64 for h in hashes.values())
+        else:
+            assert len(e.get("sha256", "")) == 64, f"{e['name']} has no full sha256"
         ood = e.get("ood_detector")
         if ood is not None:
             # "unknown" is allowed for a detector predating the space field,
@@ -127,7 +137,9 @@ def test_build_writes_a_complete_package(tmp_path):
 def test_readme_warns_against_the_three_known_traps(tmp_path):
     out = tmp_path / "handover"
     cmd_build(REPO, out)
-    readme = (out / "README.md").read_text()
+    # encoding is explicit: the README contains 'σ', '²', '—' and '→', which a
+    # default Windows locale (cp1252) cannot decode.
+    readme = (out / "README.md").read_text(encoding="utf-8")
     # each of these cost real debugging time in this repo
     assert "safe_to_report" in readme
     assert "do not hardcode" in readme.lower()
@@ -141,7 +153,7 @@ def test_verify_detects_a_stale_checkpoint(tmp_path):
     checkpoint and the verifier must fail rather than pass it to the harness."""
     out = tmp_path / "handover"
     cmd_build(REPO, out)
-    manifest = json.loads((out / "manifest.json").read_text())
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
 
     entry = next((e for e in manifest["checkpoints"]
                   if e["kind"] == "params-v1"), None)
@@ -178,3 +190,45 @@ def test_a_detector_of_unknown_space_is_never_called_trustworthy(tmp_path):
     if ood["space"] == "unknown":
         assert ood["trustworthy"] is False
         assert ood["stale"] is True
+
+
+def test_schema_1_0_0_is_not_treated_as_current():
+    """Pre-contract-change checkpoints were marked schema_current=True. The
+    only current version is the contract's own."""
+    from src.contracts import SCHEMA_VERSION
+
+    assert SCHEMA_VERSION == "2.0.0"
+    src = (REPO / "src" / "train" / "handover.py").read_text(encoding="utf-8")
+    assert 'in ("1.0.0", "2.0.0")' not in src
+    assert "stamped == SCHEMA_VERSION" in src
+
+
+def test_verify_refuses_an_empty_package(tmp_path):
+    """It used to print 'READY -- all 0 checkpoints load as documented'."""
+    out = tmp_path / "empty"
+    out.mkdir()
+    (out / "manifest.json").write_text(
+        json.dumps({"checkpoints": [], "missing": []}), encoding="utf-8")
+    assert cmd_verify(REPO, out) == 1
+
+
+def test_verify_refuses_a_stale_schema_stamp(tmp_path):
+    out = tmp_path / "stale"
+    out.mkdir()
+    (out / "manifest.json").write_text(json.dumps({
+        "checkpoints": [{"name": "x", "kind": "params-v1", "role": "r",
+                         "safe_to_report": True, "checkpoint": "nope.pt",
+                         "schema_current": False,
+                         "schema_problem": "stamped '1.0.0'"}],
+        "missing": []}), encoding="utf-8")
+    assert cmd_verify(REPO, out) == 1
+
+
+def test_handover_writes_utf8_explicitly():
+    """Path.write_text() uses the locale encoding; every write must pin it."""
+    src = (REPO / "src" / "train" / "handover.py").read_text(encoding="utf-8")
+    assert 'encoding="utf-8"' in src
+    # no bare write_text on a handover output file
+    import re
+    bare = re.findall(r'\(out_dir / "[^"]+"\)\.write_text\(', src)
+    assert not bare, f"bare write_text calls: {bare}"

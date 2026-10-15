@@ -47,6 +47,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
+from src.contracts import SCHEMA_VERSION
 from src.data.fields import FIELD_VERSION, SurfaceFieldDataset, field_splits
 from src.train.field_model import (
     SurfaceFieldModel,
@@ -55,7 +56,6 @@ from src.train.field_model import (
 )
 from src.train.train import git_hash, pick_device, r2_score, seed_everything
 
-SCHEMA_VERSION = "2.0.0"
 STATE_FILENAME = "last.pt"
 
 
@@ -103,6 +103,7 @@ def evaluate_fields(model, loader, device, norm: FieldNorm,
     model.eval()
     preds, sigmas, truths, pprimes, region_ids = [], [], [], [], []
     cd_pred, cd_true = [], []
+    cl_pred, cl_true = [], []
     loss_sum = n_points = 0.0
 
     for batch in loader:
@@ -128,10 +129,19 @@ def evaluate_fields(model, loader, device, norm: FieldNorm,
         # is comparable with the reported Cd rather than 0.05% of it.
         scale = b["area_scale"]
         cd_pred.append((integrate_drag(mean_cp, b["query_normal"],
-                                       b["query_area"], b["a_ref"])
+                                       b["query_area"], b["a_ref"], axis=0)
                         * scale).cpu().numpy())
         cd_true.append((integrate_drag(b["cp"], b["query_normal"],
-                                       b["query_area"], b["a_ref"])
+                                       b["query_area"], b["a_ref"], axis=0)
+                        * scale).cpu().numpy())
+        # Lift as well as drag. The integral loss constrains both (after the
+        # axis fix), so both have to be reported -- otherwise "the integral is
+        # consistent" is a claim about a quantity nobody measured.
+        cl_pred.append((integrate_drag(mean_cp, b["query_normal"],
+                                       b["query_area"], b["a_ref"], axis=2)
+                        * scale).cpu().numpy())
+        cl_true.append((integrate_drag(b["cp"], b["query_normal"],
+                                       b["query_area"], b["a_ref"], axis=2)
                         * scale).cpu().numpy())
 
     pred = np.concatenate(preds)
@@ -164,6 +174,13 @@ def evaluate_fields(model, loader, device, norm: FieldNorm,
     metrics["cd_partial_mae"] = float(np.abs(cdp - cdt).mean())
     if cdt.std() > 0:
         metrics["cd_partial_r2"] = r2_score(cdt, cdp)
+
+    clp, clt = np.concatenate(cl_pred), np.concatenate(cl_true)
+    metrics["cl_partial_pred"] = float(clp.mean())
+    metrics["cl_partial_true"] = float(clt.mean())
+    metrics["cl_partial_mae"] = float(np.abs(clp - clt).mean())
+    if clt.std() > 0:
+        metrics["cl_partial_r2"] = r2_score(clt, clp)
 
     per_region = {}
     for i, name in enumerate(regions):
@@ -429,6 +446,7 @@ def train_fields(cfg: dict, device_str: str | None = None,
                        "normalize": "bbox centre / max vertex radius, as stage 1",
                        "target": "CpMeanTrim, standardised by norm_stats"},
         "schema_version": SCHEMA_VERSION, "splits": splits,
+        "git_commit": git_hash(),
         "regions": regions, "n_params": n_params, "wall_clock_s": wall,
         "region_classifier": region_payload,
     }, out_dir / "best.pt")
@@ -446,7 +464,10 @@ def train_fields(cfg: dict, device_str: str | None = None,
           f"coverage = {test.get('coverage_1sigma', float('nan')):.2f}")
     print(f"  integrated Cd (pressure only, area-scaled): pred "
           f"{test['cd_partial_pred']:.4f}  true {test['cd_partial_true']:.4f}  "
-          f"MAE {test['cd_partial_mae']:.4f}")
+          f"per-car MAE {test['cd_partial_mae']:.4f}")
+    print(f"  integrated Cl (pressure only, area-scaled): pred "
+          f"{test['cl_partial_pred']:.4f}  true {test['cl_partial_true']:.4f}  "
+          f"per-car MAE {test['cl_partial_mae']:.4f}")
     if "corr_sigma_pprime2" in test:
         print(f"  corr(sigma, LES unsteadiness) = {test['corr_sigma_pprime2']:+.3f}")
     print(f"{'=' * 70}")

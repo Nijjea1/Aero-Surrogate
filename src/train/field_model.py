@@ -338,8 +338,13 @@ def integral_consistency_loss(
     pred_cp = out[..., :n]
     total = out.new_zeros(())
     for axis in axes:
-        pred = integrate_drag(pred_cp, normal, area, a_ref) * scale
-        true = integrate_drag(target, normal, area, a_ref) * scale
+        # axis=axis is NOT optional. Omitting it made both calls use the
+        # default axis=0, so the loop computed DRAG twice and averaged it with
+        # itself -- the lift term was never constrained at all. A prediction
+        # wrong only in lift scored a loss of exactly 0. Found in review by
+        # Pranoy; test_integral_loss_constrains_lift_not_only_drag guards it.
+        pred = integrate_drag(pred_cp, normal, area, a_ref, axis=axis) * scale
+        true = integrate_drag(target, normal, area, a_ref, axis=axis) * scale
         total = total + ((pred - true) ** 2).mean()
     return total / len(axes)
 

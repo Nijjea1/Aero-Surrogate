@@ -35,12 +35,14 @@ manifest makes each one's contract explicit.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import date
 from pathlib import Path
 
 import torch
 
+from src.contracts import SCHEMA_VERSION
 from src.data.dataset import load_config, make_category_splits, make_splits, preprocess_spec
 from src.train.train import pick_device
 
@@ -92,6 +94,26 @@ KNOWN_RUNS: list[dict] = [
 ]
 
 
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _write(path: Path, text: str) -> None:
+    """Write UTF-8 explicitly.
+
+    Path.write_text() uses the platform's locale encoding, which is cp1252 on
+    a default Windows install, and the README and manifest contain the
+    characters 'σ', '²', '—' and '→'. Without this the handover crashes on
+    Windows with a UnicodeEncodeError. Newlines are normalised too, so a
+    checked-in manifest does not churn between platforms.
+    """
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
 def _load_ckpt(path: Path) -> dict | None:
     if not path.exists():
         return None
@@ -117,10 +139,19 @@ def _describe(entry: dict, repo: Path) -> dict | None:
         if not report.exists():
             return None
         payload = json.loads(report.read_text())
+        members = payload.get("members", [])
         out.update({
             "kind": "ensemble",
-            "members": payload.get("members", []),
+            "members": members,
+            # One hash per member: an ensemble is five files, so a single
+            # sha256 would be meaningless. Pin all of them.
+            "member_sha256": {
+                str(Path(m).relative_to(repo) if Path(m).is_absolute()
+                    and Path(m).is_relative_to(repo) else m): _sha256(Path(m))
+                for m in members if Path(m).exists()
+            },
             "n_members": payload.get("n_members"),
+            "metrics_scope": "ensemble of members (NOT the single model)",
             "val_metrics": payload.get("val"),
             "test_metrics": payload.get("test"),
             "load_with": "src.train.ensemble.Ensemble.load([...member paths])",
@@ -135,15 +166,33 @@ def _describe(entry: dict, repo: Path) -> dict | None:
         return None
 
     pre = ckpt.get("preprocess", {})
-    out["schema_current"] = ckpt.get("schema_version") in ("1.0.0", "2.0.0")
+    # Only the contract's own version is current. This used to accept
+    # "1.0.0" as well, which marked pre-contract-change checkpoints as fine.
+    stamped = ckpt.get("schema_version")
+    out["schema_version"] = stamped
+    out["schema_current"] = stamped == SCHEMA_VERSION
+    if not out["schema_current"]:
+        out["schema_problem"] = (
+            f"stamped {stamped!r} but the contract is {SCHEMA_VERSION!r}; "
+            f"retrain, do not restamp")
     ood = ckpt.get("ood")
+    ckpt_file = run_dir / "best.pt"
     out.update({
         "kind": pre.get("version", "unknown"),
-        "checkpoint": str((run_dir / "best.pt").relative_to(repo)),
+        "checkpoint": str(ckpt_file.relative_to(repo)),
+        # Full SHA-256, not a prefix: the service pins it at /health.
+        "sha256": _sha256(ckpt_file),
+        "bytes": ckpt_file.stat().st_size,
         "version": ckpt.get("version"),
+        "git_commit": ckpt.get("git_commit"),
+        "seed": (ckpt.get("config") or {}).get("seed"),
+        "trained_body_styles": ckpt.get("trained_body_styles"),
         "schema_version": ckpt.get("schema_version"),
         "n_params": ckpt.get("n_params"),
         "preprocess": pre,
+        # Single-model metrics. The ensemble's are a separate manifest entry
+        # with its own val/test block -- never merged with these.
+        "metrics_scope": "single model",
         "val_metrics": ckpt.get("val_metrics"),
         "test_metrics": ckpt.get("test_metrics"),
         "held_out_category": ckpt.get("held_out_category"),
@@ -307,7 +356,7 @@ def cmd_build(repo: Path, out_dir: Path) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     splits = build_splits(repo)
-    (out_dir / "splits.json").write_text(json.dumps(splits, indent=2))
+    _write(out_dir / "splits.json", json.dumps(splits, indent=2))
 
     entries, missing = [], []
     for entry in KNOWN_RUNS:
@@ -325,8 +374,8 @@ def cmd_build(repo: Path, out_dir: Path) -> int:
         "checkpoints": entries,
         "missing": missing,
     }
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
-    (out_dir / "README.md").write_text(README)
+    _write(out_dir / "manifest.json", json.dumps(manifest, indent=2))
+    _write(out_dir / "README.md", README)
 
     print(f"handover -> {out_dir}\n")
     print(f"{'name':32} {'kind':14} {'report':>7}  metric")
@@ -401,13 +450,36 @@ def cmd_verify(repo: Path, out_dir: Path) -> int:
             problems.append(f"{name}: {type(exc).__name__}: {exc}")
             print(f"  {name:30} FAILED  {type(exc).__name__}: {exc}")
 
+    # An empty package is NOT ready. It used to print
+    # "READY -- all 0 checkpoints load", which is true and useless.
+    entries = manifest["checkpoints"]
+    if not entries:
+        print("NOT READY -- the manifest describes no checkpoints at all.")
+        print("  Train them first, then rebuild: python -m src.train.handover")
+        return 1
+    if manifest.get("missing"):
+        print(f"NOT READY -- {len(manifest['missing'])} expected run(s) absent: "
+              f"{manifest['missing']}")
+        return 1
+
+    stale = [e["name"] for e in entries
+             if e.get("schema_current") is False]
+    if stale:
+        print(f"NOT READY -- {len(stale)} checkpoint(s) carry a schema stamp that "
+              f"disagrees with contracts.SCHEMA_VERSION {SCHEMA_VERSION!r}:")
+        for name in stale:
+            e = next(x for x in entries if x["name"] == name)
+            print(f"  - {name}: {e.get('schema_problem')}")
+        problems.extend(stale)
+
     print()
     if problems:
-        print(f"NOT READY -- {len(problems)} checkpoint(s) do not load:")
+        print(f"NOT READY -- {len(problems)} problem(s):")
         for p in problems:
             print(f"  - {p}")
         return 1
-    print(f"READY -- all {len(manifest['checkpoints'])} checkpoints load as documented.")
+    print(f"READY -- all {len(entries)} checkpoints load as documented, "
+          f"schema {SCHEMA_VERSION}.")
     return 0
 
 
@@ -560,7 +632,7 @@ def cmd_benchmark(repo: Path, out_dir: Path, reps: int = 50) -> int:
                "cfd_reference_note": "DrivAerML, ~8 h per case on 256 cores",
                "rows": rows}
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "latency.json").write_text(json.dumps(payload, indent=2))
+    _write(out_dir / "latency.json", json.dumps(payload, indent=2))
     print(f"\nwrote {out_dir / 'latency.json'}")
     print("\nThe thesis number is the params-v1 total: that is what the agent")
     print("actually calls. The mesh-based rows are slower because sampling a")
