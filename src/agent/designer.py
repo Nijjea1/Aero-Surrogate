@@ -1,14 +1,15 @@
 """The Nemotron design agent.  OWNER: Pranoy.  GATE: running Oct 17.
 
-    python -m src.agent.designer --iterations 25 --dry-run
+    python -m src.agent.designer --iterations 25 --model super
+    python -m src.agent.designer --iterations 10 --dry-run      # scripted, no API
 
 The uncertainty gate is the point of this file. When the surrogate is not
-confident, reject the proposal and TELL THE AGENT WHY, so it adapts instead of
-hammering the same region.
+confident, the proposal is rejected and the agent is TOLD WHY, so it adapts
+instead of hammering the same region.
 
-Build a --dry-run scripted proposer first so the loop can be tested before
-Token Factory is wired up. The gate for Oct 17 is "the loop runs end to end",
-not "the predictions are good".
+Both modes score every design over HTTP through the service. --dry-run swaps
+Nemotron for a scripted proposer so the loop can be tested for free. Live mode
+calls Token Factory through src.agent.provider, which enforces the spend cap.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import sys
 import time
 import uuid
 from collections.abc import Callable
@@ -29,15 +31,9 @@ from ..contracts import (
 )
 from ..service.gate import rejection_reason
 from ..service.runlog import RunLog
-
-SYSTEM_PROMPT = """You are an aerodynamicist minimising trusted predicted Cd.
-- parameters are offsets from the baseline body of the run's body style;
-  all zeros is the unmodified baseline
-- stay inside the bounds given
-- if a proposal is REJECTED for low confidence, move back toward regions the
-  model understands; do not repeat the rejected move
-- change one or two parameters at a time so effects are attributable
-- respond ONLY with JSON: {"params": {...}, "reasoning": "..."}"""
+from .constraints import Constraint, parse_constraint, violations
+from .nemotron import NemotronProposer, NoProposal
+from .provider import BudgetExceeded, ProviderError, TokenFactoryClient
 
 
 def evaluate_design(params: dict[str, float], body_style: str = DEFAULT_BODY_STYLE) -> dict:
@@ -53,9 +49,28 @@ def evaluate_design(params: dict[str, float], body_style: str = DEFAULT_BODY_STY
     return result
 
 
-def ask_nemotron(history: list[dict], api_key: str) -> dict:
-    """One planning step via Token Factory. -> {"params": ..., "reasoning": ...}"""
-    raise NotImplementedError("Live Nemotron integration is not implemented; use --dry-run for the scripted proposer")
+def service_health() -> dict:
+    base_url = os.environ.get("AERO_SERVICE_URL", "http://127.0.0.1:8000").rstrip("/")
+    response = requests.get(f"{base_url}/health", timeout=(3.05, 10))
+    response.raise_for_status()
+    return response.json()
+
+
+def service_thresholds() -> dict:
+    """The gate thresholds the serving model uses, so the agent and /evaluate agree."""
+    base_url = os.environ.get("AERO_SERVICE_URL", "http://127.0.0.1:8000").rstrip("/")
+    response = requests.get(f"{base_url}/schema", timeout=(3.05, 10))
+    response.raise_for_status()
+    schema = response.json()
+    return {"threshold": float(schema["uncertainty_threshold"]),
+            "ood_threshold": float(schema["ood_score_threshold"])}
+
+
+def describe_provenance(health: dict) -> str:
+    if health.get("synthetic"):
+        return "synthetic stub (numbers are a test fixture, not aerodynamic results)"
+    version = health.get("model_version") or "unknown version"
+    return f"{health.get('predictor', 'model')} surrogate {version}"
 
 
 def scripted_proposer(history: list[dict]) -> dict:
@@ -99,65 +114,181 @@ def _validate_proposal(params: dict[str, float]) -> None:
 
 def run(iterations: int, run_id: str, dry_run: bool, *,
         evaluator: Callable[[dict[str, float], str], dict] | None = None,
-        body_style: str = DEFAULT_BODY_STYLE) -> str:
-    """Log exactly iterations scored attempts, including baseline iteration zero.
+        body_style: str = DEFAULT_BODY_STYLE,
+        proposer: NemotronProposer | None = None,
+        constraints: list[Constraint] | None = None,
+        provenance: str | None = None,
+        model: str | None = None,
+        run_budget_usd: float = 0.50,
+        max_consecutive_failures: int = 2,
+        thinking: str = "auto",
+        thresholds: dict | None = None) -> str:
+    """Log up to `iterations` scored attempts, including baseline iteration zero.
 
     The body style is fixed for the run: the same offsets describe a different
     car on each style, so mixing styles would make attempts incomparable.
 
-    Dry-run means scripted proposals, not bypassed HTTP or fabricated service
-    results. Predictor provenance comes from /health and each Evaluation.
+    Live runs stop early, visibly, with a run_finished event naming the reason:
+    repeated invalid proposals, a provider failure, the global spend cap, or
+    this run's own cost budget (checked before every model call). An
+    exception also writes run_finished before propagating. Dry-run always
+    scores exactly `iterations`.
     """
     if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
         raise ValueError("iterations must be a positive integer")
+    if (isinstance(run_budget_usd, bool) or not isinstance(run_budget_usd, (int, float))
+            or not math.isfinite(run_budget_usd) or run_budget_usd < 0):
+        raise ValueError("run budget must be a finite nonnegative number of USD")
     problems = validate_body_style(body_style)
     if problems:
         raise ValueError("; ".join(problems))
+    constraints = list(constraints or [])
     if not dry_run:
-        raise NotImplementedError("Live Nemotron integration is not implemented; use --dry-run")
+        if proposer is None:
+            client = TokenFactoryClient.from_env(model=model)
+            think = thinking == "on" or (thinking == "auto" and "nano" not in client.model.lower())
+            proposer = NemotronProposer(client, constraints=constraints, thinking=think)
+        # Enforced before every provider call, including correction rounds.
+        proposer.budget_usd = run_budget_usd
+    # Readiness checks come before the run is reserved, so a service that is
+    # down cannot leave an orphaned, never-started run behind.
+    if provenance is None:
+        provenance = describe_provenance(service_health()) if evaluator is None else "injected evaluator"
+    if thresholds is None:
+        thresholds = service_thresholds() if evaluator is None else {}
     log = RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
     log.reserve(run_id)
-    evaluate = evaluator or evaluate_design
-    history: list[dict] = []
-    best_cd = None
+    log.append_event(run_id, {
+        "type": "run_started", "mode": "scripted" if dry_run else "nemotron",
+        "model": None if dry_run else proposer.client.model, "body_style": body_style,
+        "thinking": None if dry_run else proposer.thinking,
+        "evaluation_budget": iterations, "run_budget_usd": None if dry_run else run_budget_usd,
+        "constraints": [str(c) for c in constraints],
+        "surrogate": provenance, "gate_thresholds": thresholds,
+    })
+    state = {"history": [], "best_cd": None}
+    try:
+        stop_reason = _drive(state, iterations, run_id, dry_run, log, evaluator or evaluate_design,
+                             body_style, proposer, constraints, provenance, thresholds,
+                             max_consecutive_failures)
+    except BaseException as exc:
+        # Every started run gets a terminal event, even when scoring or the
+        # service fails, so a reader never mistakes a dead run for a live one.
+        stop_reason = f"error: {type(exc).__name__}: {exc}"
+        _finish(log, run_id, stop_reason, state, None if dry_run else proposer)
+        raise
+    _finish(log, run_id, stop_reason, state, None if dry_run else proposer)
+    return run_id
+
+
+def _finish(log: RunLog, run_id: str, stop_reason: str, state: dict,
+            proposer: NemotronProposer | None) -> None:
+    usage = vars(proposer.client.usage).copy() if proposer is not None else None
+    log.append_event(run_id, {"type": "run_finished", "stop_reason": stop_reason,
+                              "scored": len(state["history"]), "best_cd": state["best_cd"],
+                              "usage": usage})
+
+
+def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog,
+           evaluate: Callable[[dict[str, float], str], dict], body_style: str,
+           proposer: NemotronProposer | None, constraints: list[Constraint], provenance: str,
+           thresholds: dict, max_consecutive_failures: int) -> str:
+    """Propose, score, gate and log until done. Returns the stop reason."""
+    history = state["history"]
+    best_pressure = None
+    failures = 0
     started = time.monotonic()
-    for iteration in range(iterations):
-        proposal = scripted_proposer(history)
-        params = proposal["params"]
+    while len(history) < iterations:
+        if dry_run or not history:
+            proposal = scripted_proposer(history)
+            params, reasoning = proposal["params"], proposal["reasoning"]
+        else:
+            try:
+                proposal = proposer.propose(
+                    history, body_style=body_style, evaluations_left=iterations - len(history),
+                    total_evaluations=iterations, best_pressure=best_pressure, provenance=provenance)
+            except NoProposal as exc:
+                failures += 1
+                log.append_event(run_id, {"type": "no_valid_proposal", "detail": str(exc)})
+                if failures >= max_consecutive_failures:
+                    return f"{failures} consecutive steps without a valid proposal"
+                continue
+            except BudgetExceeded as exc:
+                return f"budget: {exc}"
+            except ProviderError as exc:
+                log.append_event(run_id, {"type": "provider_error", "detail": str(exc)})
+                return f"provider error: {exc}"
+            failures = 0
+            params, reasoning = proposal.params, proposal.reasoning
+            for problem in proposal.feedback:
+                log.append_event(run_id, {"type": "proposal_corrected", "detail": problem})
         _validate_proposal(params)
         evaluation = evaluate(params, body_style)
-        reason = rejection_reason(evaluation, body_style=body_style)
+        reason = rejection_reason(evaluation, body_style=body_style, **thresholds)
         # Invalid nonfinite predictions cannot be written as valid JSONL.
         if reason and reason.startswith("invalid prediction:"):
             raise ValueError(reason)
-        if reason is None:
-            best_cd = evaluation["cd"] if best_cd is None else min(best_cd, evaluation["cd"])
+        broken = violations(params, constraints)
+        if reason is None and broken:
+            # Only the baseline can reach here; live proposals are checked
+            # before scoring. It stays a reference, never the best design.
+            reason = "reference only: " + "; ".join(broken)
+        if reason is None and (state["best_cd"] is None or evaluation["cd"] < state["best_cd"]):
+            state["best_cd"] = evaluation["cd"]
+            best_pressure = evaluation.get("pressure_summary") or None
         record = IterationRecord(
-            run_id=run_id, iteration=iteration, params=dict(params), body_style=body_style,
+            run_id=run_id, iteration=len(history), params=dict(params), body_style=body_style,
             cd=evaluation["cd"], cl=evaluation["cl"], uncertainty=evaluation["uncertainty"],
             in_distribution=evaluation["in_distribution"], accepted=reason is None,
-            reject_reason=reason, reasoning=proposal["reasoning"], best_cd_so_far=best_cd,
+            reject_reason=reason, reasoning=reasoning, best_cd_so_far=state["best_cd"],
             wall_clock_s=time.monotonic() - started, ood_score=evaluation.get("ood_score"),
         )
         log.append(record)
         history.append(record.to_dict())
-    return run_id
+    return "evaluation budget used"
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the offline scripted design loop against /evaluate.")
-    parser.add_argument("--iterations", type=int, default=25, help="Total scored attempts, including the initial design")
+    parser = argparse.ArgumentParser(description="Run the design loop against the evaluation service.")
+    parser.add_argument("--iterations", type=int, default=25, help="Total scored attempts, including the baseline")
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--body-style", default=DEFAULT_BODY_STYLE, help="Body style for the whole run")
-    parser.add_argument("--dry-run", action="store_true", help="Use scripted proposals; still calls the evaluation service")
+    parser.add_argument("--dry-run", action="store_true", help="Scripted proposals, no API calls")
+    parser.add_argument("--model", default=None, help="nano | super | full model ID (default NEMOTRON_MODEL)")
+    parser.add_argument("--constraint", action="append", default=[], metavar="RULE",
+                        help="Numeric rule enforced in code, e.g. 'A_Car_Roof_Height>=0'. Repeatable.")
+    parser.add_argument("--run-budget", type=float, default=0.50, help="Stop this run after this many USD")
+    parser.add_argument("--thinking", choices=["auto", "on", "off"], default="auto",
+                        help="Model thinking; auto = off for Nano, on for Super")
     args = parser.parse_args()
-    run_id = args.run_id or f"scripted-{uuid.uuid4().hex[:12]}"
-    print("Scripted development loop: synthetic stub outputs do not demonstrate aerodynamic improvement.")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try:
-        result = run(args.iterations, run_id, args.dry_run, body_style=args.body_style)
-    except (ValueError, OSError, requests.RequestException, NotImplementedError) as exc:
+        constraints = [parse_constraint(rule) for rule in args.constraint]
+    except ValueError as exc:
+        parser.error(str(exc))
+    prefix = "scripted" if args.dry_run else "agent"
+    run_id = args.run_id or f"{prefix}-{uuid.uuid4().hex[:12]}"
+    if args.dry_run:
+        print("Scripted development loop: no model calls; scripted proposals are not an aerodynamic result.")
+    try:
+        result = run(args.iterations, run_id, args.dry_run, body_style=args.body_style,
+                     constraints=constraints, model=args.model, run_budget_usd=args.run_budget,
+                     thinking=args.thinking)
+    except (ValueError, OSError, requests.RequestException, ProviderError) as exc:
         parser.exit(1, f"Run failed: {exc}\n")
-    print(f"Completed {args.iterations} scored attempts. Run ID: {result}")
+    log = RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
+    rows = log.read(result)
+    finished = log.read_events(result)[-1]
+    for row in rows:
+        verdict = "ok " if row["accepted"] else "REJ"
+        print(f"{row['iteration']:3d} {verdict} Cd {row['cd']:.5f}  {row['reasoning'][:110]}")
+    print(f"Run ID: {result}. {finished['scored']} scored; stopped because {finished['stop_reason']}. "
+          f"Best trusted Cd: {finished['best_cd']}")
+    if finished["usage"]:
+        usage = finished["usage"]
+        print(f"Model calls {usage['calls']}, tokens {usage['prompt_tokens']}+{usage['completion_tokens']}, "
+              f"cost ${usage['cost_usd']:.4f}")
 
 
 if __name__ == "__main__":

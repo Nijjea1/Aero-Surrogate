@@ -3,24 +3,39 @@
 Two implementations, same interface:
     StubPredictor  - plausible numbers, no model, no GPU. BUILD THIS FIRST
                      (Oct 13) so Paramveer is not blocked on Avneet.
-    TorchPredictor - loads one of Avneet's checkpoints. Swap it in Oct 15.
+    TorchPredictor - loads one of Avneet's params-v1 checkpoints, following
+                     docs/HANDOFF.md section 3. Needs requirements-model.txt.
 
 Make the stub's uncertainty RISE toward the edges of the design box, or the
 uncertainty gate has nothing to fire on and cannot be tested.
 
 Schema 2.0.0: sixteen DrivAerNet morph deltas plus a body style. All-zero
 params is the unmodified baseline body of that style.
+
+Torch is imported lazily inside TorchPredictor so the lightweight service
+(requirements-service.txt, no torch) can import this module and serve the stub.
 """
 
 from __future__ import annotations
 
+import hashlib
 import math
+import time
 from collections.abc import Mapping
+from pathlib import Path
 
 from ..contracts import (
-    BODY_STYLES, Design, Evaluation, PARAM_BOUNDS, PRESSURE_REGIONS,
-    is_in_distribution, validate_body_style,
+    BODY_STYLES, Design, Evaluation, OOD_SCORE_THRESHOLD, PARAM_BOUNDS, PRESSURE_REGIONS,
+    SCHEMA_VERSION, UNCERTAINTY_THRESHOLD, is_in_distribution, validate_body_style,
 )
+
+# Where each Evaluation field comes from, reported by /health so nobody reads a
+# placeholder as a prediction.
+#   model       - computed by the loaded checkpoint
+#   synthetic   - the deterministic stub fixture, not aerodynamics
+#   placeholder - a fixed filler value the contract requires; carries no information
+#   unavailable - the model does not produce it; the field is empty or null
+OUTPUT_FIELDS = ("cd", "uncertainty", "ood_score", "cl", "pressure_summary")
 
 
 def validate_design_params(params: object) -> list[str]:
@@ -50,6 +65,12 @@ def validate_design_params(params: object) -> list[str]:
 
 class BasePredictor:
     name = "base"
+    model_version: str | None = None
+    checkpoint_sha256: str | None = None
+    # Thresholds this predictor's in_distribution flag was computed with.
+    uncertainty_threshold: float = UNCERTAINTY_THRESHOLD
+    ood_threshold: float | None = OOD_SCORE_THRESHOLD
+    output_provenance: dict[str, str] = {}
 
     def evaluate(self, design: Design) -> Evaluation:
         raise NotImplementedError
@@ -67,6 +88,8 @@ class StubPredictor(BasePredictor):
     """
 
     name = "stub"
+    model_version = "stub-v2-synthetic"
+    output_provenance = {field: "synthetic" for field in OUTPUT_FIELDS}
 
     def evaluate(self, design: Design) -> Evaluation:
         problems = validate_design_params(design.params) + validate_body_style(design.body_style)
@@ -99,7 +122,7 @@ class StubPredictor(BasePredictor):
             uncertainty=uncertainty,
             in_distribution=in_distribution,
             pressure_summary=pressure_summary,
-            model_version="stub-v2-synthetic",
+            model_version=self.model_version,
             latency_ms=0.0,
             ood_score=ood_score,
         )
@@ -150,21 +173,252 @@ if (set(_SYNTHETIC_CD_OPTIMUM) != set(PARAM_BOUNDS)
     raise RuntimeError("synthetic stub tables are out of step with src/contracts.py")
 
 
+class CheckpointError(RuntimeError):
+    """The checkpoint cannot be served. Raised at load time, never papered over."""
+
+
+PARAMS_PREPROCESS_VERSION = "params-v1"
+POINTCLOUD_PREPROCESS_VERSION = "pointcloud-v1"
+_REQUIRED_KEYS = ("state_dict", "config", "norm_stats", "preprocess", "schema_version")
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _check_param_columns(columns: object) -> list[str]:
+    """The checkpoint's input columns, checked against the 2.0.0 contract.
+
+    Every name must be a contract parameter or a cat_<body style> indicator,
+    each exactly once, and every contract parameter and body style must be
+    present: a model that ignores a dial the agent turns, or cannot tell which
+    baseline body it is perturbing, would answer without saying so.
+    """
+    if (not isinstance(columns, list) or not columns
+            or not all(isinstance(name, str) for name in columns)):
+        raise CheckpointError("preprocess.param_columns must be a non-empty list of names")
+    problems = []
+    duplicates = sorted({name for name in columns if columns.count(name) > 1})
+    if duplicates:
+        problems.append(f"duplicate columns {duplicates}")
+    unknown = [name for name in columns
+               if name not in PARAM_BOUNDS
+               and not (name.startswith("cat_") and name[4:] in BODY_STYLES)]
+    if unknown:
+        problems.append(f"columns that are neither contract parameters nor "
+                        f"cat_<body style> indicators: {unknown}")
+    missing = [name for name in PARAM_BOUNDS if name not in columns]
+    missing += [f"cat_{style}" for style in BODY_STYLES if f"cat_{style}" not in columns]
+    if missing:
+        problems.append(f"contract inputs the model does not take: {missing}")
+    if problems:
+        raise CheckpointError(
+            f"checkpoint input columns do not match schema {SCHEMA_VERSION}: " + "; ".join(problems)
+        )
+    return list(columns)
+
+
 class TorchPredictor(BasePredictor):
+    """Serves a params-v1 checkpoint exactly as docs/HANDOFF.md section 3 says.
+
+    Everything that can be wrong with a checkpoint is checked here, at
+    construction, so a bad AERO_CHECKPOINT fails startup instead of the first
+    request. There is no fallback to the stub.
+
+    Stage 1 predicts Cd and its standard deviation only. cl is a fixed 0.0
+    placeholder and pressure_summary is empty; output_provenance says so.
+    """
+
     name = "torch"
 
     def __init__(self, checkpoint: str, device: str = "cpu"):
-        raise NotImplementedError(
-            "Real checkpoint inference is unavailable until the training adapter "
-            "is integrated. Refusing to substitute synthetic predictions."
-        )
+        path = Path(checkpoint)
+        if not path.is_file():
+            raise FileNotFoundError(f"checkpoint not found: {path}")
+        try:
+            import numpy as np
+            import torch
+
+            from ..train.model import build_model, split_prediction
+            from ..train.ood import OODDetector
+        except ImportError as exc:
+            raise CheckpointError(
+                "serving a checkpoint needs torch and numpy: "
+                "pip install -r requirements-model.txt"
+            ) from exc
+        self._np, self._torch, self._split_prediction = np, torch, split_prediction
+
+        self.checkpoint_path = str(path)
+        self.checkpoint_sha256 = _file_sha256(path)[:12]
+        self.device = torch.device(device)
+
+        # weights_only=False unpickles arbitrary Python objects, which means
+        # loading EXECUTES code embedded in the file. Only load checkpoints a
+        # trusted teammate produced with src/train/train.py.
+        try:
+            ckpt = torch.load(path, map_location=self.device, weights_only=False)
+        except Exception as exc:  # noqa: BLE001 - any failure means "not a checkpoint"
+            raise CheckpointError(f"{path} is not a readable torch checkpoint: {exc}") from exc
+        if not isinstance(ckpt, dict):
+            raise CheckpointError(f"{path} holds a {type(ckpt).__name__}, not a checkpoint dict")
+        missing = [key for key in _REQUIRED_KEYS if key not in ckpt]
+        if missing:
+            raise CheckpointError(f"{path} is missing checkpoint keys {missing}")
+        if ckpt["schema_version"] != SCHEMA_VERSION:
+            raise CheckpointError(
+                f"checkpoint was trained against schema {ckpt['schema_version']!r}; "
+                f"this service speaks {SCHEMA_VERSION!r}"
+            )
+
+        spec = ckpt["preprocess"]
+        version = spec.get("version") if isinstance(spec, dict) else None
+        if version == POINTCLOUD_PREPROCESS_VERSION:
+            raise CheckpointError(
+                "point-cloud (pointcloud-v1) checkpoints are not served: /evaluate "
+                "receives parameters, and turning them into a mesh would put the "
+                "approximate viewer morph in the prediction path. Use a params-v1 "
+                "checkpoint."
+            )
+        if version != PARAMS_PREPROCESS_VERSION:
+            raise CheckpointError(
+                f"unknown preprocess version {version!r}; this service serves "
+                f"{PARAMS_PREPROCESS_VERSION!r} checkpoints only"
+            )
+        self.param_columns = _check_param_columns(spec.get("param_columns"))
+        n_inputs = len(self.param_columns)
+
+        norm = ckpt["norm_stats"]
+        try:
+            self._param_mean = np.asarray(norm["param_mean"], dtype=np.float64)
+            self._param_std = np.asarray(norm["param_std"], dtype=np.float64)
+            self._target_mean = float(norm["target_mean"])
+            self._target_std = float(norm["target_std"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise CheckpointError(f"norm_stats is incomplete for a params-v1 checkpoint: {exc}") from exc
+        if self._param_mean.shape != (n_inputs,) or self._param_std.shape != (n_inputs,):
+            raise CheckpointError(
+                f"norm_stats has {self._param_mean.shape}/{self._param_std.shape} entries "
+                f"for {n_inputs} input columns"
+            )
+        if (not np.all(np.isfinite(self._param_mean)) or not np.all(np.isfinite(self._param_std))
+                or np.any(self._param_std <= 0)):
+            raise CheckpointError("norm_stats param_mean/param_std must be finite with std > 0")
+        if not (math.isfinite(self._target_mean) and math.isfinite(self._target_std)
+                and self._target_std > 0):
+            raise CheckpointError("norm_stats target_mean/target_std must be finite with std > 0")
+
+        try:
+            model = build_model(ckpt["config"])
+            model.load_state_dict(ckpt["state_dict"])  # strict: a partial load is a wrong model
+            model.to(self.device).eval()
+            with torch.inference_mode():
+                probe = model(torch.zeros((1, n_inputs), dtype=torch.float32, device=self.device))
+        except Exception as exc:  # noqa: BLE001
+            raise CheckpointError(f"cannot rebuild the model from the checkpoint: {exc}") from exc
+        if tuple(probe.shape) != (1, 2):
+            raise CheckpointError(
+                f"model emits {tuple(probe.shape)[1:]} outputs per design; serving needs "
+                f"(mean, log-variance). A model without an uncertainty head would report "
+                f"zero uncertainty, which the gate would read as certainty."
+            )
+        self._model = model
+
+        self._ood = None
+        if ckpt.get("ood"):
+            try:
+                detector = OODDetector.from_dict(ckpt["ood"])
+                ood_mean = np.asarray(detector.mean, dtype=np.float64)
+                cov_inv = np.asarray(detector.cov_inv, dtype=np.float64)
+                threshold = float(detector.threshold)
+            except Exception as exc:  # noqa: BLE001
+                raise CheckpointError(f"cannot rebuild the OOD detector: {exc}") from exc
+            # A feature-space detector measures the point-cloud encoder's output,
+            # not this design vector; scoring parameters with it would be noise.
+            space = getattr(detector, "space", "parameters")
+            if space != "parameters":
+                raise CheckpointError(f"OOD detector measures '{space}', but params-v1 needs 'parameters'")
+            if ood_mean.shape != (n_inputs,) or cov_inv.shape != (n_inputs, n_inputs):
+                raise CheckpointError("OOD detector dimensions do not match the input columns")
+            if not math.isfinite(threshold) or threshold <= 0:
+                raise CheckpointError(f"OOD detector threshold {threshold} is not calibrated")
+            self._ood = detector
+
+        # The checkpoint carries no calibrated sigma cutoff, so the contract's
+        # stays. The OOD threshold is the detector's own, calibrated on the
+        # validation split; the contract's 3.0 is a placeholder that would
+        # reject most real designs in 19 standardised dimensions.
+        self.uncertainty_threshold = UNCERTAINTY_THRESHOLD
+        self.ood_threshold = float(self._ood.threshold) if self._ood is not None else None
+
+        ckpt_version = ckpt.get("version")
+        self.model_version = (ckpt_version if isinstance(ckpt_version, str) and ckpt_version.strip()
+                              else f"sha256-{self.checkpoint_sha256}")
+        self.held_out_category = ckpt.get("held_out_category")
+        self.output_provenance = {
+            "cd": "model",
+            "uncertainty": "model",
+            "ood_score": "model" if self._ood is not None else "unavailable",
+            "cl": "placeholder",
+            "pressure_summary": "unavailable",
+        }
+
+    def model_input(self, design: Design):
+        """The standardised (1, P) float64 row, built by walking param_columns."""
+        row = []
+        for column in self.param_columns:
+            if column.startswith("cat_"):
+                row.append(1.0 if column == f"cat_{design.body_style}" else 0.0)
+            else:
+                row.append(float(design.params[column]))
+        raw = self._np.asarray([row], dtype=self._np.float64)
+        return (raw - self._param_mean) / self._param_std
 
     def evaluate(self, design: Design) -> Evaluation:
-        raise NotImplementedError
+        problems = validate_design_params(design.params) + validate_body_style(design.body_style)
+        if problems:
+            raise ValueError("; ".join(problems))
+        x = self.model_input(design)
+        torch = self._torch
+
+        start = time.perf_counter()
+        with torch.inference_mode():
+            pred = self._model(torch.from_numpy(x.astype(self._np.float32)).to(self.device))
+            mu, sigma = self._split_prediction(pred)
+        cd = float(mu[0]) * self._target_std + self._target_mean
+        uncertainty = float(sigma[0]) * self._target_std  # a scale: std only, no mean
+        ood_score = self._ood.score_one(x) if self._ood is not None else None
+        latency_ms = (time.perf_counter() - start) * 1000.0
+
+        if not (math.isfinite(cd) and math.isfinite(uncertainty)
+                and (ood_score is None or math.isfinite(ood_score))):
+            raise RuntimeError("model produced a non-finite prediction")
+        in_distribution, _ = is_in_distribution(
+            uncertainty, ood_score, design.body_style,
+            uncertainty_threshold=self.uncertainty_threshold,
+            ood_threshold=self.ood_threshold if self.ood_threshold is not None else OOD_SCORE_THRESHOLD,
+        )
+        return Evaluation(
+            cd=cd,
+            cl=0.0,                 # placeholder: stage 1 does not predict lift
+            uncertainty=uncertainty,
+            in_distribution=in_distribution,
+            pressure_summary={},    # unavailable until stage-2 surface fields
+            model_version=self.model_version,
+            latency_ms=latency_ms,
+            ood_score=ood_score,
+        )
 
 
 def load_predictor(checkpoint: str | None = None) -> BasePredictor:
-    """Torch predictor when a checkpoint is given, else the stub."""
+    """Torch predictor when a checkpoint is given, else the stub.
+
+    A configured checkpoint that cannot be served raises; it never falls back
+    to the synthetic stub.
+    """
     if checkpoint is None:
         return StubPredictor()
     if not isinstance(checkpoint, str) or not checkpoint.strip():

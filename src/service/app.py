@@ -3,14 +3,15 @@
     uvicorn src.service.app:app --reload --port 8000
 
 Implemented endpoints:
-    GET  /health              -> {"ok": true, "predictor": ...}
+    GET  /health              -> predictor, model version, checkpoint hash, output provenance
     GET  /schema              -> param bounds, body styles, defaults, thresholds
     POST /evaluate            -> Evaluation (the contract)
     POST /compare             -> field delta between two designs
     GET  /history/{run_id}    -> the run log
 
-Serve the synthetic stub by default. A nonempty AERO_CHECKPOINT currently
-fails startup until the real-model adapter is integrated.
+Serve the synthetic stub by default. A nonempty AERO_CHECKPOINT loads that
+params-v1 checkpoint with TorchPredictor (needs requirements-model.txt); a
+checkpoint that cannot be served fails startup and never falls back to the stub.
 """
 
 from __future__ import annotations
@@ -89,11 +90,19 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
         allow_methods=["GET", "POST"], allow_headers=["Content-Type"],
     )
 
+    def _threshold(name: str, default: float) -> float:
+        value = getattr(application.state.predictor, name, None)
+        return default if value is None else value
+
     @application.get("/health")
     def health():
-        return {"ok": True, "predictor": application.state.predictor.name,
-                "synthetic": application.state.predictor.name == "stub",
-                "schema_version": SCHEMA_VERSION}
+        predictor = application.state.predictor
+        return {"ok": True, "predictor": predictor.name,
+                "synthetic": predictor.name == "stub",
+                "schema_version": SCHEMA_VERSION,
+                "model_version": getattr(predictor, "model_version", None),
+                "checkpoint_sha256": getattr(predictor, "checkpoint_sha256", None),
+                "output_provenance": dict(getattr(predictor, "output_provenance", {}) or {})}
 
     @application.get("/schema")
     def schema():
@@ -103,9 +112,9 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
                 "param_units": "offsets from the baseline body of the chosen style: "
                                "angles in degrees, lengths in mm, curvatures and "
                                "inclinations dimensionless",
-                "uncertainty_threshold": UNCERTAINTY_THRESHOLD,
+                "uncertainty_threshold": _threshold("uncertainty_threshold", UNCERTAINTY_THRESHOLD),
                 "uncertainty_units": "Cd standard deviation",
-                "ood_score_threshold": OOD_SCORE_THRESHOLD}
+                "ood_score_threshold": _threshold("ood_threshold", OOD_SCORE_THRESHOLD)}
 
     @application.post("/evaluate", response_model=Evaluation)
     def evaluate(request: DesignRequest):
@@ -118,8 +127,10 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
     def compare(request: CompareRequest):
         a = evaluate(request.design_a).to_dict()
         b = evaluate(request.design_b).to_dict()
-        reasons = {"design_a": rejection_reason(a, body_style=request.design_a.body_style),
-                   "design_b": rejection_reason(b, body_style=request.design_b.body_style)}
+        thresholds = {"threshold": _threshold("uncertainty_threshold", UNCERTAINTY_THRESHOLD),
+                      "ood_threshold": _threshold("ood_threshold", OOD_SCORE_THRESHOLD)}
+        reasons = {"design_a": rejection_reason(a, body_style=request.design_a.body_style, **thresholds),
+                   "design_b": rejection_reason(b, body_style=request.design_b.body_style, **thresholds)}
         common = a["pressure_summary"].keys() & b["pressure_summary"].keys()
         return {
             "design_a": a, "design_b": b,

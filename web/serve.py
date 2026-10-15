@@ -18,6 +18,7 @@ import contextlib
 import json
 import socket
 import sys
+import threading
 import warnings
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -33,14 +34,25 @@ MAX_BODY = 64 * 1024
 
 class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
+        # Read the body before any reply: closing a socket with unread request
+        # bytes makes Windows reset the connection, and the client never sees
+        # the response.
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            length = -1
+        if not 0 <= length <= MAX_BODY:
+            self.close_connection = True
+            self._json(422, {"detail": "bad request length"})
+            return
+        raw = self.rfile.read(length)
         if self.path.split("?")[0] != "/api/mesh":
             self._json(404, {"detail": "not found"})
             return
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            if length > MAX_BODY:
-                raise ValueError("request too large")
-            request = json.loads(self.rfile.read(length) or b"{}")
+            request = json.loads(raw or b"{}")
+            if not isinstance(request, dict):
+                raise ValueError("body must be a JSON object")
             params = request.get("params", {})
             if not isinstance(params, dict) or not all(
                 isinstance(v, (int, float)) and not isinstance(v, bool) for v in params.values()
@@ -75,25 +87,35 @@ class Handler(SimpleHTTPRequestHandler):
             super().log_message(fmt, *args)
 
 
-class DualStackServer(ThreadingHTTPServer):
-    """Answer on both ::1 and 127.0.0.1, so http://localhost works either way."""
-
+class IPv6Server(ThreadingHTTPServer):
     address_family = socket.AF_INET6
 
-    def server_bind(self):
-        with contextlib.suppress(Exception):
-            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
-        return super().server_bind()
+
+def make_servers(host: str, port: int) -> list[ThreadingHTTPServer]:
+    """This machine only by default: 127.0.0.1 and ::1, so http://localhost
+    works whichever one the browser resolves. Pass --host 0.0.0.0 to share
+    the page on the network on purpose."""
+    handler = partial(Handler, directory=str(WEB))
+    if host != "localhost":
+        cls = IPv6Server if ":" in host else ThreadingHTTPServer
+        return [cls((host, port), handler)]
+    servers = [ThreadingHTTPServer(("127.0.0.1", port), handler)]
+    with contextlib.suppress(OSError):  # no IPv6 loopback on this machine
+        servers.append(IPv6Server(("::1", port), handler))
+    return servers
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--port", type=int, default=5173)
+    parser.add_argument("--host", default="localhost", help="default: this machine only")
     args = parser.parse_args()
-    server = DualStackServer(("::", args.port), partial(Handler, directory=str(WEB)))
+    servers = make_servers(args.host, args.port)
+    for extra in servers[1:]:
+        threading.Thread(target=extra.serve_forever, daemon=True).start()
     print(f"Aero Surrogate UI on http://localhost:{args.port}  (Ctrl+C to stop)")
     with contextlib.suppress(KeyboardInterrupt):
-        server.serve_forever()
+        servers[0].serve_forever()
 
 
 if __name__ == "__main__":

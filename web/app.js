@@ -4,10 +4,11 @@
 //   GET /health, GET /schema, POST /evaluate
 //
 // The controls are built from /schema, so the page follows whatever parameter
-// space the service runs -- contracts 1.0.0 today, 2.0.0 once it merges --
-// without code changes here.
+// space the service runs, without code changes here.
 //
 // Point it at another service with ?api=http://host:port
+
+import { aeroLoads } from "./physics.js";
 
 const API = (new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -65,7 +66,8 @@ const PRESETS = {
   },
   edge: {
     label: "Edge of the box",
-    hint: "Every dial near its limit, where the model has least data. Expect the gate to reject it.",
+    hint: "Every dial near a limit at once: each value is legal, but the combination is unlike " +
+      "any design the model learned from, so the gate should reject it.",
     params: (schema) => {
       let i = 0;
       return mapBounds(schema, (lo, hi) => (i++ % 2 ? lo + 0.03 * (hi - lo) : hi - 0.03 * (hi - lo)));
@@ -79,13 +81,19 @@ const state = {
   params: {},
   bodyStyle: null,
   label: "Baseline",
-  baseline: null,     // evaluation of the default design, for deltas
+  baselines: {},      // body style -> evaluation of the default design, for deltas
   current: null,
   history: [],
+  session: 0,         // bumps on each preset or history load; one slider session = one history row
   requestSeq: 0,
   viewer: null,
   viewerMode: "field",
   meshSeq: 0,
+  flow: null,         // airflow animation (web/flow.js), once three.js has loaded
+  flowMode: "off",
+  speedKmh: 110,
+  area: null,         // frontal area of the car on screen, m^2, from /api/mesh
+  baselineArea: null, // and of the selected style's baseline body
 };
 
 const VIEWER_CAPTIONS = {
@@ -94,6 +102,12 @@ const VIEWER_CAPTIONS = {
   regions: "Each region painted with the mean Cp the service predicts for it. Gray surfaces belong to no region.",
   plain: "Drag to orbit, scroll to zoom.",
 };
+
+const FLOW_CAPTION = "Airflow is an illustration driven by the prediction, not a simulation: the smoke " +
+  "takes the predicted pressure of each region it passes (colour, and speed by Bernoulli), the wake grows " +
+  "with predicted Cd, bends with predicted lift and trembles with σ. Shown in slow motion.";
+
+const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -144,16 +158,29 @@ async function evaluate(params) {
 // ---------------------------------------------------------------- gate
 
 // Mirrors src/service/gate.py so the badge says exactly what the agent is told.
-function rejectionReason(e, threshold) {
+// Same checks in the same order: a malformed prediction, then
+// contracts.is_in_distribution (body style, sigma, distance from the training
+// set), then the model's own flag.
+function rejectionReason(e, bodyStyle) {
+  const { uncertainty_threshold: threshold, ood_score_threshold: oodThreshold, body_styles: styles } = state.schema;
   for (const name of ["cd", "cl", "uncertainty"]) {
     if (typeof e[name] !== "number" || !Number.isFinite(e[name])) return `Invalid prediction: ${name} is not a finite number.`;
   }
   if (e.uncertainty < 0) return "Invalid prediction: negative uncertainty.";
+  const score = e.ood_score ?? null;
+  if (score !== null && (typeof score !== "number" || !Number.isFinite(score) || score < 0)) {
+    return "Invalid prediction: the distance score is not a finite, nonnegative number.";
+  }
   if (typeof e.in_distribution !== "boolean") return "Invalid prediction: no distribution flag.";
-  if (!e.in_distribution) return "Outside the training distribution. The model would be guessing here.";
+  if (bodyStyle && Array.isArray(styles) && !styles.includes(bodyStyle)) return `Unknown body style '${bodyStyle}'.`;
   if (e.uncertainty > threshold) {
     return `Uncertainty σ = ${fmt(e.uncertainty, 4)} is above the ${fmt(threshold, 4)} threshold.`;
   }
+  if (score !== null && typeof oodThreshold === "number" && score > oodThreshold) {
+    return `Distance from the training data is ${fmt(score, 2)}, above the ${fmt(oodThreshold, 2)} limit. ` +
+      "Every dial may be legal, but no real design looks like this combination.";
+  }
+  if (!e.in_distribution) return "Outside the training distribution. The model would be guessing here.";
   return null;
 }
 
@@ -179,7 +206,12 @@ function buildControls() {
     select.replaceChildren(...styles.map((s) => new Option(s[0].toUpperCase() + s.slice(1), s)));
     state.bodyStyle = schema.default_body_style || styles[0];
     select.value = state.bodyStyle;
-    select.addEventListener("change", () => { state.bodyStyle = select.value; markCustom(); scheduleEvaluate(); });
+    select.addEventListener("change", () => {
+      state.bodyStyle = select.value;
+      state.session++;  // a different car: its own history row
+      markCustom();
+      scheduleEvaluate();
+    });
     $("body-style-field").hidden = false;
   }
 
@@ -234,6 +266,7 @@ function applyPreset(key) {
   const preset = PRESETS[key];
   state.params = clampToBounds(preset.params(state.schema));
   state.label = preset.label;
+  state.session++;
   for (const button of document.querySelectorAll(".preset")) {
     button.setAttribute("aria-pressed", String(button.dataset.preset === key));
   }
@@ -254,18 +287,37 @@ function scheduleEvaluate() {
   pending = setTimeout(runEvaluate, 120);
 }
 
-async function runEvaluate() {
+async function runEvaluate({ record = true } = {}) {
   const params = { ...state.params };
   refreshMesh(params);
   try {
     const result = await evaluate(params);
     if (!result) return;
     showError(null);
-    state.current = { ...result, params, label: state.label, bodyStyle: state.bodyStyle };
-    pushHistory(state.current);
+    state.current = { ...result, params, label: state.label, bodyStyle: state.bodyStyle, session: state.session };
+    if (record) pushHistory(state.current);
     renderResult();
   } catch (error) {
     showError(error);
+  }
+}
+
+// The baseline body differs per style, so each style's deltas are against its
+// own default design. Fetched once per style, outside the request sequence so
+// it never cancels the design being shown.
+const baselineKey = () => state.bodyStyle || "default";
+
+async function ensureBaseline() {
+  const key = baselineKey();
+  if (key in state.baselines) return;
+  state.baselines[key] = null;  // in flight
+  try {
+    const body = { params: clampToBounds(state.schema.defaults) };
+    if (state.bodyStyle) body.body_style = state.bodyStyle;
+    state.baselines[key] = await api("/evaluate", body);
+    if (state.current && baselineKey() === key) renderResult();
+  } catch {
+    delete state.baselines[key];  // try again next time
   }
 }
 
@@ -274,20 +326,25 @@ async function runEvaluate() {
 function renderResult() {
   const { evaluation: e, roundTrip } = state.current;
   const threshold = state.schema.uncertainty_threshold;
-  const reason = rejectionReason(e, threshold);
+  const reason = rejectionReason(e, state.current.bodyStyle);
+  const distance = typeof e.ood_score === "number" && typeof state.schema.ood_score_threshold === "number"
+    ? `distance from the training data ${fmt(e.ood_score, 2)} is within ${fmt(state.schema.ood_score_threshold, 2)}, and `
+    : "";
 
   const verdict = $("verdict");
   verdict.dataset.state = reason ? "rejected" : "trusted";
   verdict.querySelector(".verdict-icon").textContent = reason ? "✕" : "✓";
-  $("verdict-label").textContent = reason ? "Rejected by the uncertainty gate" : "Trusted";
+  $("verdict-label").textContent = reason ? "Rejected by the gate" : "Trusted";
   $("verdict-reason").textContent = reason ||
-    `Inside the training distribution, and σ is below the ${fmt(threshold, 4)} threshold.`;
+    `Inside the training distribution: ${distance}σ is below the ${fmt(threshold, 4)} threshold.`;
 
   $("cd-value").textContent = fmt(e.cd, 4);
   $("cl-value").textContent = signed(e.cl, 4);
   $("sigma-value").textContent = `± ${fmt(e.uncertainty, 4)}`;
-  renderDelta($("cd-delta"), e.cd, state.baseline?.cd, true);
-  renderDelta($("cl-delta"), e.cl, state.baseline?.cl, null);
+  const baseline = state.baselines[baselineKey()];
+  if (baseline === undefined) ensureBaseline();
+  renderDelta($("cd-delta"), e.cd, baseline?.cd, true);
+  renderDelta($("cl-delta"), e.cl, baseline?.cl, null);
 
   // Meter spans 0 to 1.5x the threshold; the mark is the threshold itself.
   const span = threshold * 1.5;
@@ -302,6 +359,8 @@ function renderResult() {
   renderPressure(e.pressure_summary || {});
   renderHistory();
   state.viewer?.setRegionValues(e.pressure_summary || {});
+  updateFlow();
+  renderHud();
 }
 
 // ---------------------------------------------------------------- 3D viewer
@@ -320,6 +379,103 @@ async function initViewer() {
     button.addEventListener("click", () => setViewerMode(button.dataset.mode));
   }
   setViewerMode(state.viewerMode);
+  await initFlow();
+}
+
+async function initFlow() {
+  try {
+    const { createFlow } = await import("./flow.js");
+    state.flow = createFlow(state.viewer);
+  } catch (error) {
+    console.error(error);
+    return;
+  }
+  state.flow.setSpeed(state.speedKmh);
+  // ?debug=1 exposes the page state in the console, e.g. aero.flow.stats.frameMs
+  if (new URLSearchParams(location.search).has("debug")) window.aero = state;
+  // Respect reduced motion: the airflow starts paused, one click to play.
+  if (REDUCED_MOTION) state.flow.setPaused(true);
+  for (const button of $("flow-modes").querySelectorAll("button")) {
+    button.addEventListener("click", () => setFlowMode(button.dataset.flow));
+  }
+  $("speed").addEventListener("input", () => {
+    state.speedKmh = Number($("speed").value);
+    state.flow.setSpeed(state.speedKmh);
+    renderHud();
+  });
+  $("flow-pause").addEventListener("click", () => {
+    const paused = $("flow-pause").textContent === "Pause";
+    state.flow.setPaused(paused);
+    $("flow-pause").textContent = paused ? "Play" : "Pause";
+  });
+  $("fullscreen").addEventListener("click", () => {
+    const panel = $("viewer").closest(".viewer-panel");
+    if (document.fullscreenElement) document.exitFullscreen();
+    else panel.requestFullscreen?.().catch(() => {});
+  });
+  document.addEventListener("fullscreenchange", () => {
+    $("fullscreen").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+  });
+  updateFlow();
+  setFlowMode("drive");   // open on the car driving; "Still" is one click away
+}
+
+function setFlowMode(mode) {
+  state.flowMode = mode;
+  for (const button of $("flow-modes").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.flow === mode));
+  }
+  const on = mode !== "off";
+  $("flow-hud").hidden = !on;
+  $("flow-pause").hidden = !on;
+  $("flow-pause").textContent = REDUCED_MOTION ? "Play" : "Pause";
+  if (REDUCED_MOTION) state.flow.setPaused(true);
+  state.flow.setMode(mode);
+  setViewerMode(state.viewerMode);   // refresh the caption
+  renderHud();
+}
+
+// Hand the current prediction to the airflow. Called whenever the prediction,
+// the baseline or the shape changes.
+function updateFlow() {
+  if (!state.flow || !state.current) return;
+  const e = state.current.evaluation;
+  const baseline = state.baselines[baselineKey()];
+  state.flow.setPrediction({
+    cd: e.cd, cl: e.cl, sigma: e.uncertainty,
+    threshold: state.schema.uncertainty_threshold,
+    trusted: !rejectionReason(e, state.current.bodyStyle),
+    pressure: e.pressure_summary || {},
+    baselineCd: baseline?.cd,
+  });
+}
+
+function renderHud() {
+  if (!state.current || !state.area) return;
+  const e = state.current.evaluation;
+  const speedKmh = state.speedKmh;
+  const now = aeroLoads({ cd: e.cd, cl: e.cl, sigma: e.uncertainty, area: state.area, speedKmh });
+  const baseline = state.baselines[baselineKey()];
+  const base = baseline && state.baselineArea
+    ? aeroLoads({ cd: baseline.cd, cl: baseline.cl, area: state.baselineArea, speedKmh })
+    : null;
+  $("speed-value").textContent = `${speedKmh} km/h`;
+  $("hud-speed").textContent = `${speedKmh} km/h`;
+  $("hud-drag").textContent = `${fmt(now.drag, 0)} N ± ${fmt(now.dragSigma, 0)}`;
+  $("hud-power").textContent = `${fmt(now.power, 1)} kW`;
+  $("hud-energy").textContent = `${fmt(now.energyPer100km, 2)} kWh / 100 km`;
+  $("hud-lift").textContent = now.lift < 0 ? `${fmt(-now.lift, 0)} N down` : `${fmt(now.lift, 0)} N up`;
+  hudDelta($("hud-drag-delta"), base && now.drag - base.drag, (d) => `${signed(d, 0)} N vs baseline`);
+  hudDelta($("hud-energy-delta"), base && now.energyPer100km - base.energyPer100km,
+    (d) => `${signed(d, 2)} kWh vs baseline`);
+  $("hud-flag").hidden = !rejectionReason(e, state.current.bodyStyle);
+}
+
+function hudDelta(el, delta, text) {
+  const show = typeof delta === "number" && state.current.label !== "Baseline";
+  el.textContent = show ? text(delta) : "";
+  if (show && Math.abs(delta) > 1e-9) el.dataset.good = String(delta < 0);
+  else el.removeAttribute("data-good");
 }
 
 function setViewerMode(mode) {
@@ -329,7 +485,8 @@ function setViewerMode(mode) {
   }
   $("cp-legend").hidden = mode === "plain";
   $("viewer-caption").textContent = VIEWER_CAPTIONS[mode] +
-    (mode === "regions" && state.health?.synthetic ? " Values are from the synthetic stub." : "");
+    (mode === "regions" && state.health?.synthetic ? " Values are from the synthetic stub." : "") +
+    (state.flowMode !== "off" ? ` ${FLOW_CAPTION}` : "");
   state.viewer?.setMode(mode);
 }
 
@@ -361,6 +518,11 @@ async function refreshMesh(params) {
   state.viewer.setMesh(payload);
   // The prediction may have landed before the viewer finished loading.
   state.viewer.setRegionValues(state.current?.evaluation.pressure_summary || {});
+  state.area = payload.frontal_area_m2;
+  state.baselineArea = payload.baseline_frontal_area_m2 ?? null;
+  state.flow?.setShape(payload.flow, state.viewer.frame);
+  updateFlow();
+  renderHud();
   $("dims").textContent = `${fmt(payload.length_m, 2)} × ${fmt(payload.width_m, 2)} × ${fmt(payload.height_m, 2)} m` +
     ` · frontal area ${fmt(payload.frontal_area_m2, 2)} m²`;
   const ignored = payload.ignored_params || [];
@@ -417,7 +579,7 @@ function renderPressure(summary) {
       <span class="p-track"><span class="p-bar ${value < 0 ? "neg" : "pos"}"
         style="left:${left}%;width:${half}%"></span></span>
       <span class="p-value" role="cell">${signed(value, 2)}</span>`;
-    const base = state.baseline?.pressure_summary?.[region];
+    const base = state.baselines[baselineKey()]?.pressure_summary?.[region];
     row.addEventListener("mousemove", (event) => showTooltip(event,
       `<strong>${escapeHtml(name)}</strong>Cp ${signed(value, 3)}` +
       (typeof base === "number" && state.current.label !== "Baseline"
@@ -438,16 +600,23 @@ function renderPressure(summary) {
     : missing ? `${missing} region${missing > 1 ? "s" : ""} not predicted by this model.` : "";
 }
 
+// Dragging sliders is one design being refined, so it updates one row rather
+// than adding a row per pause; a preset, a style change or a reloaded row
+// starts a new one.
 function pushHistory(entry) {
+  const top = state.history[0];
+  if (top && entry.label === "Custom" && top.label === "Custom" && top.session === entry.session) {
+    state.history[0] = entry;
+    return;
+  }
   state.history.unshift(entry);
   state.history.length = Math.min(state.history.length, 12);
 }
 
 function renderHistory() {
-  const threshold = state.schema.uncertainty_threshold;
   $("history").replaceChildren(...state.history.map((entry) => {
     const e = entry.evaluation;
-    const ok = !rejectionReason(e, threshold);
+    const ok = !rejectionReason(e, entry.bodyStyle);
     const tr = document.createElement("tr");
     const style = entry.bodyStyle ? ` · ${entry.bodyStyle}` : "";
     tr.innerHTML = `<td>${escapeHtml(entry.label + style)}</td><td class="num">${fmt(e.cd, 4)}</td>
@@ -457,8 +626,9 @@ function renderHistory() {
       state.params = { ...entry.params };
       state.label = entry.label;
       if (entry.bodyStyle) { state.bodyStyle = entry.bodyStyle; $("body-style").value = entry.bodyStyle; }
+      state.session++;
       syncSliders();
-      runEvaluate();
+      runEvaluate({ record: false });  // already in the history
     });
     return tr;
   }));
@@ -543,12 +713,7 @@ async function start() {
 
   // Baseline first, so every later design can show its delta against it.
   state.params = clampToBounds(state.schema.defaults);
-  try {
-    const result = await evaluate(state.params);
-    state.baseline = result?.evaluation ?? null;
-  } catch (error) {
-    showError(error);
-  }
+  await ensureBaseline();
   applyPreset("baseline");
 }
 
