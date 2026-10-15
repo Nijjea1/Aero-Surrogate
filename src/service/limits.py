@@ -14,7 +14,7 @@ The client IP is the TCP peer. X-Forwarded-For is honoured only when
 AERO_TRUST_PROXY=1, and then only its last entry: the one written by the
 reverse proxy directly in front of us. Earlier entries are client-supplied
 and spoofable. Set it only when the app port is reachable solely through
-that proxy. (Read here because Settings does not have it yet.)
+that proxy (Settings.trust_proxy).
 """
 
 from __future__ import annotations
@@ -31,15 +31,16 @@ from typing import Callable
 from starlette.responses import JSONResponse
 
 RATE_LIMITED_PATHS = ("/evaluate", "/compare")
+# Every method under /runs: POST spends money, and GET reads run logs from
+# disk, so an unthrottled GET flood could starve the scoring endpoints.
 RATE_LIMITED_PREFIXES = ("/runs",)
 
 
 def is_rate_limited(method: str, path: str) -> bool:
-    if method != "POST":
-        return False
     path = path.rstrip("/") or "/"
-    return path in RATE_LIMITED_PATHS or any(
-        path == prefix or path.startswith(prefix + "/") for prefix in RATE_LIMITED_PREFIXES)
+    if any(path == prefix or path.startswith(prefix + "/") for prefix in RATE_LIMITED_PREFIXES):
+        return method in ("GET", "POST")
+    return method == "POST" and path in RATE_LIMITED_PATHS
 
 
 class RateLimiter:

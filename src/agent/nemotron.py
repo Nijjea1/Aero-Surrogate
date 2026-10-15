@@ -408,6 +408,9 @@ class NemotronProposer:
         if delta is not None and (isinstance(delta, bool) or not isinstance(delta, (int, float))
                                   or not math.isfinite(delta)):
             return f"rejected before scoring: 'expected_delta_cd' must be a finite number (got {delta!r})", None
+        if delta is not None and ((effect == "lower_cd" and delta > 0) or (effect == "higher_cd" and delta < 0)):
+            return (f"rejected before scoring: expected_effect '{effect}' contradicts expected_delta_cd "
+                    f"{delta:+g}"), None
         problems, values = [], {}
         for key, value in changes.items():
             if key not in PARAM_BOUNDS:

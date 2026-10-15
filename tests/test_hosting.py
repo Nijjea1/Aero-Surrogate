@@ -98,7 +98,8 @@ def test_runs_paths_are_limited_once_they_exist():
     assert is_rate_limited("POST", "/runs")
     assert is_rate_limited("POST", "/runs/abc/cancel")
     assert is_rate_limited("POST", "/evaluate/")
-    assert not is_rate_limited("GET", "/runs")
+    assert is_rate_limited("GET", "/runs") and is_rate_limited("GET", "/runs/abc")
+    assert not is_rate_limited("GET", "/health") and not is_rate_limited("OPTIONS", "/runs")
     assert not is_rate_limited("POST", "/runsx")
     assert not is_rate_limited("GET", "/history/x")
 

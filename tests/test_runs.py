@@ -139,19 +139,24 @@ def test_run_starts_in_background_and_finishes(logdir):
 def test_cancel_mid_run(logdir, gate):
     factory = Factory(gate=gate)
     with TestClient(make_app(logdir, factory)) as client:
-        run_id = start(client, iterations=5).json()["run_id"]
+        started = start(client, iterations=5).json()
+        run_id, token = started["run_id"], started["cancel_token"]
         assert wait_until(lambda: factory.clients and factory.clients[0].entered.is_set())
         live = client.get(f"/runs/{run_id}").json()  # baseline scored; model call in flight
         assert live["state"] == "running" and live["scored"] == 1 and live["cost_usd"] == 0.0
         assert live["latest_step"]["iteration"] == 0 and live["timing"]["steps"] == 1
-        cancelled = client.post(f"/runs/{run_id}/cancel")
+        # A public run needs its own cancel token; anyone else is refused.
+        assert client.post(f"/runs/{run_id}/cancel").status_code == 403
+        assert client.post(f"/runs/{run_id}/cancel", headers={"X-Cancel-Token": "guess"}).status_code == 403
+        assert "cancel_token" not in client.get(f"/runs/{run_id}").json()
+        cancelled = client.post(f"/runs/{run_id}/cancel", headers={"X-Cancel-Token": token})
         assert cancelled.status_code == 200 and cancelled.json()["cancel_requested"]
         gate.set()
         status = wait_for(client, run_id)
         assert status["state"] == "cancelled" and status["stop_reason"] == "cancelled"
         assert status["scored"] < 5
         # Cancelling a finished run is a no-op that returns its status.
-        again = client.post(f"/runs/{run_id}/cancel")
+        again = client.post(f"/runs/{run_id}/cancel", headers={"X-Cancel-Token": token})
         assert again.status_code == 200 and again.json()["state"] == "cancelled"
 
 
@@ -274,7 +279,8 @@ def test_orphans_are_closed_on_startup_only_when_stale(logdir):
         assert old["cost_usd"] is None and old["timing"]["steps"] == 1
         new = client.get("/runs/new-run").json()
         assert new["state"] == "unknown" and new["stop_reason"] is None
-        assert client.post("/runs/new-run/cancel").status_code == 409  # not ours to stop
+        assert client.post("/runs/new-run/cancel").status_code == 403  # public: no token to check
+        assert client.post("/runs/new-run/cancel", headers=ADMIN).status_code == 409  # not ours to stop
     assert [e["type"] for e in log.read_events("new-run")] == ["run_started", "step"]
     assert log.read_events("old-run")[-1]["type"] == "run_finished"
     # Closing is idempotent: a second startup finds nothing to close.

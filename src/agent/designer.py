@@ -203,7 +203,7 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         "constraints": [str(c) for c in constraints],
         "surrogate": provenance, "gate_thresholds": thresholds, **(metadata or {}),
     })
-    state = {"history": [], "best_cd": None, "timings": [], "verdicts": []}
+    state = {"history": [], "best_cd": None, "timings": [], "verdicts": [], "carry": _no_carry()}
     try:
         stop_reason = _drive(state, iterations, run_id, dry_run, log, evaluator or evaluate_design,
                              body_style, proposer, constraints, provenance, thresholds,
@@ -223,7 +223,7 @@ def _finish(log: RunLog, run_id: str, stop_reason: str, state: dict,
     usage = vars(proposer.client.usage).copy() if proposer is not None else None
     log.append_event(run_id, {"type": "run_finished", "stop_reason": stop_reason,
                               "scored": len(state["history"]), "best_cd": state["best_cd"],
-                              "usage": usage, "timing": timing_summary(state["timings"]),
+                              "usage": usage, "timing": timing_summary(state["timings"], state["carry"]),
                               "hypothesis_hits": hypothesis_hits(state["verdicts"])})
 
 
@@ -243,24 +243,50 @@ def hypothesis_summary(hits: dict | None) -> str | None:
             f"expected direction ({hits['rate']:.0%}).")
 
 
-def timing_summary(timings: list[dict]) -> dict | None:
-    """Totals and medians of where step time went. None before any step."""
-    if not timings:
+def _no_carry() -> dict:
+    return {"propose_s": 0.0, "model_calls": 0, "model_latency_s": 0.0, "failed_proposals": 0}
+
+
+def timing_summary(timings: list[dict], unscored: dict | None = None) -> dict | None:
+    """Totals and medians of where step time went. None before any step.
+
+    Medians describe live (model-proposed) steps when there are any, so the
+    instant scripted baseline does not halve them on a short run. Totals
+    include `unscored`: model time spent on attempts that never produced a
+    scored design (failed proposals at the end of a run).
+    """
+    unscored = unscored or _no_carry()
+    if not timings and not unscored["model_calls"]:
         return None
+    live = [t for t in timings if t.get("live")] or timings
     propose = [t["propose_s"] for t in timings]
     score = [t["score_s"] for t in timings]
     step = [t["step_s"] for t in timings]
     surrogate = [t["surrogate_latency_ms"] for t in timings if t["surrogate_latency_ms"] is not None]
-    total = sum(step)
+    total = sum(step) + unscored["propose_s"]
+    waiting = sum(propose) + unscored["propose_s"]
     return {
         "steps": len(timings),
-        "propose_s_total": sum(propose), "score_s_total": sum(score), "step_s_total": total,
-        "propose_s_median": statistics.median(propose), "score_s_median": statistics.median(score),
-        "step_s_median": statistics.median(step),
+        "propose_s_total": waiting, "score_s_total": sum(score), "step_s_total": total,
+        "propose_s_median": statistics.median(t["propose_s"] for t in live) if live else None,
+        "score_s_median": statistics.median(score) if score else None,
+        "step_s_median": statistics.median(t["step_s"] for t in live) if live else None,
         "surrogate_latency_ms_median": statistics.median(surrogate) if surrogate else None,
-        "model_share": sum(propose) / total if total > 0 else None,
-        "model_calls": sum(t["model_calls"] for t in timings),
+        "model_share": waiting / total if total > 0 else None,
+        "model_calls": sum(t["model_calls"] for t in timings) + unscored["model_calls"],
+        "failed_proposals": sum(t.get("failed_proposals", 0) for t in timings) + unscored["failed_proposals"],
     }
+
+
+def _bank(state: dict, step_started: float, calls_before: int, latency_before: float,
+          proposer: NemotronProposer, failed: bool) -> None:
+    """Carry the time and calls of an attempt that scored nothing into the
+    next scored step (or the run's totals), so no model time goes missing."""
+    carry = state["carry"]
+    carry["propose_s"] += _now() - step_started
+    carry["model_calls"] += proposer.client.usage.calls - calls_before
+    carry["model_latency_s"] += proposer.client.usage.latency_s - latency_before
+    carry["failed_proposals"] += int(failed)
 
 
 def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog,
@@ -289,16 +315,20 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
                     history, body_style=body_style, evaluations_left=iterations - len(history),
                     total_evaluations=iterations, best_pressure=best_pressure, provenance=provenance)
             except Cancelled:
+                _bank(state, step_started, calls_before, latency_before, proposer, failed=False)
                 return "cancelled"
             except NoProposal as exc:
+                _bank(state, step_started, calls_before, latency_before, proposer, failed=True)
                 failures += 1
                 log.append_event(run_id, {"type": "no_valid_proposal", "detail": str(exc)})
                 if failures >= max_consecutive_failures:
                     return f"{failures} consecutive steps without a valid proposal"
                 continue
             except BudgetExceeded as exc:
+                _bank(state, step_started, calls_before, latency_before, proposer, failed=False)
                 return f"budget: {exc}"
             except ProviderError as exc:
+                _bank(state, step_started, calls_before, latency_before, proposer, failed=False)
                 log.append_event(run_id, {"type": "provider_error", "detail": str(exc)})
                 return f"provider error: {exc}"
             failures = 0
@@ -325,7 +355,10 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
             # The observed half of the logbook line comes from the score and
             # the gate, never from the model.
             reasoning = logbook_entry(proposal, evaluation["cd"], reason)
-            if reason is None and proposal.base_cd is not None and proposal.expected_effect != "no_change":
+            # Judged only against a trusted base: a gate-rejected or
+            # reference-only baseline is not a fair yardstick.
+            if (reason is None and proposal.base_cd is not None and proposal.base_trusted
+                    and proposal.expected_effect != "no_change"):
                 state["verdicts"].append(judge(proposal.expected_effect, evaluation["cd"] - proposal.base_cd))
         record = IterationRecord(
             run_id=run_id, iteration=len(history), params=dict(params), body_style=body_style,
@@ -337,14 +370,19 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
         log.append(record)
         history.append(record.to_dict())
         latency_ms = evaluation.get("latency_ms")
+        carry, state["carry"] = state["carry"], _no_carry()
         timing = {
             "iteration": record.iteration,
-            "propose_s": proposed - step_started,
-            "model_calls": (proposer.client.usage.calls - calls_before) if proposer is not None else 0,
-            "model_latency_s": (proposer.client.usage.latency_s - latency_before) if proposer is not None else 0.0,
+            "live": isinstance(proposal, Proposal),
+            "propose_s": proposed - step_started + carry["propose_s"],
+            "model_calls": ((proposer.client.usage.calls - calls_before) if proposer is not None else 0)
+                           + carry["model_calls"],
+            "model_latency_s": ((proposer.client.usage.latency_s - latency_before) if proposer is not None
+                                else 0.0) + carry["model_latency_s"],
+            "failed_proposals": carry["failed_proposals"],
             "score_s": scored - proposed,
             "surrogate_latency_ms": float(latency_ms) if isinstance(latency_ms, (int, float)) else None,
-            "step_s": _now() - step_started,
+            "step_s": _now() - step_started + carry["propose_s"],
         }
         state["timings"].append(timing)
         log.append_event(run_id, {"type": "step", **timing})

@@ -105,16 +105,18 @@ def test_multiple_instances_concurrent_append_and_read(tmp_path):
     assert all(isinstance(json.loads(line), dict) for line in lines)
 
 
-def test_event_log_reports_corruption_and_skips_interrupted_appends(tmp_path):
+def test_event_log_survives_torn_and_garbled_lines(tmp_path):
     log = RunLog(tmp_path)
     log.append_event("evt", {"type": "run_started"})
     path = tmp_path / "events" / "evt.jsonl"
     with path.open("a", encoding="utf-8") as stream:
-        stream.write('{"type": "half-writ')  # an append cut off mid-line
-    assert [e["type"] for e in log.read_events("evt")] == ["run_started"]
-    path.write_text('{"type": "ok"}\nnot json but ends}\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="Malformed run log evt events, line 2"):
-        log.read_events("evt")
+        stream.write('{"type": "step", "x": {"y": 1}')  # a crash mid-append, ending in }
+    # The next event starts a fresh line instead of being glued onto the torn one.
+    log.append_event("evt", {"type": "run_finished"})
+    assert [e["type"] for e in log.read_events("evt")] == ["run_started", "run_finished"]
+    # A garbled line is skipped, not fatal: events are auxiliary.
+    path.write_text('{"type": "ok"}\nnot json but ends}\n{"type": "after"}\n', encoding="utf-8")
+    assert [e["type"] for e in log.read_events("evt")] == ["ok", "after"]
 
 
 def test_run_id_validation_is_public(tmp_path):

@@ -7,6 +7,7 @@ that is still going.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 import re
 from threading import RLock
@@ -14,6 +15,7 @@ from threading import RLock
 from ..contracts import IterationRecord
 
 _LOCK = RLock()
+_log = logging.getLogger(__name__)
 _RUN_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {
     f"{prefix}{number}" for prefix in ("COM", "LPT") for number in range(1, 10)
@@ -107,10 +109,20 @@ class RunLog:
         path = self._event_path(run_id)
         with _LOCK:
             path.parent.mkdir(parents=True, exist_ok=True)
+            # A crash mid-append leaves a line without its newline. Start a
+            # fresh line so the next event is never glued onto the torn one.
+            if path.exists() and path.stat().st_size:
+                with path.open("rb") as existing:
+                    existing.seek(-1, 2)
+                    if existing.read(1) != b"\n":
+                        payload = "\n" + payload
             with path.open("a", encoding="utf-8", newline="\n") as stream:
                 stream.write(payload)
 
     def read_events(self, run_id: str) -> list[dict]:
+        """Committed events. Events are auxiliary (the scored records are the
+        strict log), so a torn or garbled line is skipped with a warning
+        rather than making the whole run unreadable."""
         path = self._event_path(run_id)
         with _LOCK:
             if not path.exists():
@@ -122,9 +134,11 @@ class RunLog:
                 try:
                     event = json.loads(line)
                 except ValueError as exc:
-                    raise ValueError(f"Malformed run log {run_id} events, line {number}: {exc}") from None
+                    _log.warning("skipping malformed line %d of run %s events: %s", number, run_id, exc)
+                    continue
                 if not isinstance(event, dict):
-                    raise ValueError(f"Malformed run log {run_id} events, line {number}: not an object")
+                    _log.warning("skipping line %d of run %s events: not an object", number, run_id)
+                    continue
                 events.append(event)
             return events
 

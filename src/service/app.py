@@ -136,7 +136,7 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
-        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization"],
+        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization", "X-Cancel-Token"],
     )
 
     @application.get("/ready")
@@ -251,7 +251,8 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
     @application.post("/runs/{run_id}/cancel")
     def cancel_run(run_id: str, request: Request):
         role = _role(request)
-        return _manage(lambda: application.state.run_manager.cancel(run_id, role))
+        token = request.headers.get("X-Cancel-Token")
+        return _manage(lambda: application.state.run_manager.cancel(run_id, role, token))
 
     return application
 
