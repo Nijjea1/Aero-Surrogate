@@ -614,3 +614,82 @@ def test_models_expose_pooled_features_for_ood(kind):
 
     assert feats.dim() == 2 and feats.shape[0] == 4
     assert torch.allclose(out, direct), "features() is not what forward() uses"
+
+
+# --------------------------------------------------------------------------
+# Deep ensemble. Stage-1 strengthening: it reaches the noise ceiling, and its
+# epistemic term is measured rather than assumed to work.
+# --------------------------------------------------------------------------
+
+
+def test_ensemble_decomposes_variance_into_aleatoric_and_epistemic():
+    """Members that agree give small epistemic; members that disagree give
+    large. If this inverts, the decomposition is wrong and every uncertainty
+    number downstream is meaningless."""
+    from src.train.ensemble import EnsemblePrediction, Ensemble, score_ensemble
+
+    # Hand-built predictions: three members, two designs.
+    agree = np.array([[0.30, 0.25], [0.30, 0.25], [0.30, 0.25]])
+    disagree = np.array([[0.20, 0.25], [0.30, 0.25], [0.40, 0.25]])
+    for members, expect_large in ((agree, False), (disagree, True)):
+        mean = members.mean(axis=0)
+        epi = np.sqrt(members.var(axis=0))
+        assert (epi[0] > 0.05) == expect_large
+        assert epi[1] == pytest.approx(0.0)      # second design always agreed
+
+
+def test_ensemble_needs_at_least_one_member():
+    from src.train.ensemble import Ensemble
+
+    with pytest.raises(ValueError):
+        Ensemble([])
+
+
+def test_ensemble_beats_its_members_and_reports_both(cfg, tmp_path):
+    """End to end on the fixture: train 3 members, check the ensemble predicts,
+    decomposes, and reports each member's R2 so a bad member is visible."""
+    from src.train.ensemble import train_ensemble
+
+    c = dict(cfg)
+    c["run_name"] = "ens-test"
+    c["model"] = {"kind": "pointnet", "hidden_dim": 32, "n_layers": 2,
+                  "dropout": 0.0, "heteroscedastic": True}
+    c["train"] = {"epochs": 3, "variance_epochs": 3, "batch_size": 2,
+                  "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
+                  "num_workers": 0, "amp": False, "patience": 5,
+                  "variance_patience": 5, "out_dir": str(tmp_path / "runs"),
+                  "two_stage": True}
+
+    report = train_ensemble(c, n_members=3, device_str="cpu")
+
+    assert report["n_members"] == 3
+    for split in ("val", "test"):
+        m = report[split]
+        assert len(m["member_r2"]) == 3
+        # the decomposition must be internally consistent
+        assert m["mean_total"] == pytest.approx(
+            float(np.sqrt(m["mean_aleatoric"] ** 2 + m["mean_epistemic"] ** 2)),
+            rel=0.35,   # means of sqrt vs sqrt of means, so approximate
+        )
+        assert m["mean_epistemic"] >= 0.0
+        assert 0.0 <= m["coverage_total"] <= 1.0
+        # total uncertainty must never be below aleatoric alone
+        assert m["mean_total"] >= m["mean_aleatoric"] - 1e-9
+
+
+def test_ensemble_members_differ(cfg, tmp_path):
+    """Members must be seeded differently, or the epistemic term is zero by
+    construction and the whole exercise is theatre."""
+    from src.train.ensemble import train_ensemble
+
+    c = dict(cfg)
+    c["run_name"] = "ens-seed"
+    c["model"] = {"kind": "pointnet", "hidden_dim": 16, "n_layers": 2,
+                  "dropout": 0.0, "heteroscedastic": True}
+    c["train"] = {"epochs": 2, "variance_epochs": 2, "batch_size": 2,
+                  "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
+                  "num_workers": 0, "amp": False, "patience": 5,
+                  "variance_patience": 5, "out_dir": str(tmp_path / "runs"),
+                  "two_stage": True}
+    report = train_ensemble(c, n_members=3, device_str="cpu")
+    assert report["test"]["mean_epistemic"] > 0.0, "members are identical"
