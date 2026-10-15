@@ -293,17 +293,35 @@ something Nemotron can act on. A single scalar is not.
 
 | | value |
 |---|---|
-| Cp R² | 0.2984 |
-| Cp MAE | 0.1975 |
-| 1σ coverage | 0.78 |
-| integrated Cd | pred 0.2536 vs true 0.2078 |
+| Cp R² | 0.5105 |
+| Cp MAE | 0.1459 |
+| 1σ coverage | 0.80 |
+| **per-car drag error** | **0.0328** |
+| drag bias | −0.0009 |
 
-**The integrated Cd is the number to trust, not the R².** A model predicting
-the mean Cp everywhere gets a respectable MAE and integrates to **zero** drag,
-because the normals cancel — there is a test asserting exactly that. Getting
-0.25 against 0.21 means the field is spatially resolved, not merely close on
-average. That is the "integration gives a free consistency check" argument from
-the plan, measured.
+**Quote the per-car drag error, not the bias.** The bias is the average signed
+error over the five test cars and it looks almost perfect at −0.0009 — partly
+because cars cancel each other out. The per-car figure is ten times larger and
+is the honest one.
+
+Per car, with drag integrated from the model's own predicted pressure field,
+against the **pressure-only** integral of the real CFD field (the model does
+not predict the viscous term, which is ~8% of total Cd):
+
+| held-out car | CFD, pressure only | predicted | error |
+|---|---|---|---|
+| run 3 | 0.2166 | 0.1972 | −0.0194 |
+| run 11 | 0.2930 | 0.2286 | −0.0644 |
+| run 12 | 0.2443 | 0.2415 | −0.0028 |
+| run 22 | 0.2791 | 0.2445 | −0.0347 |
+| run 27 | 0.1958 | 0.2347 | +0.0389 |
+
+Mean absolute error 0.032, so roughly 12% per car. A real result, not a good
+one yet.
+
+**Still judge the field by its integral, not by Cp R².** A model predicting the
+mean Cp everywhere gets a respectable MAE and integrates to **zero** drag,
+because the normals cancel — there is a test asserting exactly that.
 
 R² 0.30 is weak and honestly so: 20 training cars, a 647k-parameter model, and
 a laptop GPU. The full-strength version is NVIDIA's upstream DoMINO recipe

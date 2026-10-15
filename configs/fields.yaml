@@ -22,8 +22,15 @@ data:
 
 model:
   latent_dim: 256              # global geometry latent
-  local_k: 16                  # nearest cloud points per query
-  local_dim: 64
+  # Three neighbourhood sizes, pooled separately. Curvature at a trailing
+  # edge and curvature across a panel are different quantities, and this is
+  # DoMINO's multi-scale idea applied where it matters. Measured against a
+  # single k=16, with the Fourier lift and the integral term both on:
+  #   k=16         Cp R² 0.4869   Cd err +0.0091
+  #   k=8/32/128   Cp R² 0.5105   Cd err -0.0009   <- better on both
+  local_k: [8, 32, 128]
+  local_dim: 96
+  n_freq: 8                    # Fourier octaves on the query position
   hidden: 256
   n_layers: 4
   dropout: 0.0
