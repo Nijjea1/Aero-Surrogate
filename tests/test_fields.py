@@ -19,6 +19,7 @@ from src.data.fields import SurfaceFieldDataset, field_splits
 from src.train.field_model import (
     LOGVAR_MAX,
     LOGVAR_MIN,
+    FourierFeatures,
     GlobalGeometryEncoder,
     LocalNeighbourhoodEncoder,
     SurfaceFieldModel,
@@ -370,3 +371,75 @@ def test_field_training_runs_and_checkpoints(fields_root, tmp_path):
 
     out = Path(result["checkpoint"]).parent
     assert not (out / "last.pt").exists(), "finished run left resumable state"
+
+
+# --------------------------------------------------------------------------
+# Fourier features and multi-scale neighbourhoods
+# --------------------------------------------------------------------------
+
+
+def test_fourier_features_have_the_advertised_width():
+    ff = FourierFeatures(n_freq=4)
+    x = torch.randn(2, 7, 3)
+    out = ff(x)
+    assert ff.out_dim(3) == 3 * (2 * 4 + 1) == out.shape[-1]
+    # the raw coordinates survive, so no information is lost by the lift
+    assert torch.allclose(out[..., :3], x)
+
+
+def test_fourier_features_are_bounded_and_finite():
+    """sin/cos of a large coordinate must not blow up -- the lift is only
+    useful if it is numerically safe at the edges of the unit sphere."""
+    ff = FourierFeatures(n_freq=8)
+    out = ff(torch.tensor([[[-1.0, 0.0, 1.0]]]) * 1e3)
+    assert torch.isfinite(out).all()
+    assert out[..., 3:].abs().max() <= 1.0 + 1e-6
+
+
+def test_fourier_disabled_is_a_passthrough():
+    ff = FourierFeatures(n_freq=0)
+    x = torch.randn(3, 5, 3)
+    assert torch.equal(ff(x), x)
+    assert ff.out_dim(3) == 3
+
+
+def test_fourier_separates_nearby_points_more_than_raw_coordinates():
+    """The point of the lift: two points a small distance apart should be
+    further apart after lifting, which is what lets an MLP resolve them."""
+    ff = FourierFeatures(n_freq=8)
+    a = torch.zeros(1, 1, 3)
+    b = torch.full((1, 1, 3), 0.01)
+    raw = float((a - b).norm())
+    lifted = float((ff(a) - ff(b)).norm())
+    assert lifted > raw
+
+
+def test_multi_scale_local_encoder_concatenates_scales():
+    enc = LocalNeighbourhoodEncoder(k=(4, 8, 16), out_dim=96)
+    assert enc.ks == (4, 8, 16)
+    out = enc(torch.randn(2, 10, 3), torch.randn(2, 64, 3))
+    assert out.shape == (2, 10, enc.out_dim)
+
+
+def test_single_scale_local_encoder_still_works():
+    enc = LocalNeighbourhoodEncoder(k=8, out_dim=32)
+    assert enc.ks == (8,)
+    assert enc(torch.randn(1, 4, 3), torch.randn(1, 32, 3)).shape[-1] == enc.out_dim
+
+
+def test_local_encoder_handles_a_cloud_smaller_than_k():
+    """A tiny cloud must clamp rather than crash -- the fixture and the tests
+    use small clouds, and so would a degenerate mesh."""
+    enc = LocalNeighbourhoodEncoder(k=(8, 32, 128), out_dim=48)
+    out = enc(torch.randn(1, 5, 3), torch.randn(1, 6, 3))
+    assert out.shape == (1, 5, enc.out_dim)
+    assert torch.isfinite(out).all()
+
+
+def test_multi_scale_encoder_is_still_translation_invariant():
+    enc = LocalNeighbourhoodEncoder(k=(4, 16), out_dim=32).eval()
+    cloud, query = torch.randn(1, 64, 3), torch.randn(1, 8, 3)
+    shift = torch.tensor([[[-5.0, 2.0, 9.0]]])
+    with torch.no_grad():
+        assert torch.allclose(enc(query, cloud),
+                              enc(query + shift, cloud + shift), atol=1e-5)

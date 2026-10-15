@@ -219,3 +219,127 @@ Per-category R², reliability diagrams, OOD detection rate and the speedup
 number are the harness's job, run against these checkpoints.
 `src.train.ood.detection_rate(detector, x_ood)` is the function for that last
 one.
+
+
+---
+
+# Stage 2 — surface field checkpoints
+
+**New in this handoff.** A second checkpoint kind, from
+`src/train/train_fields.py`, predicting **Cp at every surface point** rather
+than one drag number.
+
+```bash
+python -m src.data.drivaerml --runs 30 --download
+python -m src.data.preprocess --combine
+python -m src.data.fields --extract
+python -m src.train.train_fields --config configs/fields.yaml
+```
+
+Trains in about a minute on an M-series GPU. No Nebius instance — see the
+compute policy in `CLAUDE.md`.
+
+## Loading one
+
+```python
+import torch
+from src.train.train_fields import build_model_from_cfg
+
+ckpt  = torch.load(path, map_location=device, weights_only=False)
+model = build_model_from_cfg(ckpt["config"])
+model.load_state_dict(ckpt["state_dict"])
+model.eval()
+
+cp_mean = ckpt["norm_stats"]["cp_mean"]
+cp_std  = ckpt["norm_stats"]["cp_std"]
+regions = ckpt["regions"]          # the PRESSURE_REGIONS present
+splits  = ckpt["splits"]           # which runs trained it, by run number
+```
+
+The forward signature differs from stage 1 — it takes geometry **and** query
+points:
+
+```python
+out = model(cloud, query_xyz, query_normal)   # (B, G, 3), (B, Q, 3), (B, Q, 3)
+mean, sigma = model.split(out)                # each (B, Q, 1)
+cp    = mean  * cp_std + cp_mean
+cp_sd = sigma * cp_std
+```
+
+`cloud` and `query_xyz` must be normalised **the same way stage 1 normalises
+geometry** — bounding-box centre of the combined mesh, divided by max vertex
+radius. `src.data.fields.extract_one` is the reference. Get this wrong and the
+model returns a confident wrong field with no error.
+
+## This is what finally fills `pressure_summary`
+
+```python
+import numpy as np
+summary = {r: float(np.average(cp[region == i], weights=area[region == i]))
+           for i, r in enumerate(regions)}
+```
+
+Area-weighted mean Cp per contract region. `src/data/preprocess.py --combine`
+writes the face→region index this needs, derived from the 49 semantically named
+solids in each DrivAerML STL (`BodyHood`, `BodyRoof`, `BodyFasciafront1`, …),
+which cover all eight `PRESSURE_REGIONS`.
+
+That matters beyond filling a field: *"pressure is high on the rear fascia"* is
+something Nemotron can act on. A single scalar is not.
+
+## Current numbers, and how to read them
+
+20 train / 5 val / 5 test cars — split **by car**, never by point:
+
+| | value |
+|---|---|
+| Cp R² | 0.2984 |
+| Cp MAE | 0.1975 |
+| 1σ coverage | 0.78 |
+| integrated Cd | pred 0.2536 vs true 0.2078 |
+
+**The integrated Cd is the number to trust, not the R².** A model predicting
+the mean Cp everywhere gets a respectable MAE and integrates to **zero** drag,
+because the normals cancel — there is a test asserting exactly that. Getting
+0.25 against 0.21 means the field is spatially resolved, not merely close on
+average. That is the "integration gives a free consistency check" argument from
+the plan, measured.
+
+R² 0.30 is weak and honestly so: 20 training cars, a 647k-parameter model, and
+a laptop GPU. The full-strength version is NVIDIA's upstream DoMINO recipe
+fine-tuned from the pretrained `nvidia/domino_drivaerml` checkpoint, which is
+what a real H100 run should do. This is the scaled-down stand-in.
+
+---
+
+# Four uncertainty signals, measured. Three do not work.
+
+This is the project's headline contribution, so here is the full honest state
+of it. Every row is measured in this repo, not asserted.
+
+| signal | in distribution | on a held-out body style |
+|---|---|---|
+| heteroscedastic σ | coverage 0.64 ✓ | error ×2, σ +20% → coverage 0.49 ✗ |
+| feature-space distance | FPR 3.3% | best of 8 methods caught 26% ✗ |
+| deep-ensemble disagreement | coverage 0.79 ✓ | error ×2, epistemic +25% → 0.44 ✗ |
+| **parameter-space distance** | **FPR 0.3%** | **100% caught ✓** |
+
+Plus one external check that also failed: correlation between the field model's
+per-point σ and `pPrime2MeanTrim` (the LES's own pressure-fluctuation variance,
+i.e. where the flow is *physically* unsteady) is **+0.03** — nothing.
+
+**The pattern.** OOD detection works when the novelty is **explicit in the
+input** and fails whenever the model is asked to notice it from its own
+behaviour. The parameter-space check succeeds because an unseen body style sits
+far outside the training range of the body-style indicator. σ, ensembles and
+feature distance all fail because the model's *behaviour* looks perfectly
+normal to the model.
+
+**So `contracts.is_in_distribution` is built the right way round**: it checks
+body style explicitly and treats σ and `ood_score` as supporting evidence
+rather than as the gate. Keep it that way.
+
+For the writeup, this is a stronger result than "our gate works": we built four
+uncertainty signals, measured each against a real distribution shift, and three
+failed. Almost nobody stress-tests their own confidence claim and publishes the
+failures.

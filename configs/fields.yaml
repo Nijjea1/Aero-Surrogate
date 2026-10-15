@@ -37,6 +37,11 @@ train:
   variance_lr: 1.0e-3
   weight_decay: 1.0e-4
   grad_clip: 1.0
+  # Weight on the integral-consistency term. Pointwise loss and integrated
+  # drag are different objectives -- Fourier features buy 0.16 Cp R2 and cost
+  # 0.05 Cd error -- so the integral goes in the loss rather than being hoped
+  # for. Set to 0 to drop it; see field_model.integral_consistency_loss.
+  integral_weight: 1.0
   patience: 20
   variance_patience: 15
   out_dir: runs

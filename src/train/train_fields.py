@@ -48,7 +48,11 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.data.fields import FIELD_VERSION, SurfaceFieldDataset, field_splits
-from src.train.field_model import SurfaceFieldModel, field_nll
+from src.train.field_model import (
+    SurfaceFieldModel,
+    field_nll,
+    integral_consistency_loss,
+)
 from src.train.train import git_hash, pick_device, r2_score, seed_everything
 
 SCHEMA_VERSION = "2.0.0"
@@ -76,8 +80,10 @@ def build_model_from_cfg(cfg: dict) -> SurfaceFieldModel:
     m = cfg.get("model", {})
     return SurfaceFieldModel(
         latent_dim=m.get("latent_dim", 256),
-        local_k=m.get("local_k", 16),
-        local_dim=m.get("local_dim", 64),
+        local_k=tuple(m["local_k"]) if isinstance(m.get("local_k"), list)
+                else m.get("local_k", (8, 32, 128)),
+        local_dim=m.get("local_dim", 96),
+        n_freq=m.get("n_freq", 8),
         hidden=m.get("hidden", 256),
         n_layers=m.get("n_layers", 4),
         dropout=m.get("dropout", 0.0),
@@ -209,7 +215,8 @@ def _run_phase(phase: str, model, loaders, device, norm, regions, *, params,
                epochs: int, patience: int, lr: float, weight_decay: float,
                select_key: str, mean_only: bool, beta: float, grad_clip: float,
                log_path: Path, history: list[dict], state_path: Path,
-               resume: dict | None, done: list[str], cfg: dict) -> dict:
+               resume: dict | None, done: list[str], cfg: dict,
+               integral_weight: float = 0.0) -> dict:
     optimiser = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimiser, mode="min", factor=0.5, patience=max(2, patience // 4))
@@ -240,9 +247,19 @@ def _run_phase(phase: str, model, loaders, device, norm, regions, *, params,
         for batch in loaders["train"]:
             b = _to_device(batch, device)
             optimiser.zero_grad(set_to_none=True)
-            loss = field_nll(model(b["cloud"], b["query_xyz"], b["query_normal"]),
-                             norm.encode(b["cp"]), model,
-                             beta=beta, mean_only=mean_only)
+            out = model(b["cloud"], b["query_xyz"], b["query_normal"])
+            target = norm.encode(b["cp"])
+            loss = field_nll(out, target, model, beta=beta, mean_only=mean_only)
+            if integral_weight > 0.0:
+                # Integrate in ORIGINAL Cp units, since that is where the
+                # coefficient lives; the normalised field would give a
+                # meaningless drag.
+                n = model.n_targets
+                decoded = torch.cat(
+                    [norm.decode(out[..., :n]), out[..., n:]], dim=-1)
+                loss = loss + integral_weight * integral_consistency_loss(
+                    decoded, b["cp"], b["query_normal"], b["query_area"],
+                    b["a_ref"], b["area_scale"], model)
             loss.backward()
             if grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(params, grad_clip)
@@ -357,6 +374,7 @@ def train_fields(cfg: dict, device_str: str | None = None,
                    weight_decay=float(t.get("weight_decay", 1e-4)),
                    select_key="cp_mae", mean_only=True, beta=0.0,
                    grad_clip=grad_clip, log_path=log_path, history=history,
+                   integral_weight=float(t.get("integral_weight", 0.0)),
                    state_path=state_path,
                    resume=state if state and state["phase"] == "mean" else None,
                    done=done, cfg=cfg)
