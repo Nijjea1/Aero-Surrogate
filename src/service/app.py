@@ -8,6 +8,10 @@ Implemented endpoints:
     POST /evaluate            -> Evaluation (the contract)
     POST /compare             -> field delta between two designs
     GET  /history/{run_id}    -> the run log
+    POST /runs                -> start an agent run (202); see src/service/runs.py
+    GET  /runs                -> recent runs, newest first
+    GET  /runs/{run_id}       -> a run's live status
+    POST /runs/{run_id}/cancel
 
 Serve the synthetic stub by default. A nonempty AERO_CHECKPOINT loads that
 params-v1 checkpoint with TorchPredictor (needs requirements-model.txt); a
@@ -19,11 +23,11 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, FiniteFloat, field_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, StrictInt, field_validator
 
 from src.contracts import (
     BODY_STYLES, DEFAULT_BODY_STYLE, Design, Evaluation, OOD_SCORE_THRESHOLD, PARAM_BOUNDS,
@@ -33,6 +37,10 @@ from src.contracts import (
 from src.service.predictor import BasePredictor, load_predictor, validate_design_params
 from src.service.gate import rejection_reason
 from src.service.runlog import RunLog
+from src.service.runs import (
+    RunConflict, RunForbidden, RunLimitError, RunManager, RunNotFound, RunRequestError, RunUnavailable,
+)
+from src.service.security import AuthError, caller_role
 from src.service.settings import Settings
 
 
@@ -65,6 +73,21 @@ class CompareRequest(BaseModel):
     design_b: DesignRequest
 
 
+class RunRequest(BaseModel):
+    """Types only; RunManager checks the values against the caller's ceilings."""
+    model_config = ConfigDict(extra="forbid")
+    model: str
+    iterations: StrictInt
+    body_style: str = DEFAULT_BODY_STYLE
+    constraints: list[str] = Field(default_factory=list)
+    run_budget_usd: FiniteFloat | None = None
+    thinking: str = "auto"
+
+
+_RUN_ERROR_STATUS = {RunRequestError: 422, RunLimitError: 429, RunUnavailable: 503,
+                     RunNotFound: 404, RunForbidden: 403, RunConflict: 409}
+
+
 def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = None,
                settings: Settings | None = None) -> FastAPI:
     """Inject a predictor, log or settings for tests; otherwise read the environment."""
@@ -75,7 +98,14 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
             os.environ.get("AERO_CHECKPOINT") or None
         )
         application.state.runlog = runlog or RunLog(settings.runlog_dir)
-        yield
+        # A manager set before startup (tests: fake proposers, a fixed clock) is kept.
+        if getattr(application.state, "run_manager", None) is None:
+            application.state.run_manager = RunManager(
+                application.state.predictor, application.state.runlog, settings)
+        try:
+            yield
+        finally:
+            application.state.run_manager.shutdown()
 
     application = FastAPI(title="Aero Surrogate", version=SCHEMA_VERSION, lifespan=lifespan)
     application.state.settings = settings
@@ -159,6 +189,41 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
             # Invalid IDs are user errors; corrupt stored records are server errors.
             status = 500 if str(exc).startswith("Malformed run log") else 422
             raise HTTPException(status_code=status, detail=str(exc)) from None
+
+    def _role(request: Request) -> str:
+        try:
+            return caller_role(request.headers.get("Authorization"), settings)
+        except AuthError as exc:
+            raise HTTPException(status_code=401, detail=str(exc),
+                                headers={"WWW-Authenticate": "Bearer"}) from None
+
+    def _manage(action):
+        try:
+            return action()
+        except tuple(_RUN_ERROR_STATUS) as exc:
+            raise HTTPException(status_code=_RUN_ERROR_STATUS[type(exc)], detail=str(exc)) from None
+        except ValueError as exc:
+            # Invalid IDs are user errors; corrupt stored records are server errors.
+            status = 500 if str(exc).startswith("Malformed run log") else 422
+            raise HTTPException(status_code=status, detail=str(exc)) from None
+
+    @application.post("/runs", status_code=202)
+    def start_run(body: RunRequest, request: Request):
+        role = _role(request)
+        return _manage(lambda: application.state.run_manager.start(body.model_dump(), role))
+
+    @application.get("/runs")
+    def list_runs(limit: int = Query(20, ge=1, le=100)):
+        return _manage(lambda: application.state.run_manager.list(limit))
+
+    @application.get("/runs/{run_id}")
+    def run_status(run_id: str):
+        return _manage(lambda: application.state.run_manager.status(run_id))
+
+    @application.post("/runs/{run_id}/cancel")
+    def cancel_run(run_id: str, request: Request):
+        role = _role(request)
+        return _manage(lambda: application.state.run_manager.cancel(run_id, role))
 
     return application
 
