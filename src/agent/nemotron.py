@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -28,8 +29,16 @@ of a fixed body style (all zeros = unmodified baseline). Angles are degrees,
 lengths millimetres, curvatures and inclinations dimensionless.
 
 Every step, call `evaluate` exactly once with the parameters you want to change
-from the current best trusted design, plus your reasoning. You may first call
-`compare` or `history` if it helps, but keep it brief.
+from the current best trusted design, plus:
+- `hypothesis`: the physical reason, in one or two sentences, like an
+  engineer's logbook (e.g. "A shallower ramp should delay separation and
+  shrink the base wake"), not a parameter dump;
+- `expected_effect`: lower_cd, higher_cd or no_change;
+- optionally `expected_delta_cd`, the change in Cd you expect (e.g. -0.001).
+Your expectation is checked against the scored result, and the verdict (as
+expected, opposite to expected, or within noise) is shown to you next step,
+so commit to a direction and learn from the misses.
+You may first call `compare` or `history` if it helps, but keep it brief.
 
 Rules:
 - Change at most two parameters per step so their effect is attributable
@@ -40,8 +49,13 @@ Rules:
   Do not repeat or extend a rejected move; go back toward trusted designs.
 - An accepted result is trusted, not necessarily better. Keep what lowers Cd.
 - Do not propose a design that was already scored.
-- Reasoning, in one or two sentences: hypothesis, the change, expected effect.
-  Write it like an engineer's logbook, not a parameter dump."""
+- The observed result is recorded by the server, never by you."""
+
+# The expected effects `evaluate` accepts, and how a logbook line spells them.
+EXPECTED_EFFECTS = {"lower_cd": "lower Cd", "higher_cd": "higher Cd", "no_change": "no change in Cd"}
+# A Cd change smaller than this is "within noise", and is what no_change means.
+CD_NOISE_TOLERANCE = 1e-5
+HYPOTHESIS_MAX_CHARS = 200
 
 
 def _param_description(name: str) -> str:
@@ -67,9 +81,14 @@ TOOLS = [
                                    for name in PARAM_BOUNDS},
                     "additionalProperties": False,
                 },
-                "reasoning": {"type": "string", "description": "Hypothesis, change, expected effect."},
+                "hypothesis": {"type": "string",
+                               "description": "The physical reason for this change, one or two sentences."},
+                "expected_effect": {"type": "string", "enum": list(EXPECTED_EFFECTS),
+                                    "description": "What you expect this change to do to Cd."},
+                "expected_delta_cd": {"type": "number",
+                                      "description": "Optional: the Cd change you expect, e.g. -0.001."},
             },
-            "required": ["changes", "reasoning"],
+            "required": ["changes", "hypothesis", "expected_effect"],
         },
     }},
     {"type": "function", "function": {
@@ -110,9 +129,79 @@ class Cancelled(RuntimeError):
 class Proposal:
     params: dict[str, float]
     changes: dict[str, float]
-    reasoning: str
+    hypothesis: str
+    expected_effect: str
     rounds: int
     feedback: list[str] = field(default_factory=list)
+    expected_delta_cd: float | None = None
+    # The design this one changed from: the best trusted design, or the
+    # baseline when nothing is trusted yet. base_cd and base_iteration are
+    # None only when that design has not been scored in this run.
+    base_params: dict[str, float] = field(default_factory=dict)
+    base_cd: float | None = None
+    base_iteration: int | None = None
+    base_trusted: bool = False
+
+
+def _one_line(text: str, limit: int) -> str:
+    # " | " separates logbook fields, so "|" cannot appear inside one.
+    text = " ".join(text.replace("|", "/").split())
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+
+
+def judge(expected_effect: str, delta: float) -> str:
+    """Compare an expectation with an observed Cd change (new minus base)."""
+    small = abs(delta) < CD_NOISE_TOLERANCE
+    if expected_effect == "no_change":
+        return "as expected" if small else "not as expected"
+    if small:
+        return "within noise"
+    return "as expected" if (delta < 0) == (expected_effect == "lower_cd") else "opposite to expected"
+
+
+def logbook_entry(proposal: Proposal, cd: float, reject_reason: str | None) -> str:
+    """The record's reasoning: the model's hypothesis and expectation, then
+    what the server observed. One line; the model never writes the result."""
+    base = proposal.base_params
+    changed = [name for name in PARAM_BOUNDS
+               if float(proposal.params[name]) + 0.0 != float(base.get(name, 0.0)) + 0.0]
+    change = ", ".join(f"{name} {_fmt(base.get(name, 0.0))} → {_fmt(proposal.params[name])}"
+                       for name in changed) or "none"
+    expected = EXPECTED_EFFECTS[proposal.expected_effect]
+    if proposal.expected_delta_cd is not None:
+        expected += f" (~{proposal.expected_delta_cd:+.5f})"
+    if reject_reason is not None:
+        observed = f"REJECTED by the gate ({_one_line(reject_reason, 160)}) — no trusted result"
+    elif proposal.base_cd is None:
+        observed = f"Cd {cd:.5f}, trusted — no scored base design to compare with"
+    else:
+        delta = cd - proposal.base_cd
+        reference = f"iteration {proposal.base_iteration}" + ("" if proposal.base_trusted else " (untrusted)")
+        observed = (f"Cd {proposal.base_cd:.5f} → {cd:.5f} ({delta:+.5f}) vs {reference}, trusted — "
+                    f"{judge(proposal.expected_effect, delta)}")
+    return (f"Hypothesis: {_one_line(proposal.hypothesis, HYPOTHESIS_MAX_CHARS)} | Change: {change} | "
+            f"Expected: {expected} | Observed: {observed}")
+
+
+_LOGBOOK = re.compile(r" \| Expected: (lower Cd|higher Cd|no change in Cd)[^|]* \| Observed: (.*)$")
+_OBSERVED_DELTA = re.compile(r"\(([+-]\d+\.\d+)\) vs iteration")
+
+
+def read_logbook(reasoning: object) -> dict | None:
+    """The expectation and verdict back out of a logbook_entry line. None for
+    the baseline and scripted steps, which carry plain reasoning."""
+    if not isinstance(reasoning, str):
+        return None
+    match = _LOGBOOK.search(reasoning)
+    if not match:
+        return None
+    expected, observed = match.groups()
+    if observed.startswith("REJECTED"):
+        return {"expected": expected, "rejected": True, "delta": None, "verdict": None}
+    delta = _OBSERVED_DELTA.search(observed)
+    return {"expected": expected, "rejected": False,
+            "delta": float(delta.group(1)) if delta else None,
+            "verdict": observed.rsplit("— ", 1)[-1] if delta else None}
 
 
 def design_key(params: dict[str, float]) -> tuple[float, ...]:
@@ -139,7 +228,28 @@ def _attempt_line(row: dict) -> str:
     verdict = "accepted" if row["accepted"] else f"REJECTED: {row['reject_reason']}"
     ood = f", ood {row['ood_score']:.2f}" if row.get("ood_score") is not None else ""
     return (f"it {row['iteration']}: {_offsets(row['params'])} -> Cd {row['cd']:.5f} "
-            f"(sd {row['uncertainty']:.4f}{ood}) {verdict}")
+            f"(sd {row['uncertainty']:.4f}{ood}) {verdict}{_expectation(row)}")
+
+
+def _expectation(row: dict) -> str:
+    entry = read_logbook(row.get("reasoning"))
+    if entry is None:
+        return ""
+    return f"; expected {entry['expected']}" + (f": {entry['verdict']}" if entry["verdict"] else "")
+
+
+def _last_step_line(history: list[dict]) -> str | None:
+    """The most recent live step's expectation against what was observed."""
+    for row in reversed(history):
+        entry = read_logbook(row.get("reasoning"))
+        if entry is None:
+            continue
+        if entry["rejected"]:
+            return f"Last step: expected {entry['expected']}, but the gate rejected it (no trusted result)."
+        if entry["delta"] is None:
+            return f"Last step: expected {entry['expected']}; no scored base design to compare with."
+        return f"Last step: expected {entry['expected']}, observed {entry['delta']:+.5f} ({entry['verdict']})."
+    return None
 
 
 def _best(history: list[dict]) -> dict | None:
@@ -164,7 +274,10 @@ def state_message(history: list[dict], *, body_style: str, evaluations_left: int
     lines.append("Constraints enforced by code: " + (", ".join(map(str, constraints)) or "none") + ".")
     lines.append(f"Most recent attempts (newest last, {min(window, len(history))} of {len(history)}):")
     lines.extend(_attempt_line(row) for row in history[-window:])
-    lines.append("Call evaluate with your next design.")
+    last = _last_step_line(history)
+    if last:
+        lines.append(last)
+    lines.append("Call evaluate with your next design, hypothesis and expected effect.")
     return "\n".join(lines)
 
 
@@ -193,6 +306,9 @@ class NemotronProposer:
                 provenance: str = "unknown") -> Proposal:
         best = _best(history)
         base = dict(best["params"]) if best else {name: 0.0 for name in PARAM_BOUNDS}
+        if best is None:
+            # Nothing trusted yet: the reference is the scored baseline, if any.
+            best = next((row for row in history if design_key(row["params"]) == design_key(base)), None)
         scored = {design_key(row["params"]) for row in history}
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -237,6 +353,9 @@ class NemotronProposer:
                                  "content": result})
             if proposal:
                 proposal.rounds, proposal.feedback = round_number, feedback
+                if best is not None:
+                    proposal.base_cd, proposal.base_iteration = float(best["cd"]), best["iteration"]
+                    proposal.base_trusted = bool(best["accepted"])
                 return proposal
         raise NoProposal(f"no valid design after {self.max_rounds} rounds: " + "; ".join(feedback[-3:]))
 
@@ -267,11 +386,28 @@ class NemotronProposer:
         return self._evaluate(args, base, scored)
 
     def _evaluate(self, args: dict, base: dict[str, float], scored: set[tuple]) -> tuple[str, Proposal | None]:
-        changes, reasoning = args.get("changes"), args.get("reasoning")
+        changes = args.get("changes")
+        # Small models sometimes still send the old free-form `reasoning`
+        # argument; it is taken as the hypothesis when `hypothesis` is absent.
+        hypothesis = args["hypothesis"] if "hypothesis" in args else args.get("reasoning")
+        effect, delta = args.get("expected_effect"), args.get("expected_delta_cd")
         if not isinstance(changes, dict) or not changes:
             return "rejected before scoring: 'changes' must be a non-empty object", None
-        if not isinstance(reasoning, str) or not reasoning.strip():
-            return "rejected before scoring: 'reasoning' is required", None
+        if not isinstance(hypothesis, str) or not hypothesis.strip():
+            return ("rejected before scoring: 'hypothesis' is required: the physical reason for the change, "
+                    "in one or two sentences"), None
+        if not isinstance(effect, str) or effect.strip().lower() not in EXPECTED_EFFECTS:
+            return (f"rejected before scoring: 'expected_effect' must be one of {', '.join(EXPECTED_EFFECTS)} "
+                    f"(got {effect!r})"), None
+        effect = effect.strip().lower()
+        if isinstance(delta, str):
+            try:
+                delta = float(delta)
+            except ValueError:
+                pass
+        if delta is not None and (isinstance(delta, bool) or not isinstance(delta, (int, float))
+                                  or not math.isfinite(delta)):
+            return f"rejected before scoring: 'expected_delta_cd' must be a finite number (got {delta!r})", None
         problems, values = [], {}
         for key, value in changes.items():
             if key not in PARAM_BOUNDS:
@@ -300,8 +436,9 @@ class NemotronProposer:
             return "rejected before scoring (not clamped): " + "; ".join(problems), None
         if design_key(params) in scored:
             return "rejected before scoring: this exact design was already scored; try something new", None
-        return "accepted for scoring", Proposal(params=params, changes=values,
-                                                reasoning=reasoning.strip(), rounds=0)
+        return "accepted for scoring", Proposal(
+            params=params, changes=values, hypothesis=hypothesis.strip(), expected_effect=effect, rounds=0,
+            expected_delta_cd=None if delta is None else float(delta), base_params=dict(base))
 
     @staticmethod
     def _compare(history: list[dict], args: dict) -> str:
@@ -318,5 +455,6 @@ class NemotronProposer:
                 f"Cd {b['cd'] - a['cd']:+.5f}; accepted {a['accepted']} -> {b['accepted']}")
 
 
-__all__ = ["Cancelled", "NemotronProposer", "NoProposal", "Proposal", "ProviderError", "SYSTEM_PROMPT",
-           "TOOLS", "design_key", "state_message"]
+__all__ = ["CD_NOISE_TOLERANCE", "Cancelled", "EXPECTED_EFFECTS", "NemotronProposer", "NoProposal", "Proposal",
+           "ProviderError", "SYSTEM_PROMPT", "TOOLS", "design_key", "judge", "logbook_entry", "read_logbook",
+           "state_message"]

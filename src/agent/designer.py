@@ -40,7 +40,7 @@ from ..contracts import (
 from ..service.gate import rejection_reason
 from ..service.runlog import RunLog
 from .constraints import Constraint, parse_constraint, violations
-from .nemotron import Cancelled, NemotronProposer, NoProposal
+from .nemotron import Cancelled, NemotronProposer, NoProposal, Proposal, judge, logbook_entry
 from .provider import BudgetExceeded, ProviderError, TokenFactoryClient
 
 
@@ -201,7 +201,7 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         "constraints": [str(c) for c in constraints],
         "surrogate": provenance, "gate_thresholds": thresholds, **(metadata or {}),
     })
-    state = {"history": [], "best_cd": None, "timings": []}
+    state = {"history": [], "best_cd": None, "timings": [], "verdicts": []}
     try:
         stop_reason = _drive(state, iterations, run_id, dry_run, log, evaluator or evaluate_design,
                              body_style, proposer, constraints, provenance, thresholds,
@@ -221,7 +221,24 @@ def _finish(log: RunLog, run_id: str, stop_reason: str, state: dict,
     usage = vars(proposer.client.usage).copy() if proposer is not None else None
     log.append_event(run_id, {"type": "run_finished", "stop_reason": stop_reason,
                               "scored": len(state["history"]), "best_cd": state["best_cd"],
-                              "usage": usage, "timing": timing_summary(state["timings"])})
+                              "usage": usage, "timing": timing_summary(state["timings"]),
+                              "hypothesis_hits": hypothesis_hits(state["verdicts"])})
+
+
+def hypothesis_hits(verdicts: list[str]) -> dict:
+    """How often a trusted live step moved Cd the way the model said it would.
+    Only lower/higher expectations are judged; rejected and no_change steps
+    are left out, and a change within noise counts as a miss."""
+    judged, hits = len(verdicts), verdicts.count("as expected")
+    return {"judged": judged, "as_expected": hits, "rate": hits / judged if judged else None}
+
+
+def hypothesis_summary(hits: dict | None) -> str | None:
+    """The CLI's one-line summary of hypothesis_hits; None when nothing was judged."""
+    if not hits or not hits.get("judged"):
+        return None
+    return (f"Hypotheses: {hits['as_expected']} of {hits['judged']} trusted predictions had the "
+            f"expected direction ({hits['rate']:.0%}).")
 
 
 def timing_summary(timings: list[dict]) -> dict | None:
@@ -283,7 +300,7 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
                 log.append_event(run_id, {"type": "provider_error", "detail": str(exc)})
                 return f"provider error: {exc}"
             failures = 0
-            params, reasoning = proposal.params, proposal.reasoning
+            params, reasoning = proposal.params, None  # written after scoring, from the result
             for problem in proposal.feedback:
                 log.append_event(run_id, {"type": "proposal_corrected", "detail": problem})
         _validate_proposal(params)
@@ -302,6 +319,12 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
         if reason is None and (state["best_cd"] is None or evaluation["cd"] < state["best_cd"]):
             state["best_cd"] = evaluation["cd"]
             best_pressure = evaluation.get("pressure_summary") or None
+        if isinstance(proposal, Proposal):
+            # The observed half of the logbook line comes from the score and
+            # the gate, never from the model.
+            reasoning = logbook_entry(proposal, evaluation["cd"], reason)
+            if reason is None and proposal.base_cd is not None and proposal.expected_effect != "no_change":
+                state["verdicts"].append(judge(proposal.expected_effect, evaluation["cd"] - proposal.base_cd))
         record = IterationRecord(
             run_id=run_id, iteration=len(history), params=dict(params), body_style=body_style,
             cd=evaluation["cd"], cl=evaluation["cl"], uncertainty=evaluation["uncertainty"],
@@ -380,6 +403,9 @@ def main() -> None:
         print(f"Time per step (median): {timing['step_s_median']:.2f}s total, "
               f"{timing['propose_s_median']:.2f}s proposing, {timing['score_s_median'] * 1000:.1f} ms scoring"
               + (f" (surrogate itself {surrogate:.2f} ms)" if surrogate else "") + share + ".")
+    hypotheses = hypothesis_summary(finished.get("hypothesis_hits"))
+    if hypotheses:
+        print(hypotheses)
 
 
 if __name__ == "__main__":

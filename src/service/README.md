@@ -54,13 +54,41 @@ Check access first: two tiny calls, under $0.001.
 
 Each step rebuilds a compact prompt (system rules, best trusted design, the
 last eight attempts with their gate verdicts and reasons, constraints, budget
-left) and asks the model to call one of three tools: `evaluate` (changes from
-the best trusted design plus reasoning; uses one evaluation), `compare` and
-`history` (free, answered from the run). The server still owns scoring, the
-gate and logging; the model never writes its own result.
+left) and asks the model to call one of three tools: `evaluate` (uses one
+evaluation), `compare` and `history` (free, answered from the run). The
+server still owns scoring, the gate and logging; the model never writes its
+own result.
+
+`evaluate` takes `changes` (from the best trusted design), `hypothesis` (the
+physical reason, one or two sentences), `expected_effect` (`lower_cd`,
+`higher_cd` or `no_change`) and optionally `expected_delta_cd` (e.g.
+`-0.001`). A legacy free-form `reasoning` string is accepted as the
+hypothesis when `hypothesis` is absent, since small models sometimes still
+send it. After scoring, the code writes each record's `reasoning` as one
+logbook line; the Observed part comes from the score and the gate, never the
+model:
+
+```text
+Hypothesis: A shallower ramp should delay separation. | Change: B_Ramp_Angle -3 → -1 | Expected: lower Cd (~-0.00100) | Observed: Cd 0.28710 → 0.28650 (-0.00060) vs iteration 3, trusted — as expected
+... | Expected: lower Cd | Observed: REJECTED by the gate (uncertainty 0.0230 exceeds 0.0130) — no trusted result
+```
+
+The comparison is against the design the step changed from (the best trusted
+design, or the baseline, marked untrusted, if nothing is trusted yet).
+Verdicts are `as expected`, `opposite to expected`, or `within noise` when
+|ΔCd| < 1e-5; a `no_change` expectation is `as expected` within that
+tolerance and `not as expected` outside it. The next step's prompt carries the
+verdicts and a `Last step: expected lower Cd, observed +0.00041 (opposite to
+expected).` line. `run_finished` records `hypothesis_hits` (`judged`,
+`as_expected`, `rate`) over trusted live steps that expected lower or higher
+Cd; rejected and `no_change` steps are not judged, and a change within noise
+counts as a miss. The CLI prints it as `Hypotheses: 7 of 11 trusted
+predictions had the expected direction (64%).` The baseline and `--dry-run`
+steps keep their plain reasoning.
 
 Before anything is scored, a proposal is refused with a precise reason (never
-clamped) if it names an unknown parameter, changes more than two parameters,
+clamped) if it lacks a hypothesis or a valid expected effect, names an
+unknown parameter, changes more than two parameters,
 leaves the bounds, breaks a `--constraint`, or repeats a design already scored
 (compared numerically, so `2`, `2.0` and `-0.0`/`0.0` spellings cannot slip
 through). Malformed tool calls get an error reply, never a crash. The model
