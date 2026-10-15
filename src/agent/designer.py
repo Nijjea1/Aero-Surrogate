@@ -7,9 +7,16 @@ The uncertainty gate is the point of this file. When the surrogate is not
 confident, the proposal is rejected and the agent is TOLD WHY, so it adapts
 instead of hammering the same region.
 
-Both modes score every design over HTTP through the service. --dry-run swaps
-Nemotron for a scripted proposer so the loop can be tested for free. Live mode
-calls Token Factory through src.agent.provider, which enforces the spend cap.
+From the command line both modes score every design over HTTP through the
+service. The service's own run API (src/service/runs.py) runs the same loop
+in-process with `predictor_evaluator`. --dry-run swaps Nemotron for a scripted
+proposer so the loop can be tested for free. Live mode calls Token Factory
+through src.agent.provider, which enforces the spend cap.
+
+Every scored step writes a `step` event with where its time went: waiting for
+the model versus scoring. run_finished carries the totals and medians, so the
+speed claim can be made honestly (a millisecond surrogate does not make a
+millisecond agent step).
 """
 
 from __future__ import annotations
@@ -17,6 +24,7 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import statistics
 import sys
 import time
 import uuid
@@ -26,13 +34,13 @@ from numbers import Real
 import requests
 
 from ..contracts import (
-    DEFAULT_BODY_STYLE, PARAM_BOUNDS, IterationRecord, default_params,
-    validate_body_style, validate_params,
+    DEFAULT_BODY_STYLE, OOD_SCORE_THRESHOLD, PARAM_BOUNDS, UNCERTAINTY_THRESHOLD, Design,
+    IterationRecord, default_params, validate_body_style, validate_params,
 )
 from ..service.gate import rejection_reason
 from ..service.runlog import RunLog
 from .constraints import Constraint, parse_constraint, violations
-from .nemotron import NemotronProposer, NoProposal
+from .nemotron import Cancelled, NemotronProposer, NoProposal
 from .provider import BudgetExceeded, ProviderError, TokenFactoryClient
 
 
@@ -64,6 +72,24 @@ def service_thresholds() -> dict:
     schema = response.json()
     return {"threshold": float(schema["uncertainty_threshold"]),
             "ood_threshold": float(schema["ood_score_threshold"])}
+
+
+def predictor_evaluator(predictor) -> Callable[[dict[str, float], str], dict]:
+    """Score in-process with a service predictor instead of over HTTP."""
+    return lambda params, body_style: predictor.evaluate(Design(params, body_style)).to_dict()
+
+
+def predictor_thresholds(predictor) -> dict:
+    """The thresholds a predictor gates with, matching what /schema reports."""
+    uncertainty = getattr(predictor, "uncertainty_threshold", None)
+    ood = getattr(predictor, "ood_threshold", None)
+    return {"threshold": UNCERTAINTY_THRESHOLD if uncertainty is None else float(uncertainty),
+            "ood_threshold": OOD_SCORE_THRESHOLD if ood is None else float(ood)}
+
+
+def predictor_provenance(predictor) -> str:
+    return describe_provenance({"synthetic": predictor.name == "stub", "predictor": predictor.name,
+                                "model_version": getattr(predictor, "model_version", None)})
 
 
 def describe_provenance(health: dict) -> str:
@@ -122,7 +148,9 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         run_budget_usd: float = 0.50,
         max_consecutive_failures: int = 2,
         thinking: str = "auto",
-        thresholds: dict | None = None) -> str:
+        thresholds: dict | None = None,
+        should_stop: Callable[[], bool] | None = None,
+        on_step: Callable[[dict, dict], None] | None = None) -> str:
     """Log up to `iterations` scored attempts, including baseline iteration zero.
 
     The body style is fixed for the run: the same offsets describe a different
@@ -132,7 +160,11 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
     repeated invalid proposals, a provider failure, the global spend cap, or
     this run's own cost budget (checked before every model call). An
     exception also writes run_finished before propagating. Dry-run always
-    scores exactly `iterations`.
+    scores exactly `iterations` unless cancelled.
+
+    should_stop is polled before every step and every model call; when it
+    returns True the run ends with stop reason "cancelled". on_step(record,
+    timing) is called after each scored step, for live progress.
     """
     if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
         raise ValueError("iterations must be a positive integer")
@@ -150,6 +182,7 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
             proposer = NemotronProposer(client, constraints=constraints, thinking=think)
         # Enforced before every provider call, including correction rounds.
         proposer.budget_usd = run_budget_usd
+        proposer.should_stop = should_stop
     # Readiness checks come before the run is reserved, so a service that is
     # down cannot leave an orphaned, never-started run behind.
     if provenance is None:
@@ -166,11 +199,11 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         "constraints": [str(c) for c in constraints],
         "surrogate": provenance, "gate_thresholds": thresholds,
     })
-    state = {"history": [], "best_cd": None}
+    state = {"history": [], "best_cd": None, "timings": []}
     try:
         stop_reason = _drive(state, iterations, run_id, dry_run, log, evaluator or evaluate_design,
                              body_style, proposer, constraints, provenance, thresholds,
-                             max_consecutive_failures)
+                             max_consecutive_failures, should_stop, on_step)
     except BaseException as exc:
         # Every started run gets a terminal event, even when scoring or the
         # service fails, so a reader never mistakes a dead run for a live one.
@@ -186,19 +219,46 @@ def _finish(log: RunLog, run_id: str, stop_reason: str, state: dict,
     usage = vars(proposer.client.usage).copy() if proposer is not None else None
     log.append_event(run_id, {"type": "run_finished", "stop_reason": stop_reason,
                               "scored": len(state["history"]), "best_cd": state["best_cd"],
-                              "usage": usage})
+                              "usage": usage, "timing": timing_summary(state["timings"])})
+
+
+def timing_summary(timings: list[dict]) -> dict | None:
+    """Totals and medians of where step time went. None before any step."""
+    if not timings:
+        return None
+    propose = [t["propose_s"] for t in timings]
+    score = [t["score_s"] for t in timings]
+    step = [t["step_s"] for t in timings]
+    surrogate = [t["surrogate_latency_ms"] for t in timings if t["surrogate_latency_ms"] is not None]
+    total = sum(step)
+    return {
+        "steps": len(timings),
+        "propose_s_total": sum(propose), "score_s_total": sum(score), "step_s_total": total,
+        "propose_s_median": statistics.median(propose), "score_s_median": statistics.median(score),
+        "step_s_median": statistics.median(step),
+        "surrogate_latency_ms_median": statistics.median(surrogate) if surrogate else None,
+        "model_share": sum(propose) / total if total > 0 else None,
+        "model_calls": sum(t["model_calls"] for t in timings),
+    }
 
 
 def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog,
            evaluate: Callable[[dict[str, float], str], dict], body_style: str,
            proposer: NemotronProposer | None, constraints: list[Constraint], provenance: str,
-           thresholds: dict, max_consecutive_failures: int) -> str:
+           thresholds: dict, max_consecutive_failures: int,
+           should_stop: Callable[[], bool] | None = None,
+           on_step: Callable[[dict, dict], None] | None = None) -> str:
     """Propose, score, gate and log until done. Returns the stop reason."""
     history = state["history"]
     best_pressure = None
     failures = 0
     started = time.monotonic()
     while len(history) < iterations:
+        if should_stop is not None and should_stop():
+            return "cancelled"
+        step_started = _now()
+        calls_before = proposer.client.usage.calls if proposer is not None else 0
+        latency_before = proposer.client.usage.latency_s if proposer is not None else 0.0
         if dry_run or not history:
             proposal = scripted_proposer(history)
             params, reasoning = proposal["params"], proposal["reasoning"]
@@ -207,6 +267,8 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
                 proposal = proposer.propose(
                     history, body_style=body_style, evaluations_left=iterations - len(history),
                     total_evaluations=iterations, best_pressure=best_pressure, provenance=provenance)
+            except Cancelled:
+                return "cancelled"
             except NoProposal as exc:
                 failures += 1
                 log.append_event(run_id, {"type": "no_valid_proposal", "detail": str(exc)})
@@ -223,7 +285,9 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
             for problem in proposal.feedback:
                 log.append_event(run_id, {"type": "proposal_corrected", "detail": problem})
         _validate_proposal(params)
+        proposed = _now()
         evaluation = evaluate(params, body_style)
+        scored = _now()
         reason = rejection_reason(evaluation, body_style=body_style, **thresholds)
         # Invalid nonfinite predictions cannot be written as valid JSONL.
         if reason and reason.startswith("invalid prediction:"):
@@ -245,7 +309,25 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
         )
         log.append(record)
         history.append(record.to_dict())
+        latency_ms = evaluation.get("latency_ms")
+        timing = {
+            "iteration": record.iteration,
+            "propose_s": proposed - step_started,
+            "model_calls": (proposer.client.usage.calls - calls_before) if proposer is not None else 0,
+            "model_latency_s": (proposer.client.usage.latency_s - latency_before) if proposer is not None else 0.0,
+            "score_s": scored - proposed,
+            "surrogate_latency_ms": float(latency_ms) if isinstance(latency_ms, (int, float)) else None,
+            "step_s": _now() - step_started,
+        }
+        state["timings"].append(timing)
+        log.append_event(run_id, {"type": "step", **timing})
+        if on_step is not None:
+            on_step(history[-1], timing)
     return "evaluation budget used"
+
+
+# Indirection so tests can drive step timing with a fake clock.
+_now = time.perf_counter
 
 
 def main() -> None:
@@ -289,6 +371,13 @@ def main() -> None:
         usage = finished["usage"]
         print(f"Model calls {usage['calls']}, tokens {usage['prompt_tokens']}+{usage['completion_tokens']}, "
               f"cost ${usage['cost_usd']:.4f}")
+    timing = finished.get("timing")
+    if timing:
+        share = f", {timing['model_share']:.0%} of it waiting for the model" if timing["model_share"] is not None else ""
+        surrogate = timing["surrogate_latency_ms_median"]
+        print(f"Time per step (median): {timing['step_s_median']:.2f}s total, "
+              f"{timing['propose_s_median']:.2f}s proposing, {timing['score_s_median'] * 1000:.1f} ms scoring"
+              + (f" (surrogate itself {surrogate:.2f} ms)" if surrogate else "") + share + ".")
 
 
 if __name__ == "__main__":

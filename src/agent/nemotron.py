@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..contracts import PARAM_BOUNDS, validate_params
@@ -101,6 +102,10 @@ class NoProposal(RuntimeError):
     """The model did not produce a valid design within the step's round limit."""
 
 
+class Cancelled(RuntimeError):
+    """The run was asked to stop; raised before the next model call."""
+
+
 @dataclass
 class Proposal:
     params: dict[str, float]
@@ -179,6 +184,9 @@ class NemotronProposer:
     # The run's spend limit, checked before every call including correction
     # rounds. None means only the global spend cap applies.
     budget_usd: float | None = None
+    # Polled before every model call, so a cancelled run stops between
+    # correction rounds too. A call already in flight is bounded by its timeout.
+    should_stop: Callable[[], bool] | None = None
 
     def propose(self, history: list[dict], *, body_style: str, evaluations_left: int,
                 total_evaluations: int, best_pressure: dict | None = None,
@@ -195,6 +203,8 @@ class NemotronProposer:
         ]
         feedback: list[str] = []
         for round_number in range(1, self.max_rounds + 1):
+            if self.should_stop is not None and self.should_stop():
+                raise Cancelled("run cancelled")
             if self.budget_usd is not None and self.client.usage.cost_usd >= self.budget_usd:
                 raise BudgetExceeded(f"run budget ${self.budget_usd:.4f} reached: "
                                      f"${self.client.usage.cost_usd:.4f} spent")
@@ -308,5 +318,5 @@ class NemotronProposer:
                 f"Cd {b['cd'] - a['cd']:+.5f}; accepted {a['accepted']} -> {b['accepted']}")
 
 
-__all__ = ["NemotronProposer", "NoProposal", "Proposal", "ProviderError", "SYSTEM_PROMPT",
+__all__ = ["Cancelled", "NemotronProposer", "NoProposal", "Proposal", "ProviderError", "SYSTEM_PROMPT",
            "TOOLS", "design_key", "state_message"]

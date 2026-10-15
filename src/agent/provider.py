@@ -187,12 +187,14 @@ class Usage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float = 0.0
+    latency_s: float = 0.0
 
-    def add(self, prompt: int, completion: int, cost: float) -> None:
+    def add(self, prompt: int, completion: int, cost: float, latency_s: float = 0.0) -> None:
         self.calls += 1
         self.prompt_tokens += prompt
         self.completion_tokens += completion
         self.cost_usd += cost
+        self.latency_s += latency_s
 
 
 # Request fields the client owns; `extra` may not override them, or it could
@@ -334,7 +336,7 @@ class TokenFactoryClient:
             else:
                 cost = call_cost(self.model, prompt_tokens, completion_tokens)
                 usage_note = None
-            self.usage.add(prompt_tokens, completion_tokens, cost)
+            self.usage.add(prompt_tokens, completion_tokens, cost, latency_s)
             billed["cost_usd"] = cost
             billed["usage"] = {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
                                "latency_s": round(latency_s, 3),
