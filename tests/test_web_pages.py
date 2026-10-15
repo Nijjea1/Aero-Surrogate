@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 WEB = Path(__file__).resolve().parents[1] / "web"
-PAGES = {"index.html": ["app.js"], "runs.html": ["runs.js"]}
+PAGES = {"index.html": ["app.js"], "runs.html": ["runs.js"], "results.html": ["results.js"]}
 
 
 def _local_imports(script: Path) -> set[str]:

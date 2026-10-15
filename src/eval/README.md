@@ -38,7 +38,35 @@ Grading a checkpoint needs torch. The CPU build is enough:
 | `--scaling a.pt b.pt …` | trained on growing subsets: the data-scaling curve |
 | `--splits` | `runs/splits.json`. Without it, the splits are rebuilt with the training algorithm, which matches exactly. |
 | `--cfd-hours` | CFD wall-clock per design. Adds the speedup figure. |
-| `--out` | default `runs/metrics.json` |
+| `--out` | default `runs/metrics.json`. Use `web/results/metrics.json` to publish to the results page. |
+| `--label` | one line shown on the results page, e.g. `"Final: H100 checkpoints, Oct 26"` |
+
+The written file never contains absolute paths. Paths inside the repo become
+repo-relative, and anything else is cut to its file name, so a published file
+names nobody's disk.
+
+## Agent against the baselines
+
+```powershell
+# CMA-ES and random search for seeds 0-4, then summarise every finished run
+python -m src.eval.benchmark --baseline-seeds 5 --iterations 25 --body-style fastback `
+    --checkpoint runs/drivaernet-random/best.pt
+```
+
+The command writes `web/results/benchmark.json`. Runs are grouped into fair
+comparisons: same body style, budget, surrogate and constraints. Within each
+comparison it reports, per method, the median and middle-half spread of best
+trusted Cd at every evaluation, as a change against the run's own unmodified
+car.
+
+Unfinished runs are listed and left out, never silently dropped. A second
+baseline run with the same seed is left out too, because it is the same run.
+
+`--checkpoint` scores the baseline seeds in-process with the checkpoint the
+service serves, using the same gate thresholds and provenance. That avoids
+the service's per-minute rate limit. Without it they score over HTTP, like the
+agent. Agent runs cost money, so start them yourself with
+`python -m src.agent.designer --model super --iterations 25`.
 
 ## What's in metrics.json
 

@@ -428,6 +428,7 @@ function showError(error) {
 
 async function start() {
   $("designer-link").href = pageUrl("index.html");
+  $("results-link").href = pageUrl("results.html");
   try {
     state.health = await api("/health");
     renderService();

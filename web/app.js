@@ -774,6 +774,7 @@ async function start() {
   }
   renderService();
   $("runs-link").href = pageUrl("runs.html");
+  $("results-link").href = pageUrl("results.html");
   buildControls();
   loadRealCars();
   // three.js comes from a CDN; never hold the first prediction for it.

@@ -108,6 +108,26 @@ Moving sliders updates one row of the session history rather than adding a
 row per pause. A preset, a body-style change or a reloaded row starts a new
 row. Deltas are against the baseline design of the selected body style.
 
+## Results
+
+**http://localhost:5173/results.html** is a static page. It reads
+`web/results/metrics.json` (from the eval harness) and
+`web/results/benchmark.json` (from `src.eval.benchmark`), and needs no
+service. It shows:
+
+- the headline numbers;
+- R² against the noise ceiling for unseen designs and for an unseen body
+  style, beside the predict-the-average and straight-line references;
+- the reliability diagram;
+- how well each check catches the unseen body style;
+- the data-scaling curve;
+- the agent against CMA-ES and random search, as the median and middle-half
+  band over seeds.
+
+A harness `--label` shows as a banner. The committed files are a provisional
+local check until the final checkpoints are graded. See
+[src/eval/README.md](../src/eval/README.md) for both commands.
+
 ## Runs
 
 **http://localhost:5173/runs.html** compares optimisation runs. It shows the

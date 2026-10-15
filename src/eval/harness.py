@@ -40,6 +40,7 @@ import argparse
 import json
 import math
 import platform
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -487,6 +488,30 @@ def _clean(obj):
     return obj
 
 
+# A drive path (C:\ or C:/) or a rooted POSIX path, starting a word.
+_ABSOLUTE = re.compile(r"(?:(?<![\w.])[A-Za-z]:[\\/]|(?<![\w.:/])/(?=[^/\s]))[^\s\"']*")
+
+
+def portable_paths(obj, root: Path | None = None):
+    """Absolute paths made repo-relative, or cut to the file name when they
+    are outside the repo, so a published metrics file names no one's disk."""
+    root = (root or Path.cwd()).resolve()
+
+    def fix(match):
+        text = match.group(0)
+        try:
+            return Path(text).resolve().relative_to(root).as_posix()
+        except (ValueError, OSError):
+            return Path(text.replace("\\", "/")).name
+    if isinstance(obj, dict):
+        return {k: portable_paths(v, root) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [portable_paths(v, root) for v in obj]
+    if isinstance(obj, str) and ("/" in obj or "\\" in obj):
+        return _ABSOLUTE.sub(fix, obj)
+    return obj
+
+
 def write(metrics: dict, path) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -521,11 +546,13 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--cfd-hours", type=float, help="CFD wall-clock per design, for the speedup figure")
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--label", help="shown on the results page, e.g. 'Final: H100 checkpoints, Oct 26'")
     args = ap.parse_args(argv)
 
     metrics = evaluate(args.data, args.splits, args.checkpoint, args.ood_checkpoint, args.scaling,
                        seed=args.seed, cfd_hours=args.cfd_hours, device=args.device)
-    path = write(metrics, args.out)
+    metrics["label"] = args.label
+    path = write(portable_paths(metrics), args.out)
     print(summary(_clean(metrics)))
     print(f"\nwrote {path}")
     return 0

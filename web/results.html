@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aero Surrogate Results</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="results.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Aero Surrogate</h1>
+      <p class="tagline">How good the surrogate is, how far to trust it, and what the agent does with it.</p>
+    </div>
+    <nav class="pages" aria-label="Pages">
+      <a href="index.html" id="designer-link">Designer</a>
+      <a href="runs.html" id="runs-link">Runs</a>
+      <a href="results.html" aria-current="page">Results</a>
+    </nav>
+    <div class="service" id="source" role="status">
+      <span class="dot"></span><span class="service-text">Loading results…</span>
+    </div>
+  </header>
+
+  <div class="banner banner-warning" id="label-banner" hidden>
+    <span class="banner-icon" aria-hidden="true">!</span>
+    <span id="label-text"></span>
+  </div>
+
+  <div class="banner banner-critical" id="error-banner" hidden>
+    <span class="banner-icon" aria-hidden="true">✕</span>
+    <span id="error-text"></span>
+  </div>
+
+  <main class="results-page">
+    <section class="panel" aria-labelledby="headline-title">
+      <div class="panel-head">
+        <h2 id="headline-title">Headline</h2>
+        <span class="timing" id="provenance"></span>
+      </div>
+      <div class="tiles tiles-4" id="headline"></div>
+      <details class="caveats" id="caveats" hidden>
+        <summary id="caveats-summary"></summary>
+        <ul class="warnings" id="warnings"></ul>
+      </details>
+    </section>
+
+    <section class="panel" aria-labelledby="accuracy-title">
+      <div class="panel-head"><h2 id="accuracy-title">Accuracy against what is achievable</h2></div>
+      <p class="lede">R² of predicted against CFD drag on designs the model never trained on. The marked line is
+        the ceiling: the CFD's own run-to-run spread caps any model below 1.0.</p>
+      <div class="chart-pair">
+        <div><h3>Unseen designs</h3><div class="bars" id="acc-random"></div></div>
+        <div><h3 id="acc-ood-title">Unseen body style</h3><div class="bars" id="acc-ood"></div></div>
+      </div>
+      <div class="table-scroll">
+        <table class="history" id="per-category">
+          <thead><tr><th scope="col">Unseen designs by body style</th><th scope="col" class="num">R²</th>
+            <th scope="col" class="num">Ceiling</th><th scope="col" class="num">Share of ceiling</th>
+            <th scope="col" class="num">MAE</th><th scope="col" class="num">Designs</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="cal-title">
+      <div class="panel-head"><h2 id="cal-title">Are the error bars honest?</h2></div>
+      <p class="lede">For each nominal interval, the share of designs whose CFD drag actually fell inside the
+        predicted interval. On the diagonal is honest; below it, the bars are too narrow.</p>
+      <div class="legend run-legend" id="cal-legend"></div>
+      <div class="chart" id="calibration"></div>
+      <p class="chart-note" id="cal-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="gate-title">
+      <div class="panel-head"><h2 id="gate-title">Can the gate tell when the model is guessing?</h2></div>
+      <p class="lede" id="gate-lede"></p>
+      <div class="bars" id="gate"></div>
+      <p class="chart-note" id="gate-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="scaling-title">
+      <div class="panel-head"><h2 id="scaling-title">More data, better model?</h2></div>
+      <p class="lede">R² on the same fixed test set as the training set grows.</p>
+      <div class="legend run-legend" id="scaling-legend"></div>
+      <div class="chart" id="scaling"></div>
+      <p class="chart-note" id="scaling-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="bench-title">
+      <div class="panel-head">
+        <h2 id="bench-title">The agent against the optimisers</h2>
+        <select id="bench-pick" aria-label="Comparison" hidden></select>
+      </div>
+      <p class="lede" id="bench-lede"></p>
+      <div class="legend run-legend" id="bench-legend"></div>
+      <div class="chart" id="bench"></div>
+      <p class="chart-note">Lines are the median run; bands span the middle half of runs (25th to 75th
+        percentile). A method with one run has no band.</p>
+      <div class="table-scroll">
+        <table class="history compare" id="bench-table">
+          <thead><tr><th scope="col">Method</th><th scope="col" class="num">Runs</th>
+            <th scope="col" class="num">Median result</th><th scope="col" class="num">Best run</th>
+            <th scope="col" class="num">Found at (median)</th><th scope="col" class="num">Gated (median)</th>
+            <th scope="col" class="num">Time per step</th><th scope="col" class="num">Cost</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="chart-note" id="bench-note"></p>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>
