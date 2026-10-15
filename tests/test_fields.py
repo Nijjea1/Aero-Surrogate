@@ -1,0 +1,372 @@
+"""Tests for stage-2 surface field prediction.  OWNER: Avneet.
+
+Guards the things that fail silently: the split (by car, never by point), the
+freeze (so reported accuracy is the shipped accuracy), and the integration
+(which is the project's free consistency check on the field).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+
+from src.contracts import PRESSURE_REGIONS
+from src.data.fields import SurfaceFieldDataset, field_splits
+from src.train.field_model import (
+    LOGVAR_MAX,
+    LOGVAR_MIN,
+    GlobalGeometryEncoder,
+    LocalNeighbourhoodEncoder,
+    SurfaceFieldModel,
+    field_nll,
+    integrate_drag,
+)
+
+
+# --------------------------------------------------------------------------
+# A synthetic fields directory, so these tests need no DrivAerML download
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def fields_root(tmp_path_factory):
+    root = tmp_path_factory.mktemp("fieldroot")
+    out = root / "fields"
+    out.mkdir()
+    rng = np.random.default_rng(0)
+    for run in range(1, 13):
+        n = 900
+        xyz = rng.normal(size=(n, 3)).astype(np.float32)
+        xyz /= np.linalg.norm(xyz, axis=1, keepdims=True).clip(1e-6)
+        normal = xyz.copy()
+        area = rng.uniform(1e-5, 1e-4, size=n).astype(np.float32)
+        # a smooth, geometry-dependent "pressure" so a model can learn it
+        cp = (-0.3 + 0.5 * xyz[:, 0] - 0.2 * xyz[:, 2] + 0.02 * run).astype(np.float32)
+        meta = {
+            "run": run, "version": "fields-v1", "n_cells_total": n * 10,
+            "n_query": n, "centre": [0.0, 0.0, 0.0], "radius": 1.0,
+            "a_ref_m2": 2.2, "total_area_m2": float(area.sum() * 10),
+            "cd_integrated": 0.3, "cl_integrated": 0.05,
+            "regions": list(PRESSURE_REGIONS),
+            "cp_mean": float(cp.mean()), "cp_std": float(cp.std()),
+            "cd_reported": 0.3, "cl_reported": 0.05,
+        }
+        payload = {
+            "query_xyz": xyz, "query_normal": normal, "query_area": area,
+            "cp": cp, "pprime2": np.abs(cp).astype(np.float32),
+            "shear": rng.normal(size=(n, 3)).astype(np.float32) * 1e-3,
+            "region": rng.integers(0, len(PRESSURE_REGIONS), n).astype(np.int16),
+            "cloud_xyz": xyz[: 256].copy(),
+        }
+        with (out / f"run_{run}.tmp").open("wb") as fh:
+            np.savez_compressed(fh, **payload, meta=json.dumps(meta))
+        (out / f"run_{run}.tmp").replace(out / f"run_{run}.npz")
+    return root
+
+
+# --------------------------------------------------------------------------
+# Splits -- the decision that decides whether any number means anything
+# --------------------------------------------------------------------------
+
+
+def test_splits_are_by_run_and_disjoint():
+    runs = list(range(1, 31))
+    sp = field_splits(runs, val=5, test=5, seed=0)
+    assert len(sp["train"]) == 20 and len(sp["val"]) == 5 and len(sp["test"]) == 5
+    joined = sp["train"] + sp["val"] + sp["test"]
+    assert sorted(joined) == runs
+    assert len(set(joined)) == len(joined), "a run appears in two splits"
+
+
+def test_splits_are_reproducible_and_seed_dependent():
+    runs = list(range(1, 31))
+    assert field_splits(runs, seed=0) == field_splits(runs, seed=0)
+    assert field_splits(runs, seed=1) != field_splits(runs, seed=0)
+
+
+def test_splits_refuse_to_leave_no_training_runs():
+    with pytest.raises(ValueError):
+        field_splits(list(range(6)), val=3, test=3)
+
+
+def test_no_car_appears_in_two_splits_at_the_dataset_level(fields_root):
+    """The leak this guards is subtle: each car holds hundreds of points, so
+    splitting points instead of cars would score the model on interpolating
+    within a geometry it had already seen."""
+    sp = field_splits(list(range(1, 13)), val=2, test=2, seed=0)
+    sets = {name: SurfaceFieldDataset(fields_root, ids, n_query=64, n_cloud=64)
+            for name, ids in sp.items()}
+    seen: set[int] = set()
+    for ds in sets.values():
+        runs = {int(ds[i]["run"]) for i in range(len(ds))}
+        assert not (runs & seen), "a car is in two splits"
+        seen |= runs
+
+
+# --------------------------------------------------------------------------
+# Dataset
+# --------------------------------------------------------------------------
+
+
+def test_dataset_yields_model_shaped_items(fields_root):
+    ds = SurfaceFieldDataset(fields_root, [1, 2, 3], n_query=128, n_cloud=64)
+    item = ds[0]
+    assert item["cloud"].shape == (64, 3)
+    assert item["query_xyz"].shape == (128, 3)
+    assert item["query_normal"].shape == (128, 3)
+    assert item["cp"].shape == (128, 1)
+    assert item["query_area"].shape == (128,)
+    assert item["region"].shape == (128,)
+    assert float(item["area_scale"]) > 1.0, "scale must expand a subsample"
+
+
+def test_resampling_changes_points_across_epochs(fields_root):
+    """Each epoch should see a different slice of the same surface -- free
+    augmentation, and it stops the model memorising particular cells."""
+    ds = SurfaceFieldDataset(fields_root, [1], n_query=128, n_cloud=64,
+                             resample=True)
+    ds.set_epoch(0)
+    a = ds[0]["query_xyz"].copy()
+    ds.set_epoch(1)
+    b = ds[0]["query_xyz"].copy()
+    assert not np.array_equal(a, b)
+
+
+def test_eval_splits_do_not_resample(fields_root):
+    """Validation must be the same points every epoch or the metric wanders."""
+    ds = SurfaceFieldDataset(fields_root, [1], n_query=128, n_cloud=64,
+                             resample=False)
+    ds.set_epoch(0)
+    a = ds[0]["query_xyz"].copy()
+    ds.set_epoch(7)
+    assert np.array_equal(a, ds[0]["query_xyz"])
+
+
+def test_dataset_reports_a_missing_extraction_clearly(fields_root):
+    with pytest.raises(FileNotFoundError, match="--extract"):
+        SurfaceFieldDataset(fields_root, [999])
+
+
+def test_target_stats_come_from_the_given_runs_only(fields_root):
+    """Norm stats must be fitted on train runs alone, or the test
+    distribution leaks into the model."""
+    train = SurfaceFieldDataset(fields_root, [1, 2], n_query=64, n_cloud=64)
+    other = SurfaceFieldDataset(fields_root, [11, 12], n_query=64, n_cloud=64)
+    assert train.target_stats() != other.target_stats()
+
+
+# --------------------------------------------------------------------------
+# Model
+# --------------------------------------------------------------------------
+
+
+def test_global_encoder_is_permutation_invariant():
+    """A geometry is a SET of points. Shuffle it and the latent must not move,
+    or the model is partly learning point order."""
+    enc = GlobalGeometryEncoder(widths=(16, 32), latent_dim=32).eval()
+    cloud = torch.randn(2, 128, 3)
+    perm = torch.randperm(128)
+    with torch.no_grad():
+        a = enc(cloud)
+        b = enc(cloud[:, perm])
+    assert torch.allclose(a, b, atol=1e-5)
+
+
+def test_local_encoder_uses_relative_offsets_only():
+    """Translating the whole scene must not change the local feature: it
+    describes neighbourhood SHAPE, not absolute position."""
+    enc = LocalNeighbourhoodEncoder(k=8, out_dim=16).eval()
+    cloud, query = torch.randn(1, 64, 3), torch.randn(1, 16, 3)
+    shift = torch.tensor([[[3.0, -2.0, 7.0]]])
+    with torch.no_grad():
+        a = enc(query, cloud)
+        b = enc(query + shift, cloud + shift)
+    assert torch.allclose(a, b, atol=1e-5)
+
+
+def test_model_emits_mean_and_sigma_per_point():
+    m = SurfaceFieldModel(latent_dim=32, hidden=32, n_layers=2, local_dim=16).eval()
+    with torch.no_grad():
+        out = m(torch.randn(2, 128, 3), torch.randn(2, 64, 3), torch.randn(2, 64, 3))
+        mean, sigma = m.split(out)
+    assert out.shape == (2, 64, 2)
+    assert mean.shape == (2, 64, 1) and sigma.shape == (2, 64, 1)
+    assert (sigma > 0).all()
+
+
+def test_homoscedastic_model_emits_one_column():
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8,
+                          heteroscedastic=False).eval()
+    with torch.no_grad():
+        out = m(torch.randn(1, 32, 3), torch.randn(1, 8, 3), torch.randn(1, 8, 3))
+        _, sigma = m.split(out)
+    assert out.shape == (1, 8, 1)
+    assert float(sigma.abs().max()) == 0.0
+
+
+def test_logvar_is_clamped_both_ways():
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    wild = torch.tensor([[[0.0, -500.0], [0.0, 500.0]]])
+    _, sigma = m.split(wild)
+    assert torch.isfinite(sigma).all()
+    assert float(sigma[0, 0, 0]) == pytest.approx(np.exp(0.5 * LOGVAR_MIN), rel=1e-5)
+    assert float(sigma[0, 1, 0]) == pytest.approx(np.exp(0.5 * LOGVAR_MAX), rel=1e-5)
+
+
+def test_model_rejects_wrong_shapes():
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    with pytest.raises(ValueError):
+        m(torch.randn(8, 3), torch.randn(2, 4, 3), torch.randn(2, 4, 3))
+
+
+def test_freezing_the_mean_path_holds_the_field_still():
+    """The load-bearing invariant, as in stage 1. Compared in EVAL mode both
+    times: BatchNorm uses batch statistics in train mode, so a train-vs-eval
+    comparison would show drift that is not a leak."""
+    torch.manual_seed(0)
+    m = SurfaceFieldModel(latent_dim=32, hidden=32, n_layers=2, local_dim=16)
+    cloud, q, nrm = torch.randn(2, 64, 3), torch.randn(2, 32, 3), torch.randn(2, 32, 3)
+
+    m.eval()
+    with torch.no_grad():
+        before = m(cloud, q, nrm)[..., :1].clone()
+
+    params = m.freeze_mean_path()
+    assert params, "nothing left to train"
+    m.train()
+    opt = torch.optim.AdamW(params, lr=0.1)
+    for _ in range(25):
+        opt.zero_grad()
+        field_nll(m(cloud, q, nrm), torch.randn(2, 32, 1), m).backward()
+        opt.step()
+
+    m.eval()
+    with torch.no_grad():
+        after = m(cloud, q, nrm)
+    assert torch.allclose(before, after[..., :1], atol=1e-7), "the field moved"
+    assert float(m.split(after)[1].std()) > 0, "sigma did not train"
+
+
+def test_freeze_holds_batchnorm_statistics():
+    torch.manual_seed(0)
+    m = SurfaceFieldModel(latent_dim=32, hidden=32, n_layers=2, local_dim=16)
+    m.freeze_mean_path()
+    m.train()
+    bn = next(x for x in m.global_encoder.modules()
+              if isinstance(x, torch.nn.BatchNorm1d))
+    before = bn.running_mean.clone()
+    m(torch.randn(2, 64, 3), torch.randn(2, 32, 3), torch.randn(2, 32, 3))
+    assert torch.allclose(before, bn.running_mean)
+
+
+def test_freeze_refuses_without_a_variance_head():
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8,
+                          heteroscedastic=False)
+    with pytest.raises(RuntimeError):
+        m.freeze_mean_path()
+
+
+# --------------------------------------------------------------------------
+# Loss and integration
+# --------------------------------------------------------------------------
+
+
+def test_mean_only_loss_is_exactly_mse():
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    out = torch.tensor([[[1.0, 0.5], [2.0, -3.0]]])
+    target = torch.tensor([[[1.5], [1.0]]])
+    expected = torch.nn.functional.mse_loss(out[..., :1], target)
+    assert torch.allclose(field_nll(out, target, m, mean_only=True), expected)
+
+
+def test_field_nll_rewards_honest_per_point_error_bars():
+    m = SurfaceFieldModel(latent_dim=16, hidden=16, n_layers=1, local_dim=8)
+    target = torch.zeros(1, 1, 1)
+    confident_wrong = torch.tensor([[[3.0, -4.0]]])
+    humble_wrong = torch.tensor([[[3.0, 2.0]]])
+    assert float(field_nll(humble_wrong, target, m)) < float(
+        field_nll(confident_wrong, target, m))
+
+
+def test_constant_field_integrates_to_zero_drag():
+    """The sharpest diagnostic in stage 2: a model that predicts the mean Cp
+    everywhere scores a decent MAE and ZERO drag, because the normals cancel.
+    So integrated Cd measures whether the field is spatially resolved, which
+    MAE alone does not."""
+    n = 2048
+    rng = np.random.default_rng(0)
+    xyz = rng.normal(size=(n, 3))
+    normal = torch.tensor(xyz / np.linalg.norm(xyz, axis=1, keepdims=True),
+                          dtype=torch.float32).unsqueeze(0)
+    area = torch.full((1, n), 1e-4)
+    a_ref = torch.tensor([2.2])
+
+    flat = torch.full((1, n, 1), -0.30)
+    cd_flat = abs(float(integrate_drag(flat, normal, area, a_ref)))
+
+    # a field that varies WITH the normal does not cancel
+    varying = (-0.30 - 0.8 * normal[..., :1])
+    cd_varying = abs(float(integrate_drag(varying, normal, area, a_ref)))
+
+    # The claim is relative, not absolute: the absolute scale is set by the
+    # sampled area over A_ref (here 0.2048 / 2.2), so an absolute threshold
+    # would just encode this fixture's numbers.
+    assert cd_flat < 0.1 * cd_varying, (
+        f"constant {cd_flat:.5f} should be far below varying {cd_varying:.5f}")
+    assert cd_varying > 0.0
+
+
+def test_integration_scales_with_reference_area():
+    n = 256
+    normal = torch.zeros(1, n, 3)
+    normal[..., 0] = -1.0
+    cp = torch.full((1, n, 1), 1.0)
+    area = torch.full((1, n), 1.0 / n)
+    one = float(integrate_drag(cp, normal, area, torch.tensor([1.0])))
+    half = float(integrate_drag(cp, normal, area, torch.tensor([2.0])))
+    assert one == pytest.approx(1.0, rel=1e-5)
+    assert half == pytest.approx(0.5, rel=1e-5)
+
+
+# --------------------------------------------------------------------------
+# End to end
+# --------------------------------------------------------------------------
+
+
+def test_field_training_runs_and_checkpoints(fields_root, tmp_path):
+    from src.train.train_fields import train_fields
+
+    cfg = {
+        "run_name": "pytest-fields", "seed": 0,
+        "data": {"root": str(fields_root), "val_runs": 2, "test_runs": 2,
+                 "n_query": 128, "n_cloud": 64},
+        "model": {"latent_dim": 32, "local_k": 8, "local_dim": 16,
+                  "hidden": 32, "n_layers": 2, "dropout": 0.0,
+                  "heteroscedastic": True},
+        "train": {"epochs": 3, "variance_epochs": 3, "batch_size": 2,
+                  "lr": 1e-3, "variance_lr": 1e-3, "weight_decay": 1e-4,
+                  "grad_clip": 1.0, "patience": 5, "variance_patience": 5,
+                  "out_dir": str(tmp_path / "runs")},
+    }
+    result = train_fields(cfg, device_str="cpu")
+    test = result["test"]
+
+    for key in ("cp_r2", "cp_mae", "coverage_1sigma", "per_region",
+                "cd_partial_pred", "cd_partial_true"):
+        assert key in test, key
+    assert set(test["per_region"]) <= set(PRESSURE_REGIONS)
+
+    ckpt = torch.load(result["checkpoint"], map_location="cpu", weights_only=False)
+    for key in ("state_dict", "config", "norm_stats", "version",
+                "val_metrics", "test_metrics", "splits", "regions"):
+        assert key in ckpt, key
+    assert ckpt["norm_stats"]["cp_std"] > 0
+    # the splits must be recoverable, or the result is unreproducible
+    assert len(ckpt["splits"]["train"]) == 8
+
+    out = Path(result["checkpoint"]).parent
+    assert not (out / "last.pt").exists(), "finished run left resumable state"

@@ -1,0 +1,42 @@
+# Stage 2 — surface pressure field prediction on DrivAerML.
+#
+#   python -m src.data.drivaerml --runs 30 --download
+#   python -m src.data.preprocess --combine
+#   python -m src.data.fields --extract
+#   python -m src.train.train_fields --config configs/fields.yaml
+#
+# Sized for the M-series GPU (MPS) / a Kaggle T4 per the compute policy in
+# CLAUDE.md. No Nebius instance is involved.
+
+run_name: fields
+seed: 0
+
+data:
+  root: data/drivaerml
+  val_runs: 5
+  test_runs: 5                 # 20 train / 5 val / 5 test, as the DoMINO
+                               # fine-tuning recipe was validated on
+  n_query: 4096                # query points per car per step, resampled each
+                               # epoch from the 100k stored
+  n_cloud: 2048                # geometry cloud for the global encoder
+
+model:
+  latent_dim: 256              # global geometry latent
+  local_k: 16                  # nearest cloud points per query
+  local_dim: 64
+  hidden: 256
+  n_layers: 4
+  dropout: 0.0
+  heteroscedastic: true        # per-point sigma; the field's uncertainty
+
+train:
+  epochs: 120
+  variance_epochs: 80
+  batch_size: 4                # 4 cars x 4096 points = 16k points per step
+  lr: 1.0e-3
+  variance_lr: 1.0e-3
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  patience: 20
+  variance_patience: 15
+  out_dir: runs

@@ -253,3 +253,110 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# --------------------------------------------------------------------------
+# Dataset
+# --------------------------------------------------------------------------
+
+try:
+    from torch.utils.data import Dataset as _TorchDataset
+except Exception:  # pragma: no cover
+    _TorchDataset = object  # type: ignore[assignment, misc]
+
+
+def field_splits(runs: list[int], val: int = 5, test: int = 5,
+                 seed: int = 0) -> dict[str, list[int]]:
+    """Split BY RUN, never by point.
+
+    This is the one decision that decides whether the numbers mean anything.
+    Each car contributes 100,000 query points; splitting points would put the
+    same car in train and test, and the model would be scored on interpolating
+    within a geometry it had already seen. Generalisation here means a car it
+    has never seen, so whole runs move together.
+    """
+    rng = np.random.default_rng(seed)
+    shuffled = [int(runs[i]) for i in rng.permutation(len(runs))]
+    if val + test >= len(shuffled):
+        raise ValueError(f"val+test={val + test} leaves no training runs "
+                         f"out of {len(shuffled)}")
+    return {
+        "test": sorted(shuffled[:test]),
+        "val": sorted(shuffled[test:test + val]),
+        "train": sorted(shuffled[test + val:]),
+    }
+
+
+class SurfaceFieldDataset(_TorchDataset):  # type: ignore[misc, valid-type]
+    """One item per CAR: a geometry cloud plus a fresh sample of query points.
+
+    Re-sampling the query points every epoch is deliberate. A car holds 100,000
+    stored cells and an item yields a few thousand, so each epoch sees a
+    different slice of the same surface -- effectively free augmentation, and
+    it stops the model memorising particular cells.
+    """
+
+    def __init__(self, root: Path | str, runs: list[int], n_query: int = 4096,
+                 n_cloud: int = 2048, seed: int = 0, resample: bool = True):
+        self.dir = Path(root) / "fields"
+        self.runs = list(runs)
+        self.n_query = int(n_query)
+        self.n_cloud = int(n_cloud)
+        self.resample = bool(resample)
+        self._epoch = 0
+        self.seed = int(seed)
+
+        self.data: list[dict] = []
+        self.meta: list[dict] = []
+        for run in self.runs:
+            path = self.dir / f"run_{run}.npz"
+            if not path.exists():
+                raise FileNotFoundError(
+                    f"{path} -- run `python -m src.data.fields --extract` first")
+            arrays, meta = load_run(path)
+            self.data.append(arrays)
+            self.meta.append(meta)
+        self.regions: list[str] = self.meta[0]["regions"]
+
+    def set_epoch(self, epoch: int) -> None:
+        """Change the resampling seed so each epoch sees different cells."""
+        self._epoch = int(epoch)
+
+    def __len__(self) -> int:
+        return len(self.runs)
+
+    def target_stats(self) -> tuple[float, float]:
+        """Mean and sd of Cp over every stored cell in this split."""
+        cp = np.concatenate([d["cp"] for d in self.data])
+        return float(cp.mean()), float(cp.std())
+
+    def __getitem__(self, index: int) -> dict:
+        arrays, meta = self.data[index], self.meta[index]
+        n_stored = len(arrays["cp"])
+        base = self.runs[index] * 7919 + self.seed
+        rng = np.random.default_rng(base + (self._epoch if self.resample else 0))
+
+        q = min(self.n_query, n_stored)
+        take = rng.choice(n_stored, size=q, replace=False)
+        cloud = arrays["cloud_xyz"]
+        if self.n_cloud < len(cloud):
+            cloud = cloud[rng.choice(len(cloud), size=self.n_cloud, replace=False)]
+
+        return {
+            "cloud": cloud.astype(np.float32),
+            "query_xyz": arrays["query_xyz"][take],
+            "query_normal": arrays["query_normal"][take],
+            "query_area": arrays["query_area"][take],
+            "cp": arrays["cp"][take][:, None],
+            "pprime2": arrays["pprime2"][take],
+            "region": arrays["region"][take].astype(np.int64),
+            "a_ref": np.float32(meta["a_ref_m2"]),
+            # Ratio of the whole wetted surface to the area actually sampled.
+            # Multiplying a partial surface integral by this estimates the
+            # full-surface value, which is what makes the integrated Cd
+            # comparable with the reported one instead of ~1e-4 of it.
+            "area_scale": np.float32(
+                meta["total_area_m2"] / float(arrays["query_area"][take].sum())
+            ),
+            "run": np.int64(meta["run"]),
+        }
