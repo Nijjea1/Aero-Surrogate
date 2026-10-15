@@ -1,7 +1,9 @@
 // Aero Surrogate UI shell.  OWNER: Paramveer.
 //
-// Talks to Pranoy's service (src/service/app.py) and nothing else:
+// Talks to Pranoy's service (src/service/app.py):
 //   GET /health, GET /schema, POST /evaluate
+// and reads designs.json, real test-set cars with their CFD Cd, written by
+// `python -m src.eval.showcase`.
 //
 // The controls are built from /schema, so the page follows whatever parameter
 // space the service runs, without code changes here.
@@ -94,6 +96,8 @@ const state = {
   speedKmh: 110,
   area: null,         // frontal area of the car on screen, m^2, from /api/mesh
   baselineArea: null, // and of the selected style's baseline body
+  realCars: null,     // designs.json, when present
+  reference: null,    // the real car on screen, until any dial or the style changes
 };
 
 const VIEWER_CAPTIONS = {
@@ -143,6 +147,7 @@ function designRequest(params) {
   const body = { params };
   // body_style only exists from contracts 2.0.0; the 1.0.0 service forbids extra keys.
   if (state.bodyStyle) body.body_style = state.bodyStyle;
+  if (state.reference && state.bodyStyle) body.design_id = state.reference.design_id;
   return body;
 }
 
@@ -237,6 +242,7 @@ function buildControls() {
     });
     input.addEventListener("dblclick", () => {
       state.params[name] = schema.defaults[name];
+      markCustom();
       syncSliders();
       scheduleEvaluate();
     });
@@ -266,6 +272,7 @@ function applyPreset(key) {
   const preset = PRESETS[key];
   state.params = clampToBounds(preset.params(state.schema));
   state.label = preset.label;
+  setReference(null);
   state.session++;
   for (const button of document.querySelectorAll(".preset")) {
     button.setAttribute("aria-pressed", String(button.dataset.preset === key));
@@ -277,8 +284,103 @@ function applyPreset(key) {
 
 function markCustom() {
   state.label = "Custom";
+  setReference(null);  // edited, so no longer the car CFD measured
   for (const button of document.querySelectorAll(".preset")) button.setAttribute("aria-pressed", "false");
   $("preset-hint").textContent = "Your own design. Double-click a slider to reset it.";
+}
+
+// ---------------------------------------------------------------- real cars
+
+async function loadRealCars() {
+  try {
+    const response = await fetch("designs.json", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    const styles = state.schema.body_styles;
+    // Only cars this service can score: its body styles and every parameter in bounds.
+    const cars = (data.designs || []).filter((car) => Array.isArray(styles) && styles.includes(car.body_style) &&
+      Object.entries(state.schema.param_bounds).every(([k, [lo, hi]]) => car.params?.[k] >= lo && car.params[k] <= hi));
+    if (!cars.length) return;
+    state.realCars = { ...data, designs: cars };
+  } catch {
+    return;  // no file, no picker
+  }
+  const select = $("real-car");
+  for (const style of state.schema.body_styles) {
+    const group = document.createElement("optgroup");
+    group.label = style[0].toUpperCase() + style.slice(1);
+    for (const car of state.realCars.designs.filter((c) => c.body_style === style)) {
+      group.append(new Option(`${dragBand(car.cd_percentile)} · ${car.design_id} · CFD Cd ${fmt(car.cd_cfd, 4)}`, car.design_id));
+    }
+    if (group.children.length) select.append(group);
+  }
+  select.addEventListener("change", () => {
+    const car = state.realCars.designs.find((c) => c.design_id === select.value);
+    if (car) applyRealCar(car);
+  });
+  $("real-car-field").hidden = false;
+}
+
+function dragBand(percentile) {
+  return percentile < 34 ? "Low drag" : percentile > 66 ? "High drag" : "Typical";
+}
+
+function applyRealCar(car) {
+  state.params = clampToBounds(car.params);
+  state.bodyStyle = car.body_style;
+  $("body-style").value = car.body_style;
+  state.label = car.design_id;
+  state.session++;
+  for (const button of document.querySelectorAll(".preset")) button.setAttribute("aria-pressed", "false");
+  setReference(car);
+  $("preset-hint").textContent = "A real DrivAerNet car from the test set. The model never trained on it; " +
+    "CFD measured its drag, shown under the prediction.";
+  syncSliders();
+  runEvaluate();
+}
+
+function setReference(car) {
+  state.reference = car;
+  if (state.realCars) $("real-car").value = car ? car.design_id : "";
+}
+
+function renderCfd() {
+  const box = $("cfd-check");
+  const car = state.current.reference;
+  box.hidden = !car;
+  if (!car) return;
+  const e = state.current.evaluation;
+  const error = e.cd - car.cd_cfd;
+  const sigma = e.uncertainty;
+  const z = sigma > 0 ? Math.abs(error) / sigma : Infinity;
+
+  $("cfd-id").textContent = `${car.design_id} · ${car.body_style}`;
+  $("cfd-truth").textContent = fmt(car.cd_cfd, 4);
+  $("cfd-noise").textContent = typeof car.cd_cfd_std === "number" ? `solver spread ± ${fmt(car.cd_cfd_std, 4)}` : "";
+  $("cfd-pred").textContent = fmt(e.cd, 4);
+  $("cfd-sigma").textContent = `± ${fmt(sigma, 4)}`;
+  $("cfd-error").textContent = `${signed(error, 4)} (${signed((100 * error) / car.cd_cfd, 1)}%)`;
+  $("cfd-within").textContent = z <= 1 ? "within 1σ" : z <= 2 ? "within 2σ" : `${fmt(z, 1)}σ away`;
+  $("cfd-within").dataset.good = String(z <= 2);
+
+  // One Cd axis, wide enough for the 2σ interval and the CFD value with a margin.
+  const half = Math.max(2.6 * sigma, Math.abs(error) * 1.3, 0.004);
+  const mid = (e.cd + car.cd_cfd) / 2;
+  const lo = mid - half, hi = mid + half;
+  const at = (v) => `${((v - lo) / (hi - lo)) * 100}%`;
+  const span = (el, a, b) => { el.style.left = at(a); el.style.width = `calc(${at(b)} - ${at(a)})`; };
+  span($("cfd-band2"), e.cd - 2 * sigma, e.cd + 2 * sigma);
+  span($("cfd-band1"), e.cd - sigma, e.cd + sigma);
+  $("cfd-dot").style.left = at(e.cd);
+  $("cfd-mark").style.left = at(car.cd_cfd);
+  $("cfd-scale").textContent = `Cd ${fmt(lo, 3)} to ${fmt(hi, 3)}`;
+
+  const reason = rejectionReason(e, state.current.bodyStyle);
+  $("cfd-note").textContent = state.health?.synthetic
+    ? "The service is running the synthetic stub, so this comparison means nothing yet."
+    : reason
+      ? "The gate rejected this prediction, so the agent would not have trusted it either way."
+      : "A test-set car, chosen by its CFD drag, not by how well the model does on it.";
 }
 
 let pending = null;
@@ -294,7 +396,8 @@ async function runEvaluate({ record = true } = {}) {
     const result = await evaluate(params);
     if (!result) return;
     showError(null);
-    state.current = { ...result, params, label: state.label, bodyStyle: state.bodyStyle, session: state.session };
+    state.current = { ...result, params, label: state.label, bodyStyle: state.bodyStyle, session: state.session,
+      reference: state.reference };
     if (record) pushHistory(state.current);
     renderResult();
   } catch (error) {
@@ -356,6 +459,7 @@ function renderResult() {
   const latency = e.latency_ms > 0 ? `model ${fmt(e.latency_ms, 1)} ms · ` : "";
   $("timing").textContent = `${latency}round trip ${fmt(roundTrip, 0)} ms · ${e.model_version}`;
 
+  renderCfd();
   renderPressure(e.pressure_summary || {});
   renderHistory();
   state.viewer?.setRegionValues(e.pressure_summary || {});
@@ -626,6 +730,7 @@ function renderHistory() {
       state.params = { ...entry.params };
       state.label = entry.label;
       if (entry.bodyStyle) { state.bodyStyle = entry.bodyStyle; $("body-style").value = entry.bodyStyle; }
+      setReference(entry.reference || null);
       state.session++;
       syncSliders();
       runEvaluate({ record: false });  // already in the history
@@ -708,6 +813,7 @@ async function start() {
   }
   renderService();
   buildControls();
+  loadRealCars();
   // three.js comes from a CDN; never hold the first prediction for it.
   initViewer().then(() => refreshMesh({ ...state.params }));
 

@@ -50,6 +50,11 @@
       <div class="presets" role="group" aria-label="Preset designs" id="presets"></div>
       <p class="preset-hint" id="preset-hint"></p>
 
+      <div class="field" id="real-car-field" hidden>
+        <label for="real-car">Real car the model never saw</label>
+        <select id="real-car"><option value="">Pick a test-set car to check against CFD…</option></select>
+      </div>
+
       <div class="sliders" id="sliders"></div>
     </section>
 
@@ -136,6 +141,30 @@
           </div>
           <div class="tile-delta" id="sigma-note"></div>
         </div>
+      </div>
+
+      <div class="cfd-check" id="cfd-check" hidden>
+        <div class="cfd-head">
+          <h3>Against CFD ground truth</h3>
+          <span class="cfd-id" id="cfd-id"></span>
+        </div>
+        <dl class="cfd-numbers">
+          <div><dt>CFD</dt><dd id="cfd-truth"></dd><small id="cfd-noise"></small></div>
+          <div><dt>Predicted</dt><dd id="cfd-pred"></dd><small id="cfd-sigma"></small></div>
+          <div><dt>Error</dt><dd id="cfd-error"></dd><small id="cfd-within"></small></div>
+        </dl>
+        <div class="cfd-strip" id="cfd-strip" aria-hidden="true">
+          <span class="cfd-band2" id="cfd-band2"></span>
+          <span class="cfd-band1" id="cfd-band1"></span>
+          <span class="cfd-dot" id="cfd-dot"></span>
+          <span class="cfd-mark" id="cfd-mark"></span>
+        </div>
+        <div class="cfd-legend" aria-hidden="true">
+          <span><i class="cfd-key-band"></i>Prediction ± σ, ± 2σ</span>
+          <span><i class="cfd-key-mark"></i>CFD</span>
+          <span class="cfd-scale" id="cfd-scale"></span>
+        </div>
+        <p class="chart-note" id="cfd-note"></p>
       </div>
 
       <div class="chart-block">
