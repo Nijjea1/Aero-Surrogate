@@ -75,25 +75,28 @@ function renderSource() {
 function renderHeadline() {
   const m = state.metrics, h = m.headline, speed = m.speed || {};
   const noise = m.data?.noise_ceiling?.mean_label_std;
-  const tiles = [
+  const pct = (v) => `${fmt(100 * v, 0)} %`;
+  const style = h.held_out_category || "body style";
+  let line = `On designs it never trained on, the surrogate predicts drag with R² <b>${fmt(h.r2_in_distribution, 3)}</b>, ` +
+    `${pct(h.share_of_ceiling)} of what the CFD's own noise allows, in <b>${fmt(h.latency_ms, 2)} ms</b> a design.`;
+  if (h.r2_held_out_category != null) {
+    line += ` On a ${escapeHtml(style)} it never saw, R² falls to ${fmt(h.r2_held_out_category, 2)}` +
+      (h.ood_detection_rate == null ? "." : `, and the gate flags ${pct(h.ood_detection_rate)} of those designs.`);
+  }
+  $("headline-line").innerHTML = line;
+  const rows = [
     ["R² on unseen designs", fmt(h.r2_in_distribution, 3),
-      `${fmt(100 * h.share_of_ceiling, 0)}% of the ${fmt(h.r2_ceiling_test_set, 3)} the CFD noise allows. ` +
-      `A straight line gets ${fmt(h.r2_linear_reference, 3)}.`],
-    ["Typical error", `${fmt(h.mae_in_distribution, 4)}`,
-      `mean absolute error in Cd${noise ? `; the CFD's own spread is ${fmt(noise, 4)}` : ""}`],
-    [`Unseen ${h.held_out_category || "body style"}`, h.r2_held_out_category == null ? "–" : fmt(h.r2_held_out_category, 2),
-      h.ood_detection_rate == null ? "R² with that style held out of training"
-        : `R² when held out of training, and the gate flags ${fmt(100 * h.ood_detection_rate, 0)}% of them`],
+      `ceiling ${fmt(h.r2_ceiling_test_set, 3)} from the CFD noise; a straight line gets ${fmt(h.r2_linear_reference, 3)}`],
+    ["Typical error", `${fmt(h.mae_in_distribution, 4)} Cd`, noise ? `the CFD's own run-to-run spread is ${fmt(noise, 4)}` : "mean absolute error"],
+    [`R² on an unseen ${style}`, h.r2_held_out_category == null ? "–" : fmt(h.r2_held_out_category, 2),
+      h.ood_detection_rate == null ? "that style held out of training" : `gate flags ${pct(h.ood_detection_rate)} of them`],
     ["Time per design", `${fmt(h.latency_ms, 2)} ms`,
-      speed.speedup_vs_cfd ? `${Math.round(speed.speedup_vs_cfd).toLocaleString()}× faster than one CFD run`
-        : `${speed.device || "cpu"}, one design at a time`],
+      speed.speedup_vs_cfd ? `${Math.round(speed.speedup_vs_cfd).toLocaleString()}× faster than one CFD run` : `${speed.device || "cpu"}, one at a time`],
   ];
-  $("headline").replaceChildren(...tiles.map(([label, value, note]) => {
-    const tile = document.createElement("div");
-    tile.className = "tile";
-    tile.innerHTML = `<div class="tile-label">${escapeHtml(label)}</div><div class="tile-value">${escapeHtml(value)}</div>
-      <div class="tile-delta">${escapeHtml(note)}</div>`;
-    return tile;
+  $("headline").replaceChildren(...rows.map(([label, value, note]) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHtml(label)}</td><td class="num">${escapeHtml(value)}</td><td class="muted">${escapeHtml(note)}</td>`;
+    return tr;
   }));
   $("provenance").textContent = `${m.data?.n_designs ?? "?"} DrivAerNet designs · ${m.models?.in_distribution?.n_params?.toLocaleString() ?? "?"} parameters`;
   const warnings = m.warnings || [];
@@ -200,13 +203,50 @@ function renderScaling() {
   const xs = series.flatMap((d) => d.points.map((p) => p[0]));
   const ys = series.flatMap((d) => d.points.map((p) => p[1]));
   const ceiling = state.metrics.in_distribution?.overall?.r2_ceiling;
+  // Training size doubles from point to point, so the x axis is logarithmic.
+  const lo = Math.min(...xs, 50), hi = Math.max(...xs, 100);
   lineChart($("scaling"), {
-    series, x: [0, Math.max(...xs, 1)], y: [Math.min(0.5, ...ys) - 0.05, Math.max(ceiling ?? 0, ...ys) + 0.03],
+    series, x: [lo * 0.85, hi * 1.15], y: [Math.min(0.5, ...ys) - 0.05, Math.max(ceiling ?? 0, ...ys) + 0.03], logX: true,
+    xTicks: [50, 100, 250, 500, 1000, 2500, 5000].filter((t) => t >= lo * 0.85 && t <= hi * 1.15),
     hline: ceiling ? { y: ceiling, label: `ceiling ${fmt(ceiling, 3)}` } : null, markers: true,
-    xLabel: "training designs", yLabel: "R²", fmtX: (v) => Math.round(v).toLocaleString(), fmtY: (v) => fmt(v, 2),
+    xLabel: "training designs (log scale)", yLabel: "R²", fmtX: (v) => Math.round(v).toLocaleString(), fmtY: (v) => fmt(v, 2),
   });
-  $("scaling-note").textContent = s.model?.length ? ""
-    : "Only the straight-line reference so far: the surrogate's points arrive with checkpoints trained on subsets.";
+  $("scaling-note").textContent = scalingTakeaway(s, ceiling);
+}
+
+// What the curve says, in one or two sentences, from the points themselves.
+function scalingTakeaway(s, ceiling) {
+  const pts = s.model || [];
+  if (pts.length < 2) {
+    return "Only the straight-line reference so far: the surrogate's points arrive with checkpoints trained on subsets " +
+      "(python -m src.eval.scaling).";
+  }
+  const first = pts[0], last = pts[pts.length - 1], prev = pts[pts.length - 2];
+  const n = (p) => p.n_train.toLocaleString();
+  let text = `From ${n(first)} to ${n(last)} training designs, R² rises from ${fmt(first.r2, 2)} to ${fmt(last.r2, 2)}. ` +
+    `The last step, from ${n(prev)}, adds ${signed(last.r2 - prev.r2, 3)}`;
+  if (ceiling) text += `, with ${fmt(ceiling - last.r2, 3)} left below the ceiling`;
+  text += ".";
+  const linear = s.linear_reference || [];
+  // Where the network overtakes a straight line fitted to the same number of designs.
+  const lineAt = (n) => {
+    if (!linear.length) return null;
+    const below = [...linear].reverse().find((p) => p.n_train <= n) || linear[0];
+    const above = linear.find((p) => p.n_train >= n) || linear[linear.length - 1];
+    if (below === above || above.n_train === below.n_train) return below.r2;
+    const k = (Math.log(n) - Math.log(below.n_train)) / (Math.log(above.n_train) - Math.log(below.n_train));
+    return below.r2 + k * (above.r2 - below.r2);
+  };
+  const linLast = linear[linear.length - 1];
+  const beats = pts.find((p) => lineAt(p.n_train) !== null && p.r2 > lineAt(p.n_train));
+  if (linLast && beats) {
+    text += beats === first
+      ? ` It beats a straight line at every size; the line levels off near ${fmt(linLast.r2, 2)}.`
+      : ` With little data a straight line does better; the network overtakes it by ${n(beats)} designs and keeps improving ` +
+        `while the line levels off near ${fmt(linLast.r2, 2)}.`;
+  }
+  if (s.subsets) text += ` Subsets: ${s.subsets}.`;
+  return text;
 }
 
 // ---------------------------------------------------------------- benchmark
@@ -315,9 +355,10 @@ function lineChart(host, opts) {
   const width = Math.max(host.clientWidth, 260);
   const height = width < 560 ? 240 : 300;
   const m = { left: 56, right: 18, top: 12, bottom: 40 };
-  const X = (v) => m.left + ((v - x0) / (x1 - x0 || 1)) * (width - m.left - m.right);
+  const tx = opts.logX ? Math.log10 : (v) => v;
+  const X = (v) => m.left + ((tx(v) - tx(x0)) / (tx(x1) - tx(x0) || 1)) * (width - m.left - m.right);
   const Y = (v) => m.top + (1 - (v - y0) / (y1 - y0 || 1)) * (height - m.top - m.bottom);
-  const yt = ticks(y0, y1, 5), xt = ticks(x0, x1, width < 560 ? 4 : 6);
+  const yt = ticks(y0, y1, 5), xt = opts.xTicks || ticks(x0, x1, width < 560 ? 4 : 6);
   const parts = [];
   parts.push(`<g class="grid">${yt.map((t) => `<line x1="${m.left}" x2="${width - m.right}" y1="${Y(t)}" y2="${Y(t)}"/>`).join("")}</g>`);
   parts.push(`<g class="axis">${yt.map((t) => `<text x="${m.left - 8}" y="${Y(t) + 4}" text-anchor="end">${escapeHtml(fmtY(t))}</text>`).join("")}`
@@ -365,7 +406,8 @@ function lineChart(host, opts) {
   const cross = host.querySelector(".crosshair");
   host.querySelector(".hit").addEventListener("mousemove", (event) => {
     const box = host.querySelector("svg").getBoundingClientRect();
-    const xv = x0 + ((event.clientX - box.left - m.left) / (width - m.left - m.right)) * (x1 - x0);
+    const f = (event.clientX - box.left - m.left) / (width - m.left - m.right);
+    const xv = opts.logX ? 10 ** (tx(x0) + f * (tx(x1) - tx(x0))) : x0 + f * (x1 - x0);
     // Nearest plotted x across series.
     const all = [...new Set(series.flatMap((s) => s.points.map((p) => p[0])))];
     const near = all.reduce((a, b) => (Math.abs(b - xv) < Math.abs(a - xv) ? b : a), all[0]);

@@ -43,6 +43,11 @@
     <span id="error-text"></span>
   </div>
 
+  <section class="answer" aria-live="polite">
+    <p class="answer-line" id="answer-line">Loading runs…</p>
+    <p class="answer-sub" id="answer-sub"></p>
+  </section>
+
   <main class="layout">
     <div class="column">
     <section class="panel start-panel" aria-labelledby="start-title">
@@ -65,13 +70,16 @@
           <span>Body style</span>
           <select id="start-style"></select>
         </label>
-        <label class="form-col">
-          <span>Constraints <small>one rule per line, for example <code>A_Car_Roof_Height &gt;= 0</code></small></span>
-          <textarea id="start-constraints" rows="2" spellcheck="false" placeholder="optional"></textarea>
-        </label>
+        <details>
+          <summary>Constraints (optional)</summary>
+          <label class="form-col">
+            <span><small>One rule per line, for example <code>A_Car_Roof_Height &gt;= 0</code></small></span>
+            <textarea id="start-constraints" rows="2" spellcheck="false" aria-label="Constraints"></textarea>
+          </label>
+        </details>
         <div class="start-actions">
           <button type="submit" class="button primary" id="start-button">Start run</button>
-          <span class="start-hint">Evaluations include the unmodified car at step 0.</span>
+          <span class="start-hint">Step 0 is the unmodified car.</span>
         </div>
         <p class="start-status" id="start-status" role="status" aria-live="polite"></p>
       </form>
@@ -82,7 +90,7 @@
         <h2 id="runs-title">Runs</h2>
         <button type="button" class="link-button" id="refresh">Refresh</button>
       </div>
-      <p class="preset-hint">Tick up to four runs to compare. Click a name to read its steps.</p>
+      <p class="preset-hint">Tick up to four to compare; click a name for its logbook.</p>
       <ul class="run-list" id="run-list"></ul>
       <div class="run-empty" id="run-empty" hidden>
         <p>No runs in this service's log yet. Start one above, or from the repo root:</p>
@@ -101,8 +109,7 @@ python -m src.optim.baseline --method random --iterations 25</pre>
         </div>
         <div class="legend run-legend" id="legend"></div>
         <div class="chart" id="chart" role="img" aria-label="Best trusted Cd so far against evaluations, one line per run"></div>
-        <p class="chart-note" id="chart-note">Each line steps down when a run finds a lower Cd that the gate trusts.
-          Gated designs never count, so they appear only as × in the top lane.</p>
+        <p class="chart-note" id="chart-note">A line steps down when its run finds a lower Cd the gate trusts. × marks a gated design, which never counts.</p>
         <p class="chart-note viewer-warning" id="mix-warning" hidden></p>
 
         <div class="table-scroll">
@@ -152,9 +159,7 @@ python -m src.optim.baseline --method random --iterations 25</pre>
           <tbody id="logbook"></tbody>
         </table>
         </div>
-        <p class="chart-note">Each agent step is one logbook line: its hypothesis, the change, what it expected, and what
-          the score and the gate observed. The observation comes from the service, never from the model.
-          Click a row to read it in full. "Open" loads that design in the designer.</p>
+        <p class="chart-note">Each line: the agent's hypothesis and change, then what the service measured (never the model's own claim). Click a row to expand; "Open" loads the design.</p>
       </section>
     </div>
   </main>

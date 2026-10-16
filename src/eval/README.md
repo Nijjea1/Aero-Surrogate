@@ -45,6 +45,26 @@ The written file never contains absolute paths. Paths inside the repo become
 repo-relative, and anything else is cut to its file name, so a published file
 names nobody's disk.
 
+## Data-scaling curve
+
+```powershell
+# train the stage-1 model on 5, 10, 25, 50 and 100 % of the training split
+python -m src.eval.scaling train --config configs/drivaernet.yaml
+# grade them on the fixed test set and write the curve into the published metrics
+python -m src.data.dataset --config configs/drivaernet.yaml --dump-splits runs/splits.json
+python -m src.eval.scaling update --metrics web/results/metrics.json --splits runs/splits.json `
+    runs/scaling/scaling-005-random/best.pt runs/scaling/scaling-010-random/best.pt `
+    runs/scaling/scaling-025-random/best.pt runs/scaling/scaling-050-random/best.pt `
+    runs/scaling/scaling-100-random/best.pt
+```
+
+Training runs Track A's own trainer unchanged; only the random split's training
+ids are cut, to nested subsets (the 10 % set contains the 5 % set), so
+validation and the 625 test designs are the same for every point. `update`
+replaces `data_scaling.model` and leaves every other graded number alone. On CPU
+the five runs take about five minutes in all. The same checkpoints can instead
+be passed to the harness with `--scaling` in a full regrade.
+
 ## Agent against the baselines
 
 ```powershell

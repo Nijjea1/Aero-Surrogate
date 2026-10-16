@@ -177,6 +177,27 @@ def _scaling_curve(table, split, columns, fractions, rng) -> list[dict]:
     return points
 
 
+def score_scaling(table, split, paths, device, warnings) -> list[dict]:
+    """Checkpoints trained on growing subsets, each scored on the split's test
+    set: the model's own data-scaling curve, sorted by training-set size."""
+    y_test = table.column(D.TARGET, split["test"])
+    points = []
+    for p in paths:
+        m = CheckpointModel(p, device)
+        if m.held_out_category:
+            warnings.append(f"scaling checkpoint {p} was trained with a style held out; skipped")
+            continue
+        if not m.n_train:
+            warnings.append(f"scaling checkpoint {p} does not record its training-set size; skipped")
+            continue
+        mu, sigma = m.predict(D.design_matrix(table, split["test"], m.columns))
+        err = np.abs(mu - y_test)
+        points.append({"n_train": int(m.n_train), "r2": r2_score(y_test, mu), "mae": float(err.mean()),
+                       "coverage_1sigma": float(np.mean(err <= sigma)) if sigma is not None else None,
+                       "checkpoint": m.info["path"]})
+    return sorted(points, key=lambda r: r["n_train"])
+
+
 def _calibration_warnings(cal: dict | None) -> list[str]:
     if not cal or not cal.get("available"):
         return []
@@ -410,21 +431,10 @@ def evaluate(
     out["ood_detection"] = ood
 
     # --- data scaling -----------------------------------------------------
-    scaling_points = []
-    for p in scaling:
-        m = CheckpointModel(p, device)
-        if m.held_out_category:
-            warnings.append(f"scaling checkpoint {p} was trained with a style held out; skipped")
-            continue
-        if not m.n_train:
-            warnings.append(f"scaling checkpoint {p} does not record its training-set size; skipped")
-            continue
-        mu, _ = m.predict(D.design_matrix(table, rs["test"], m.columns))
-        scaling_points.append({"n_train": int(m.n_train), "r2": r2_score(y_test, mu),
-                               "mae": float(np.abs(mu - y_test).mean()), "checkpoint": m.info["path"]})
+    scaling_points = score_scaling(table, rs, scaling, device, warnings)
     out["data_scaling"] = {
         "test_set": "random split test, fixed for every point",
-        "model": sorted(scaling_points, key=lambda r: r["n_train"]),
+        "model": scaling_points,
         "linear_reference": _scaling_curve(table, rs, columns, (0.02, 0.05, 0.1, 0.25, 0.5, 1.0), rng),
     }
     if not scaling_points:
