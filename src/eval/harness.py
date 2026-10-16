@@ -250,6 +250,8 @@ def evaluate(
     cfd_hours: float | None = None,
     device: str = "cpu",
     n_synthetic: int = 2000,
+    field_checkpoint=None,
+    fields_root="data/drivaerml",
 ) -> dict:
     rng = np.random.default_rng(seed)
     warnings: list[str] = []
@@ -440,8 +442,15 @@ def evaluate(
     if not scaling_points:
         warnings.append("no --scaling checkpoints: the data-scaling curve has the linear reference only")
 
-    out["field"] = {"available": False,
-                    "reason": "stage 1 predicts Cd only; surface-pressure error arrives with stage 2"}
+    if field_checkpoint:
+        from .fields import grade_checkpoint
+
+        out["field"] = grade_checkpoint(field_checkpoint, fields_root, device)
+        if not out["field"]["available"]:
+            warnings.append(f"surface pressure not graded: {out['field']['reason']}")
+    else:
+        out["field"] = {"available": False,
+                        "reason": "no --field-checkpoint: surface-pressure error needs a stage-2 checkpoint"}
     out["headline"] = _headline(out)
     out["warnings"] = warnings
     return out
@@ -557,10 +566,13 @@ def main(argv=None) -> int:
     ap.add_argument("--cfd-hours", type=float, help="CFD wall-clock per design, for the speedup figure")
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--label", help="shown on the results page, e.g. 'Final: H100 checkpoints, Oct 26'")
+    ap.add_argument("--field-checkpoint", help="stage-2 surface-pressure checkpoint (graded on its own test cars)")
+    ap.add_argument("--fields-root", default="data/drivaerml", help="DrivAerML root holding fields/run_<n>.npz")
     args = ap.parse_args(argv)
 
     metrics = evaluate(args.data, args.splits, args.checkpoint, args.ood_checkpoint, args.scaling,
-                       seed=args.seed, cfd_hours=args.cfd_hours, device=args.device)
+                       seed=args.seed, cfd_hours=args.cfd_hours, device=args.device,
+                       field_checkpoint=args.field_checkpoint, fields_root=args.fields_root)
     metrics["label"] = args.label
     path = write(portable_paths(metrics), args.out)
     print(summary(_clean(metrics)))

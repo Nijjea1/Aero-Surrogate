@@ -44,6 +44,7 @@ async function start() {
     renderAccuracy();
     renderCalibration();
     renderGate();
+    renderField();
     renderScaling();
   }
   if (state.bench) renderBench();
@@ -51,7 +52,7 @@ async function start() {
   window.addEventListener("resize", () => {
     clearTimeout(resize);
     resize = setTimeout(() => {
-      if (state.metrics) { renderAccuracy(); renderCalibration(); renderGate(); renderScaling(); }
+      if (state.metrics) { renderAccuracy(); renderCalibration(); renderGate(); renderField(); renderScaling(); }
       if (state.bench) renderBenchChart();
     }, 120);
   });
@@ -187,6 +188,42 @@ function renderGate() {
   $("gate-note").textContent = ordinary
     ? `On ordinary unseen designs, the gate passes ${fmt(100 * ordinary.pass_rate, 1)}%. σ alone cannot do this job: ` +
       "a new body style widens σ by about a fifth while the error doubles."
+    : "";
+}
+
+// ---------------------------------------------------------------- surface pressure
+
+function renderField() {
+  const f = state.metrics.field || {};
+  $("field-body").hidden = !f.available;
+  if (!f.available) {
+    $("field-lede").textContent = "Not graded yet: " + (f.reason || "no surface-pressure checkpoint.") +
+      " Once there is one: python -m src.eval.fields --checkpoint <fields best.pt>.";
+    $("field-note").textContent = "";
+    return;
+  }
+  const o = f.overall, ref = f.references || {}, near = ref.nearest_training_car;
+  const pct = (v) => `${fmt(100 * v, 0)} %`;
+  $("field-lede").textContent = `On ${f.test_runs.length} DrivAerML cars it never trained on (${f.n_points.toLocaleString()} surface points), ` +
+    `predicted Cp scores R² ${fmt(o.r2, 2)} with a typical error of ${fmt(o.mae, 3)}` +
+    (near ? `; copying the nearest point on a training car scores ${fmt(near.r2, 2)}.` : ".") +
+    ` Its error bars hold ${pct(o.coverage_1sigma)} of the points where an honest 1σ band holds 68 %.`;
+  const rows = [
+    { label: "Predict the average", value: ref.mean?.r2, kind: "muted" },
+    ...(near ? [{ label: "Nearest training car", value: near.r2, kind: "muted" }] : []),
+    { label: "Surface model", value: o.r2, kind: "accent" },
+  ];
+  barChart($("field-acc"), rows, { domain: [0, 1], format: (v) => fmt(v, 3) });
+  const regions = Object.entries(f.per_region || {}).sort((a, b) => b[1].mae - a[1].mae);
+  const top = Math.max(0.05, ...regions.map(([, r]) => r.mae));
+  barChart($("field-regions"), regions.map(([name, r]) => ({
+    label: name, value: r.mae, kind: "accent",
+    note: `mean Cp ${signed(r.cp_true, 3)} measured, ${signed(r.cp_pred, 3)} predicted`,
+  })), { domain: [0, top * 1.1], format: (v) => fmt(v, 3) });
+  const c = f.integrated_cd;
+  $("field-note").textContent = c
+    ? `Integrated over each car, the predicted pressure drag averages ${fmt(c.pred_mean, 4)} against ${fmt(c.true_mean, 4)} ` +
+      `from CFD, off by ${fmt(c.mae, 4)} per car (${pct(c.mean_relative_error)}). Region means are what the designer's Regions paint shows.`
     : "";
 }
 
