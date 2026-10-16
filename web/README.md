@@ -39,6 +39,7 @@ To point the page at a different service, add `?api=` to the URL:
 | Cd, Cl, σ tiles, with deltas against the baseline design | `POST /evaluate` |
 | Trusted / Rejected badge | The same rules, in the same order, as `src/service/gate.py`: body style, σ against `uncertainty_threshold`, the distance score against `ood_score_threshold`, then the model's own distribution flag |
 | Pressure by region | `pressure_summary`. A region the model doesn't predict shows as n/a and is never filled in |
+| Real car picker and the CFD check | `web/designs.json`: real DrivAerNet cars from the test split, which the model never trained on, with their CFD Cd. Chosen by CFD drag (low, typical, high per style), not by model error. The check disappears as soon as a dial moves, because the design is then no longer the car CFD measured. Rebuild with `python -m src.eval.showcase` (add `--splits runs/splits.json` to match the served checkpoint's split). DrivAerNet is CC BY-NC 4.0 |
 | Synthetic banner | `GET /health` `synthetic: true`. The stub's numbers are never presented as results |
 | 3D car | `POST /api/mesh` → `src/geometry/viewer.py`. Drag to orbit, scroll to zoom, hover for region and Cp |
 | Airflow and road loads | The prediction plus the car's outline and frontal area from `/api/mesh`. See [Airflow](#airflow) |
