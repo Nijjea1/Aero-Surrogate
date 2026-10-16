@@ -60,6 +60,7 @@ from ..contracts import DEFAULT_BODY_STYLE, validate_body_style
 from .runlog import RunLog
 from .security import ADMIN, PUBLIC
 from .settings import AGENT_MODELS, Settings
+from .provenance import describe_predictor
 
 log = logging.getLogger(__name__)
 
@@ -437,6 +438,7 @@ class RunManager:
                 evaluator=designer.predictor_evaluator(self.predictor),
                 thresholds=designer.predictor_thresholds(self.predictor),
                 provenance=designer.predictor_provenance(self.predictor),
+                model_provenance=describe_predictor(self.predictor),
                 proposer=run.proposer, constraints=constraints, body_style=run.body_style,
                 run_budget_usd=run.run_budget_usd, should_stop=run.stop.is_set, on_step=on_step,
                 metadata={"started_by": run.role, "started_at": run.started_at, "requested_via": "api"},

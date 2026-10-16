@@ -82,6 +82,8 @@ class RunLog:
         """Create an empty run exclusively; existing IDs raise FileExistsError."""
         with _LOCK:
             path = self._path(run_id)
+            if self._event_path(run_id).exists():
+                raise FileExistsError(f"Run {run_id} already has an event log; choose a fresh ID")
             self.root.mkdir(parents=True, exist_ok=True)
             with path.open("x", encoding="utf-8"):
                 pass
@@ -93,6 +95,11 @@ class RunLog:
     def validate_run_id(self, run_id: str) -> None:
         """Raise ValueError unless run_id is a safe run identifier."""
         self._path(run_id)
+
+    def exists(self, run_id: str) -> bool:
+        """Either artifact reserves an identity, including an event-only failed run."""
+        with _LOCK:
+            return self._path(run_id).exists() or self._event_path(run_id).exists()
 
     def _event_path(self, run_id: str) -> Path:
         # A subdirectory, so list_runs' *.jsonl glob only ever sees scored runs.

@@ -152,6 +152,7 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
         should_stop: Callable[[], bool] | None = None,
         on_step: Callable[[dict, dict], None] | None = None,
         metadata: dict | None = None,
+        model_provenance: dict | None = None,
         log: RunLog | None = None) -> str:
     """Log up to `iterations` scored attempts, including baseline iteration zero.
 
@@ -190,18 +191,29 @@ def run(iterations: int, run_id: str, dry_run: bool, *,
     # Readiness checks come before the run is reserved, so a service that is
     # down cannot leave an orphaned, never-started run behind.
     if provenance is None:
-        provenance = describe_provenance(service_health()) if evaluator is None else "injected evaluator"
+        if evaluator is None:
+            health = service_health()
+            provenance = describe_provenance(health)
+            if model_provenance is None:
+                model_provenance = health.get("provenance") or {
+                    key: health.get(key) for key in ("predictor", "synthetic", "schema_version",
+                                                     "model_version", "checkpoint_sha256",
+                                                     "output_provenance")}
+        else:
+            provenance = "injected evaluator"
     if thresholds is None:
         thresholds = service_thresholds() if evaluator is None else {}
     log = log or RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
     log.reserve(run_id)
     log.append_event(run_id, {
+        **(metadata or {}),
         "type": "run_started", "mode": "scripted" if dry_run else "nemotron",
         "model": None if dry_run else proposer.client.model, "body_style": body_style,
         "thinking": None if dry_run else proposer.thinking,
         "evaluation_budget": iterations, "run_budget_usd": None if dry_run else run_budget_usd,
         "constraints": [str(c) for c in constraints],
-        "surrogate": provenance, "gate_thresholds": thresholds, **(metadata or {}),
+        "surrogate": provenance, "gate_thresholds": thresholds,
+        "model_provenance": model_provenance,
     })
     state = {"history": [], "best_cd": None, "timings": [], "verdicts": [], "carry": _no_carry()}
     try:
