@@ -250,18 +250,6 @@ stage 2 is sized for a single laptop-class GPU, so serving needs no GPU at all.
 - **DrivAerML** (stage 2): high-fidelity LES surface fields; see
   [`data/README.md`](data/README.md).
 - **Code:** MIT. See [LICENSE](LICENSE).
-
-## Team
-
-| | Track | Owns |
-|---|---|---|
-| **Avneet Nijjer** | Data and training | `src/data`, `src/train`, `configs` |
-| **Pranoy Mukherjee** | Agent and backend | `src/service`, `src/agent` |
-| **Paramveer Multani** | Geometry, evaluation and product | `src/geometry`, `src/eval`, `src/optim`, `web/` |
-
-The person who trains a model is the worst person to grade it, so grading
-lives on a different track from training. `src/contracts.py` is the frozen
-seam between the three, and `tests/test_contracts.py` is its tripwire.
-[`docs/PLAN.md`](docs/PLAN.md) has the plan and the gates it was built against.
+st.
 
 <p align="center"><img src="https://img.shields.io/badge/-Aero_Surrogate-ff5f1f?style=flat-square" alt=""></p>
