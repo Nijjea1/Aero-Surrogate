@@ -1,9 +1,11 @@
 // Shared by the designer (app.js), the run view (runs.js) and the results page.
 // OWNER: Paramveer.
 //
-// Point any page at another service with ?api=http://host:port
+// Which service: ?api=http://host:port on the page, else the address web/serve.py
+// was started with (config.js), else a service on this machine.
 
-export const API = (new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8000").replace(/\/$/, "");
+export const API = (new URLSearchParams(location.search).get("api") || globalThis.AERO_CONFIG?.api
+  || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 export const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 

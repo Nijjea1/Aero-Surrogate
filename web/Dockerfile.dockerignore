@@ -1,0 +1,12 @@
+# Context for web/Dockerfile (BuildKit reads this file instead of the root
+# .dockerignore, which keeps web/ out of the API image). Everything is
+# excluded except what the web image copies.
+*
+!src/__init__.py
+!src/contracts.py
+!src/geometry/
+!web/
+**/__pycache__/
+**/*.py[cod]
+web/Dockerfile
+web/Dockerfile.dockerignore
