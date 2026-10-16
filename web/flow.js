@@ -23,8 +23,17 @@
 //            carries the reaction) and up by downforce
 //   fuzz     the smoke trembles in proportion to predicted sigma, and turns grey
 //            when the gate rejects the prediction
+//   haze     a soft turbulent cloud behind the car, as dense and as long as the
+//            predicted wake
+//
+// Drawing: streamlines are screen-space lines a few pixels wide and the puffs
+// are soft glowing points, both added light-on-dark so bloom picks them up.
+// Alpha is folded into the colour, which additive blending needs.
 
 import * as THREE from "three";
+import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 
 const SLOW_MOTION = 0.15;          // screen speed / road speed
 const STEP = 0.02;                 // m, outline grid
@@ -33,19 +42,22 @@ const UPSTREAM = 2.8;              // m ahead of the nose where smoke is release
 const DOWNSTREAM = 7.0;            // m behind the tail where it is retired
 const EXP = 3.0;                   // superellipse sections, as in src/geometry
 const CP_RANGE = 0.5;              // smoke saturates sooner than paint, so it reads at a glance
-const RAKE_HEIGHTS = [0.14, 0.3, 0.48, 0.66, 0.84, 1.02, 1.22, 1.45, 1.7];
+const RAKE_HEIGHTS = [0.14, 0.26, 0.38, 0.5, 0.62, 0.74, 0.86, 0.98, 1.1, 1.24, 1.4, 1.58, 1.78];
 const RAKE_LANES = [0, 0.45, -0.45, 0.9, -0.9];   // across the car, so the smoke wraps the sides too
 const RAKE_SPACING = 0.08;         // m of travel between puffs from one nozzle
 const RAKE_SLOTS = 220;            // puffs alive per nozzle
 const VOLUME_PARTICLES = 1100;     // drive mode: free particles drawn as streaks
 const STREAK_SECONDS = 0.12;       // drive mode: a streak is where the particle was this long ago
 const CAPACITY = Math.max(RAKE_HEIGHTS.length * RAKE_LANES.length * RAKE_SLOTS, VOLUME_PARTICLES);
+const HAZE = 220;                  // soft puffs in the wake
+const LINE_PX = { tunnel: 2.2, drive: 1.8 };
 
 const COLOR = {
-  neg: new THREE.Color("#2a78d6"),
-  pos: new THREE.Color("#e34948"),
-  mid: new THREE.Color("#a8a7a1"),
-  grey: new THREE.Color("#9c9b96"),
+  neg: new THREE.Color("#4f86e0"),
+  pos: new THREE.Color("#e0553f"),
+  mid: new THREE.Color("#8e98a3"),
+  grey: new THREE.Color("#6f7781"),
+  haze: new THREE.Color("#6f8faf"),
 };
 
 export function createFlow(viewer) {
@@ -65,41 +77,40 @@ export function createFlow(viewer) {
   const prev = new Float32Array(CAPACITY * 3);
   const rgba = new Float32Array(CAPACITY * 4);
 
-  // ---- drawing: soft points plus line segments (streaklines or streaks)
-  const pointGeo = new THREE.BufferGeometry();
-  const pointPos = new THREE.BufferAttribute(new Float32Array(CAPACITY * 3), 3).setUsage(THREE.DynamicDrawUsage);
-  const pointCol = new THREE.BufferAttribute(new Float32Array(CAPACITY * 4), 4).setUsage(THREE.DynamicDrawUsage);
-  pointGeo.setAttribute("position", pointPos);
-  pointGeo.setAttribute("color", pointCol);
-  const points = new THREE.Points(pointGeo, new THREE.PointsMaterial({
-    size: 0.05, map: dotTexture(), vertexColors: true, transparent: true, depthWrite: false,
-  }));
-  const lineGeo = new THREE.BufferGeometry();
-  const linePos = new THREE.BufferAttribute(new Float32Array(CAPACITY * 6), 3).setUsage(THREE.DynamicDrawUsage);
-  const lineCol = new THREE.BufferAttribute(new Float32Array(CAPACITY * 8), 4).setUsage(THREE.DynamicDrawUsage);
-  lineGeo.setAttribute("position", linePos);
-  lineGeo.setAttribute("color", lineCol);
-  const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({
-    vertexColors: true, transparent: true, depthWrite: false,
-  }));
-  points.renderOrder = lines.renderOrder = 2;
-  points.frustumCulled = lines.frustumCulled = false;
-  group.add(lines, points);
+  // ---- drawing: glowing points plus screen-space lines (streaklines or streaks)
+  const points = glowPoints(CAPACITY, 0.05);
+  const pointPos = points.geometry.getAttribute("position");
+  const pointCol = points.geometry.getAttribute("rgba");
+  const lineGeo = new LineSegmentsGeometry();
+  lineGeo.setPositions(new Float32Array(CAPACITY * 6));
+  lineGeo.setColors(new Float32Array(CAPACITY * 6));
+  const lineMaterial = new LineMaterial({
+    vertexColors: true, linewidth: LINE_PX.tunnel, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const lines = new LineSegments2(lineGeo, lineMaterial);
+  const haze = glowPoints(HAZE, 0.9);
+  const hazePos = haze.geometry.getAttribute("position");
+  const hazeCol = haze.geometry.getAttribute("rgba");
+  points.renderOrder = lines.renderOrder = haze.renderOrder = 2;
+  points.frustumCulled = lines.frustumCulled = haze.frustumCulled = false;
+  group.add(haze, lines, points);
+  viewer.onResize((pw, ph, w, h) => {
+    lineMaterial.resolution.set(w, h);
+    const scale = ph / (2 * Math.tan(THREE.MathUtils.degToRad(viewer.camera.fov) / 2));
+    points.material.uniforms.scale.value = haze.material.uniforms.scale.value = scale;
+  });
 
-  // ---- road and wheel rims, drive mode only
+  // ---- the road world, drive mode only
   const road = makeRoad();
-  const rims = [];
   const scenery = new THREE.Group();        // drive mode: the road world
   const roadside = makeRoadside();
   scenery.add(road.mesh, roadside.group);
   scenery.visible = false;
   viewer.scene.add(scenery);
-  const floor = new THREE.GridHelper(18, 36, 0x8a8984, 0x8a8984);   // tunnel mode: depth cues
-  floor.material.transparent = true;
-  floor.material.opacity = 0.25;
-  floor.position.set(1.5, 0.001, 0);
-  floor.visible = false;
-  viewer.scene.add(floor);
+  const tunnel = makeTunnel();               // tunnel mode: the test section
+  tunnel.group.visible = false;
+  viewer.scene.add(tunnel.group);
   let travel = 0;                           // m the road has moved, for the roadside
   let warmed = false;
   let clock = 0;     // simulation time: every wobble and swirl runs on this, never the wall clock
@@ -175,10 +186,8 @@ export function createFlow(viewer) {
       tailB: at(outline.z_top, tail - 0.05) + 0.04,
       underHalf: 0.85 * at(outline.half_width, nose + 0.4),
       axles: outline.axles.map((a) => a - frame.cx),
-      wheelZ: outline.wheel_y + outline.tyre_width / 2 + 0.004,
       wheelR: outline.wheel_radius,
     };
-    buildRims();
     rebuildField();
   }
 
@@ -376,26 +385,27 @@ export function createFlow(viewer) {
     rgba[o] = c.r; rgba[o + 1] = c.g; rgba[o + 2] = c.b;
     // On the road, air the car is not disturbing fades back, so the eye goes
     // to the flow around the body rather than a screen full of streaks.
-    const focus = mode === "drive" ? 0.05 + 0.8 * near : 1;
-    rgba[o + 3] = Math.max(0, fade) * (field.trusted ? 0.9 : 0.55) * focus;
+    const focus = mode === "drive" ? 0.06 + 0.94 * near : 0.55 + 0.45 * near;
+    rgba[o + 3] = Math.max(0, fade) * (field.trusted ? 0.95 : 0.45) * focus;
   }
 
+  const L = lineGeo.attributes.instanceStart.data.array;
+  const LC = lineGeo.attributes.instanceColorStart.data.array;
   function draw() {
     let p = 0, l = 0;
-    const P = pointPos.array, PC = pointCol.array, L = linePos.array, LC = lineCol.array;
+    const P = pointPos.array, PC = pointCol.array;
     // From (ax, ay, az) to particle i; the far end fades to `tailAlpha` of i's.
+    // Additive blending: the alpha is folded into the colour.
     const segment = (i, ax, ay, az, tailAlpha) => {
-      const v = l * 6, o = i * 3, q = i * 4, w = l * 8;
+      const v = l * 6, o = i * 3, q = i * 4;
       L[v] = ax; L[v + 1] = ay; L[v + 2] = az;
       L[v + 3] = cur[o]; L[v + 4] = cur[o + 1]; L[v + 5] = cur[o + 2];
-      LC[w] = LC[w + 4] = rgba[q];
-      LC[w + 1] = LC[w + 5] = rgba[q + 1];
-      LC[w + 2] = LC[w + 6] = rgba[q + 2];
-      LC[w + 3] = rgba[q + 3] * tailAlpha;
-      LC[w + 7] = rgba[q + 3];
+      const a = rgba[q + 3] * (mode === "tunnel" ? 0.32 : 0.42), t = a * tailAlpha;
+      LC[v] = rgba[q] * t; LC[v + 1] = rgba[q + 1] * t; LC[v + 2] = rgba[q + 2] * t;
+      LC[v + 3] = rgba[q] * a; LC[v + 4] = rgba[q + 1] * a; LC[v + 5] = rgba[q + 2] * a;
       l++;
     };
-    const pointAlpha = mode === "tunnel" ? 0.45 : 1;
+    const pointAlpha = mode === "tunnel" ? 0.3 : 0.45;
     for (let i = 0; i < CAPACITY; i++) {
       if (!alive[i]) continue;
       const o = i * 3, q = i * 4;
@@ -419,19 +429,66 @@ export function createFlow(viewer) {
           cur[o + 2] - (cur[o + 2] - prev[o + 2]) * k, 0.15);
       }
     }
-    pointGeo.setDrawRange(0, p);
-    lineGeo.setDrawRange(0, l * 2);
-    pointPos.needsUpdate = pointCol.needsUpdate = linePos.needsUpdate = lineCol.needsUpdate = true;
-    points.material.size = mode === "tunnel" ? 0.035 : 0.03;
+    points.geometry.setDrawRange(0, p);
+    lineGeo.instanceCount = l;
+    lineGeo.attributes.instanceStart.data.needsUpdate = true;
+    lineGeo.attributes.instanceColorStart.data.needsUpdate = true;
+    pointPos.needsUpdate = pointCol.needsUpdate = true;
+    points.material.uniforms.size.value = mode === "tunnel" ? 0.045 : 0.04;
+    lineMaterial.linewidth = LINE_PX[mode] || 2;
+    drawHaze();
+  }
+
+  // ---- the wake haze: soft puffs released at the tail, carried slowly
+  // downstream and churned at the predicted swirl. More and longer-lived
+  // when the predicted wake is bigger.
+  const hx = new Float32Array(HAZE), hy = new Float32Array(HAZE), hz = new Float32Array(HAZE);
+  const hAge = new Float32Array(HAZE).fill(1), hLife = new Float32Array(HAZE).fill(1);
+  const hSeed = new Float32Array(HAZE);
+  function stepHaze(dt, t) {
+    const U = roadSpeed();
+    const active = Math.round(HAZE * (0.35 + 0.65 * field.wake));
+    for (let i = 0; i < HAZE; i++) {
+      hAge[i] += dt / hLife[i];
+      if (hAge[i] >= 1) {
+        if (i >= active) { hAge[i] = 1; continue; }
+        hAge[i] = 0;
+        hLife[i] = (1.2 + 2.4 * field.wake) * (0.6 + 0.8 * rng()) / Math.max(SLOW_MOTION * 4, 0.2);
+        hSeed[i] = rng() * 6.283;
+        hx[i] = shape.tail - 0.2 + rng() * 0.3;
+        hy[i] = shape.tailB * (0.25 + 0.6 * rng());
+        hz[i] = (rng() * 2 - 1) * shape.tailA * 0.75;
+      }
+      hx[i] += U * (0.35 + 0.25 * hAge[i]) * dt;
+      const swirl = field.swirl * 1.8;
+      hy[i] += Math.sin(t * 1.7 + hSeed[i]) * swirl * dt - field.downwash * 0.4 * dt;
+      hz[i] += Math.cos(t * 1.3 + hSeed[i] * 1.7) * swirl * dt;
+    }
+  }
+  function drawHaze() {
+    const P = hazePos.array, C = hazeCol.array;
+    const tint = field.trusted ? COLOR.haze : COLOR.grey;
+    let k = 0;
+    for (let i = 0; i < HAZE; i++) {
+      if (hAge[i] >= 1) continue;
+      const a = Math.sin(Math.PI * hAge[i]) * 0.022 * (0.5 + field.wake);
+      P[k * 3] = hx[i]; P[k * 3 + 1] = Math.max(0.05, hy[i]); P[k * 3 + 2] = hz[i];
+      C[k * 4] = tint.r; C[k * 4 + 1] = tint.g; C[k * 4 + 2] = tint.b; C[k * 4 + 3] = a;
+      k++;
+    }
+    haze.geometry.setDrawRange(0, k);
+    hazePos.needsUpdate = hazeCol.needsUpdate = true;
   }
 
   const stats = { frameMs: 0 };   // exponential mean of the work per frame
-  function tick(dt) {
+  function tick(frameDt) {
     if (!shape || !field) return;
+    const dt = Math.min(frameDt, 0.05);   // the integration stays stable on a slow frame
     if (!warmed) { warmUp(); warmed = true; }
     const started = performance.now();
     clock += dt;
     step(dt, clock);
+    stepHaze(dt, clock);
     draw();
     stats.frameMs = 0.9 * stats.frameMs + 0.1 * (performance.now() - started);
     if (mode === "drive") {
@@ -440,8 +497,14 @@ export function createFlow(viewer) {
       travel += U * dt;
       roadside.place(travel);
       wheelAngle += (U / shape.wheelR) * dt;
-      for (const rim of rims) rim.rotation.z = rim.userData.side * wheelAngle;
+      viewer.car?.spin(wheelAngle);
       sweepCamera(dt);
+    } else if (mode === "tunnel") {
+      // The rolling road runs at the air speed, and turns the wheels with it.
+      const U = roadSpeed();
+      tunnel.belt.offset.x -= (U * dt) / tunnel.tile;
+      wheelAngle += (U / shape.wheelR) * dt;
+      viewer.car?.spin(wheelAngle);
     }
   }
 
@@ -480,38 +543,20 @@ export function createFlow(viewer) {
       const path = UPSTREAM + (shape.tail - shape.nose) + DOWNSTREAM;
       steps = Math.ceil(path / Math.max(roadSpeed(), 0.5) / dt) + 4;
     }
-    for (let k = 0; k < steps; k++) { clock += dt; step(dt, clock); }
+    for (let k = 0; k < steps; k++) { clock += dt; step(dt, clock); stepHaze(dt, clock); }
     draw();
   }
 
   function reset() {
     warmed = false;
     alive.fill(0);
+    hAge.fill(1);
     nozzleCarry.fill(0);
     nozzleSeq.fill(0);
     rng = mulberry32(7);
   }
 
   // ------------------------------------------------------------ scenery
-
-  const rimMaterial = new THREE.MeshStandardMaterial({ map: rimTexture(), metalness: 0.6, roughness: 0.35 });
-  let rimGeometry = null;
-  function buildRims() {
-    for (const rim of rims) scenery.remove(rim);
-    rims.length = 0;
-    rimGeometry?.dispose();
-    rimGeometry = new THREE.CircleGeometry(shape.wheelR * 0.68, 40);
-    for (const x of shape.axles) {
-      for (const side of [1, -1]) {
-        const rim = new THREE.Mesh(rimGeometry, rimMaterial);
-        rim.position.set(x, shape.wheelR, side * shape.wheelZ);
-        if (side < 0) rim.rotateY(Math.PI);
-        rim.userData.side = side;
-        rims.push(rim);
-        scenery.add(rim);
-      }
-    }
-  }
 
   // ------------------------------------------------------------ controls
 
@@ -524,8 +569,8 @@ export function createFlow(viewer) {
     mode = next;
     group.visible = mode !== "off";
     scenery.visible = mode === "drive";
-    floor.visible = mode === "tunnel";
-    setAtmosphere(mode === "drive");
+    tunnel.group.visible = mode === "tunnel";
+    setAtmosphere(mode);
     reset();
     autoCamera = true;
     resumeAt = 0;
@@ -534,22 +579,14 @@ export function createFlow(viewer) {
     run();
   }
 
-  // Drive mode gets a sky and distance fog in the page's own colours, so the
-  // road runs to a horizon in either theme.
-  function setAtmosphere(on) {
+  // The road runs at dusk and the tunnel is dark, whatever the page theme:
+  // the smoke is light on dark, and it glows. Fog starts far enough out that
+  // the air round the car stays crisp.
+  const SKY = { drive: skyTexture("#02040a", "#0f1a2a", "#2a3a52"), tunnel: skyTexture("#030407", "#080b10", "#0d121a") };
+  function setAtmosphere(next) {
     const scene = viewer.scene;
-    if (!on) {
-      scene.background = null;
-      scene.fog = null;
-      return;
-    }
-    const page = getComputedStyle(document.documentElement).getPropertyValue("--page").trim() || "#f9f9f7";
-    const horizon = new THREE.Color(page);
-    const dark = horizon.getHSL({}).l < 0.5;
-    const zenith = horizon.clone().lerp(new THREE.Color(dark ? "#1d2a3a" : "#a9c4de"), 0.75);
-    scene.background = skyTexture(zenith, horizon);
-    scene.fog = new THREE.Fog(horizon, 18, 70);
-    roadside.tint(dark);
+    scene.background = SKY[next] || null;
+    scene.fog = next === "drive" ? new THREE.Fog("#0d1520", 28, 110) : null;
   }
 
   function setPaused(value) {
@@ -561,7 +598,7 @@ export function createFlow(viewer) {
     speedKmh = kmh;
   }
 
-  return { setShape, setPrediction, setMode, setPaused, setSpeed, stats, get mode() { return mode; } };
+  return { setShape, setPrediction, setMode, setPaused, setSpeed, stats, scenery, get mode() { return mode; } };
 }
 
 // ---------------------------------------------------------------- helpers
@@ -576,15 +613,17 @@ function makeRoadside() {
   const N_TREES = 46;
   const postGeo = new THREE.BoxGeometry(0.08, 0.9, 0.08);
   postGeo.translate(0, 0.45, 0);
-  const posts = new THREE.InstancedMesh(postGeo, new THREE.MeshStandardMaterial({ color: "#d9d8d2", roughness: 0.6 }), N_POSTS);
+  const posts = new THREE.InstancedMesh(postGeo, new THREE.MeshStandardMaterial({
+    color: "#cfd3d8", roughness: 0.6, emissive: "#ffb347", emissiveIntensity: 0.12,
+  }), N_POSTS);
   const trunkGeo = new THREE.CylinderGeometry(0.09, 0.12, 1.2, 6);
   trunkGeo.translate(0, 0.6, 0);
   const crownGeo = new THREE.ConeGeometry(1.0, 3.2, 8);
   crownGeo.translate(0, 2.6, 0);
-  const crownMat = new THREE.MeshStandardMaterial({ color: "#56724f", roughness: 0.85, flatShading: true });
-  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ color: "#5b4a3a", roughness: 0.9 }), N_TREES);
+  const crownMat = new THREE.MeshStandardMaterial({ color: "#1d2b22", roughness: 0.85, flatShading: true });
+  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ color: "#2a2119", roughness: 0.9 }), N_TREES);
   const crowns = new THREE.InstancedMesh(crownGeo, crownMat, N_TREES);
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: "#7d876f", roughness: 1 }));
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: "#0c110d", roughness: 1 }));
   grass.rotation.x = -Math.PI / 2;
   grass.position.y = -0.01;
   group.add(grass, posts, trunks, crowns);
@@ -609,22 +648,69 @@ function makeRoadside() {
     trunks.instanceMatrix.needsUpdate = true;
     crowns.instanceMatrix.needsUpdate = true;
   }
-  function tint(dark) {
-    grass.material.color.set(dark ? "#2b3128" : "#7d876f");
-    crownMat.color.set(dark ? "#33452f" : "#56724f");
-  }
   place(0);
-  return { group, place, tint };
+  return { group, place };
 }
 
-function skyTexture(zenith, horizon) {
+// The test section: a measuring grid on the wall behind the car (0.1 m minor,
+// 0.5 m major lines) and a rolling road under it that runs at the air speed.
+function makeTunnel() {
+  const group = new THREE.Group();
+  const grid = document.createElement("canvas");
+  grid.width = grid.height = 256;
+  const g = grid.getContext("2d");
+  g.fillStyle = "#0d1116";
+  g.fillRect(0, 0, 256, 256);
+  for (let k = 0; k <= 10; k++) {
+    const at = Math.round((k / 10) * 256);
+    g.fillStyle = k % 5 === 0 ? "rgba(120,160,210,0.28)" : "rgba(120,160,210,0.11)";
+    g.fillRect(at - (k % 5 === 0 ? 1 : 0), 0, k % 5 === 0 ? 2 : 1, 256);
+    g.fillRect(0, at - (k % 5 === 0 ? 1 : 0), 256, k % 5 === 0 ? 2 : 1);
+  }
+  const gridTexture = new THREE.CanvasTexture(grid);
+  gridTexture.wrapS = gridTexture.wrapT = THREE.RepeatWrapping;
+  gridTexture.colorSpace = THREE.SRGBColorSpace;
+  gridTexture.anisotropy = 4;
+  gridTexture.repeat.set(26, 7);
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(26, 7), new THREE.MeshBasicMaterial({ map: gridTexture }));
+  wall.position.set(1.5, 3.5, -3.6);
+
+  const beltCanvas = document.createElement("canvas");
+  beltCanvas.width = 256;
+  beltCanvas.height = 64;
+  const b = beltCanvas.getContext("2d");
+  b.fillStyle = "#16181c";
+  b.fillRect(0, 0, 256, 64);
+  b.fillStyle = "rgba(255,255,255,0.07)";
+  b.fillRect(0, 0, 3, 64);
+  b.fillRect(128, 0, 3, 64);
+  const belt = new THREE.CanvasTexture(beltCanvas);
+  belt.wrapS = belt.wrapT = THREE.RepeatWrapping;
+  belt.colorSpace = THREE.SRGBColorSpace;
+  belt.anisotropy = 8;
+  const tile = 1;                            // m of belt per texture repeat
+  belt.repeat.set(26 / tile, 1);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 7.2), new THREE.MeshStandardMaterial({ color: "#0b0d10", roughness: 0.9 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(1.5, 0.0004, 0);
+  floor.receiveShadow = true;
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(26, 2.8), new THREE.MeshStandardMaterial({ map: belt, roughness: 0.75, envMapIntensity: 0.2 }));
+  road.rotation.x = -Math.PI / 2;
+  road.position.set(1.5, 0.0008, 0);
+  road.receiveShadow = true;
+  group.add(wall, floor, road);
+  return { group, belt, tile };
+}
+
+function skyTexture(zenith, mid, horizon) {
   const canvas = document.createElement("canvas");
   canvas.width = 2;
   canvas.height = 256;
   const ctx = canvas.getContext("2d");
   const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, "#" + zenith.getHexString());
-  g.addColorStop(1, "#" + horizon.getHexString());
+  g.addColorStop(0, zenith);
+  g.addColorStop(0.62, mid);
+  g.addColorStop(1, horizon);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 2, 256);
   const texture = new THREE.CanvasTexture(canvas);
@@ -637,13 +723,13 @@ function makeRoad() {
   canvas.width = 512;
   canvas.height = 256;
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#3a3a38";
+  ctx.fillStyle = "#17191c";
   ctx.fillRect(0, 0, 512, 256);
-  for (let k = 0; k < 900; k++) {   // a little asphalt grain
-    ctx.fillStyle = `rgba(255,255,255,${0.02 + Math.random() * 0.04})`;
+  for (let k = 0; k < 1400; k++) {   // asphalt grain
+    ctx.fillStyle = `rgba(255,255,255,${0.015 + Math.random() * 0.035})`;
     ctx.fillRect(Math.random() * 512, Math.random() * 256, 2, 2);
   }
-  ctx.fillStyle = "#e9e8e3";
+  ctx.fillStyle = "#d9dde2";
   ctx.fillRect(0, 18, 512, 6);          // edge line
   ctx.fillRect(0, 232, 512, 6);         // edge line
   ctx.fillRect(0, 125, 256, 6);         // centre dash
@@ -656,49 +742,43 @@ function makeRoad() {
   texture.repeat.set(length / tile, 1);
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(length, 7.5),
-    new THREE.MeshStandardMaterial({ map: texture, roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ map: texture, roughness: 0.72, metalness: 0.05, envMapIntensity: 0.35 }),   // damp asphalt
   );
   mesh.rotation.x = -Math.PI / 2;
+  mesh.receiveShadow = true;
   mesh.position.set(length / 2 - 45, 0.0005, -1.7);   // the car in the near lane
   return { mesh, texture, tile };
 }
 
-function rimTexture() {
-  const size = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  const c = size / 2;
-  ctx.fillStyle = "#b9bcc2";
-  ctx.beginPath(); ctx.arc(c, c, c - 1, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#2b2b2a";
-  for (let k = 0; k < 5; k++) {          // five gaps between five spokes
-    const a = (k / 5) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(c + Math.cos(a + 0.22) * 18, c + Math.sin(a + 0.22) * 18);
-    ctx.arc(c, c, c - 9, a + 0.32, a + (Math.PI * 2) / 5 - 0.32);
-    ctx.lineTo(c + Math.cos(a + (Math.PI * 2) / 5 - 0.22) * 18, c + Math.sin(a + (Math.PI * 2) / 5 - 0.22) * 18);
-    ctx.fill();
-  }
-  ctx.fillStyle = "#77797d";
-  ctx.beginPath(); ctx.arc(c, c, 12, 0, Math.PI * 2); ctx.fill();
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-function dotTexture() {
-  const size = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.4, "rgba(255,255,255,0.5)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  return new THREE.CanvasTexture(canvas);
+// Soft glowing points with size attenuation; colour premultiplied by alpha.
+function glowPoints(capacity, size) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  geometry.setAttribute("rgba", new THREE.BufferAttribute(new Float32Array(capacity * 4), 4).setUsage(THREE.DynamicDrawUsage));
+  geometry.setDrawRange(0, 0);
+  const material = new THREE.ShaderMaterial({
+    uniforms: { size: { value: size }, scale: { value: 600 } },
+    vertexShader: `
+      attribute vec4 rgba;
+      uniform float size;
+      uniform float scale;
+      varying vec4 vColor;
+      void main() {
+        vColor = rgba;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = clamp(size * scale / -mv.z, 1.0, 96.0);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      varying vec4 vColor;
+      void main() {
+        float r = length(gl_PointCoord - 0.5) * 2.0;
+        float a = smoothstep(1.0, 0.0, r);
+        gl_FragColor = vec4(vColor.rgb * vColor.a * a * a, 1.0);
+      }`,
+    blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+  });
+  return new THREE.Points(geometry, material);
 }
 
 function interp(xs, ys, x) {

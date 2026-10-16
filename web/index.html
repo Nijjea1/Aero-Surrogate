@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Aero Surrogate</title>
+  <meta name="description" content="Drag, lift and a confidence verdict for a car design in milliseconds, with the airflow in 3D.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">
     {"imports": {
@@ -11,16 +15,28 @@
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
     }}
   </script>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js">
   <script type="module" src="app.js"></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <h1>Aero Surrogate</h1>
-      <p class="tagline">Drag, lift and a confidence verdict for one car design, in milliseconds.</p>
+      <span class="logo" id="logo" aria-hidden="true"></span>
+      <div>
+        <h1>Aero Surrogate</h1>
+        <p class="tagline">Drag and a trust verdict for a car design, in milliseconds.</p>
+      </div>
     </div>
-    <div class="service" id="service-status" role="status">
-      <span class="dot"></span><span class="service-text">Connecting to the service…</span>
+    <nav class="pages" aria-label="Pages">
+      <a href="index.html" aria-current="page">Design</a>
+      <a href="runs.html" id="runs-link">Runs</a>
+      <a href="results.html" id="results-link">Results</a>
+    </nav>
+    <div class="topbar-end">
+      <div class="service" id="service-status" role="status">
+        <span class="dot"></span><span class="service-text">Connecting…</span>
+      </div>
+      <button type="button" class="icon-button" id="theme-toggle" aria-label="Switch theme"></button>
     </div>
   </header>
 
@@ -35,162 +51,210 @@
     <span id="error-text"></span>
   </div>
 
-  <main class="layout">
-    <section class="panel design" aria-labelledby="design-title">
-      <div class="panel-head">
-        <h2 id="design-title">Design</h2>
-        <button type="button" class="link-button" id="reset-button">Reset to baseline</button>
-      </div>
-
-      <div class="field" id="body-style-field" hidden>
-        <label for="body-style">Body style</label>
-        <select id="body-style"></select>
-      </div>
-
-      <div class="presets" role="group" aria-label="Preset designs" id="presets"></div>
-      <p class="preset-hint" id="preset-hint"></p>
-
-      <div class="field" id="real-car-field" hidden>
-        <label for="real-car">Real car the model never saw</label>
-        <select id="real-car"><option value="">Pick a test-set car to check against CFD…</option></select>
-      </div>
-
-      <div class="sliders" id="sliders"></div>
-    </section>
-
-    <div class="column">
-    <section class="panel viewer-panel" aria-labelledby="viewer-title">
-      <div class="panel-head">
-        <h2 id="viewer-title">Shape</h2>
-        <div class="segmented" role="group" aria-label="Colour the car by" id="viewer-modes">
-          <button type="button" data-mode="field" aria-pressed="true">Pressure</button>
-          <button type="button" data-mode="regions" aria-pressed="false">Regions</button>
-          <button type="button" data-mode="plain" aria-pressed="false">Plain</button>
+  <main class="studio">
+    <aside class="drawer" aria-labelledby="design-title">
+      <div class="drawer-head">
+        <div class="panel-head" style="margin: 0">
+          <h2 id="design-title">Design</h2>
+          <button type="button" class="link-button" id="reset-button">Reset to baseline</button>
         </div>
+        <div class="field" id="body-style-field" hidden>
+          <span class="field-label" id="body-style-label">Body style</span>
+          <div class="segmented wide" role="group" aria-labelledby="body-style-label" id="body-style"></div>
+        </div>
+        <div class="field">
+          <span class="field-label">Start from</span>
+          <div class="presets" role="group" aria-label="Preset designs" id="presets"></div>
+        </div>
+        <div class="field" id="real-car-field" hidden>
+          <label class="field-label" for="real-car">Real car the model never saw</label>
+          <select id="real-car"><option value="">Pick a test-set car to check against CFD…</option></select>
+        </div>
+        <p class="preset-hint" id="preset-hint"></p>
       </div>
-      <div class="viewer" id="viewer">
-        <div class="viewer-message" id="viewer-message">Loading the 3D view…</div>
-        <div class="flow-hud" id="flow-hud" hidden>
-          <div class="hud-title"><span id="hud-speed">110 km/h</span><span class="hud-sub">from the prediction</span></div>
-          <dl>
-            <div><dt>Drag force</dt><dd><span id="hud-drag">–</span><small id="hud-drag-delta"></small></dd></div>
-            <div><dt>Power to push the air</dt><dd><span id="hud-power">–</span></dd></div>
-            <div><dt>Energy, drag only</dt><dd><span id="hud-energy">–</span><small id="hud-energy-delta"></small></dd></div>
-            <div><dt>Lift <abbr title="Cl is predicted but not yet validated against CFD">unvalidated</abbr></dt><dd><span id="hud-lift">–</span></dd></div>
+      <div class="drawer-body" id="sliders"></div>
+    </aside>
+
+    <div class="stage-col">
+      <section class="stage-wrap" aria-label="3D view">
+        <div class="stage" id="stage">
+          <div class="viewer" id="viewer"></div>
+          <div class="viewer-message" id="viewer-message"><div><div class="loader"></div>Loading the 3D view…</div></div>
+          <div class="pins" id="pins" aria-label="Values on the car"></div>
+
+          <div class="stage-cap" id="stage-cap">
+            <span id="cap-scene">Road</span>
+            <span>V <b id="cap-speed">110 km/h</b></span>
+            <span>Re <b id="cap-re">–</b></span>
+            <span id="cap-extra"></span>
+          </div>
+          <div class="stage-tag" id="stage-tag">
+            <div class="k" id="tag-state" data-state="pending">Cd</div>
+            <div class="v" id="tag-cd">–</div>
+            <div class="d" id="tag-drag"></div>
+          </div>
+          <div class="hud-flag" id="hud-flag" hidden>The gate rejected this prediction: the airflow is greyed out</div>
+
+          <div class="stage-legend" id="cp-legend" hidden>
+            <span>Suction</span><i class="cp-ramp"></i><span>Pressure</span>
+            <button type="button" class="info" data-info="cp" aria-label="What is Cp?">i</button>
+          </div>
+          <div class="stage-legend" id="sigma-legend" hidden>
+            <span>Cp σ 0</span><i class="sigma-ramp"></i><span id="sigma-max">–</span>
+            <button type="button" class="info" data-info="cpsigma" aria-label="What is Cp σ?">i</button>
+          </div>
+
+          <div class="race-hud" id="race-hud" hidden></div>
+        </div>
+
+        <div class="toolbar" id="dock">
+          <div><span class="dock-label">Scene</span>
+            <span class="segmented" role="group" aria-label="Scene" id="scene-modes">
+              <button type="button" data-scene="studio" aria-pressed="false">Studio</button>
+              <button type="button" data-scene="tunnel" aria-pressed="false">Wind tunnel</button>
+              <button type="button" data-scene="drive" aria-pressed="true">Road</button>
+              <button type="button" data-scene="race" aria-pressed="false">Race</button>
+            </span></div>
+          <div><span class="dock-label">Paint</span>
+            <span class="segmented" role="group" aria-label="Colour the car by" id="viewer-modes">
+              <button type="button" data-mode="plain" aria-pressed="true">Studio</button>
+              <button type="button" data-mode="field" aria-pressed="false">Pressure</button>
+              <button type="button" data-mode="sigma" aria-pressed="false" id="sigma-mode" hidden
+                title="The surface-pressure model's uncertainty">σ</button>
+              <button type="button" data-mode="regions" aria-pressed="false">Regions</button>
+            </span></div>
+          <div class="swatches" id="swatches" role="group" aria-label="Paint colour"></div>
+          <span class="dock-spacer"></span>
+          <label class="speed" for="speed">
+            <span>Speed</span>
+            <span class="range"><span class="range-track"></span><span class="range-fill" id="speed-fill"></span>
+              <input type="range" id="speed" min="30" max="200" step="5" value="110"></span>
+            <output id="speed-value" for="speed">110 km/h</output>
+          </label>
+          <button type="button" class="icon-button" id="labels-toggle" aria-pressed="true" aria-label="Show values on the car">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+          </button>
+          <button type="button" class="icon-button" id="flow-pause" aria-pressed="false" aria-label="Pause the airflow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          </button>
+          <button type="button" class="icon-button" id="fullscreen" aria-label="Full screen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+          </button>
+        </div>
+        <p class="stage-caption" id="viewer-caption"></p>
+        <p class="stage-caption viewer-warning" id="viewer-ignored" hidden></p>
+      </section>
+
+      <section class="race-panel" id="race-panel" aria-label="Race controls and timing" hidden>
+        <div class="race-controls">
+          <div><span class="field-label">Mode</span>
+            <span class="segmented" role="group" aria-label="Race mode" id="race-mode">
+              <button type="button" data-mode="distance" aria-pressed="true">Distance</button>
+              <button type="button" data-mode="top" aria-pressed="false">Top speed</button>
+              <button type="button" data-mode="coast" aria-pressed="false">Coast-down</button>
+            </span></div>
+          <label class="race-input" data-for="distance" for="race-distance"><span>Distance</span>
+            <div><input id="race-distance" inputmode="decimal" value="5"><em>km</em></div></label>
+          <label class="race-input" data-for="coast" for="race-v0" hidden><span>Start speed</span>
+            <div><input id="race-v0" inputmode="decimal" value="130"><em>km/h</em></div></label>
+          <label class="race-input" data-for="distance top" for="race-power"><span>Engine power</span>
+            <div><input id="race-power" inputmode="decimal" value="150"><em>kW</em></div></label>
+          <label class="race-input" data-for="distance top coast" for="race-mass"><span>Mass</span>
+            <div><input id="race-mass" inputmode="decimal" value="1600"><em>kg</em></div></label>
+          <div><span class="field-label">Playback</span>
+            <span class="segmented" role="group" aria-label="Playback speed" id="race-rate">
+              <button type="button" data-rate="auto" aria-pressed="true">Auto</button>
+              <button type="button" data-rate="1" aria-pressed="false">1×</button>
+              <button type="button" data-rate="10" aria-pressed="false">10×</button>
+              <button type="button" data-rate="100" aria-pressed="false">100×</button>
+              <button type="button" data-rate="skip" aria-pressed="false">Skip to finish</button>
+            </span></div>
+          <button type="button" class="button primary" id="race-go">Start race</button>
+        </div>
+        <div class="race-trace"><canvas id="race-trace" role="img" aria-label="Speed against time for both cars"></canvas></div>
+        <div class="race-ruler">
+          <div class="ruler" id="race-ruler"><div class="rail"></div>
+            <span class="mk" id="race-mk-o" style="background: var(--silver)" title="Original"></span>
+            <span class="mk" id="race-mk-d" style="background: var(--accent)" title="Your design"></span></div>
+          <div class="ruler-ticks" id="race-ticks"></div>
+        </div>
+      </section>
+
+      <section class="cluster" aria-labelledby="results-title">
+        <div class="cd-gauge">
+          <svg viewBox="0 0 256 146" id="cd-gauge" aria-hidden="true"></svg>
+          <div class="cd-read">
+            <div class="v" id="cd-value">–</div>
+            <div class="k">drag coefficient Cd <button type="button" class="info" data-info="cd" aria-label="What is Cd?">i</button></div>
+            <div class="d" id="cd-delta"></div>
+          </div>
+          <div class="verdict" id="verdict" data-state="pending">
+            <div class="verdict-label" id="verdict-label">Waiting for the first prediction</div>
+            <div class="verdict-reason" id="verdict-reason"></div>
+          </div>
+        </div>
+        <div class="cluster-right">
+          <div class="meters-head">
+            <h2 id="results-title">Prediction</h2>
+            <span class="timing" id="timing"></span>
+          </div>
+          <div class="meters" id="meters"></div>
+        </div>
+      </section>
+
+      <div class="panels">
+        <section class="panel span-2 cfd-check" id="cfd-check" aria-labelledby="cfd-title" hidden>
+          <div class="cfd-head">
+            <h3 id="cfd-title">Against CFD ground truth <button type="button" class="info" data-info="cfd" aria-label="What is CFD ground truth?">i</button></h3>
+            <span class="cfd-id" id="cfd-id"></span>
+          </div>
+          <dl class="cfd-numbers">
+            <div><dt>CFD</dt><dd id="cfd-truth"></dd><small id="cfd-noise"></small></div>
+            <div><dt>Predicted</dt><dd id="cfd-pred"></dd><small id="cfd-sigma"></small></div>
+            <div><dt>Error</dt><dd id="cfd-error"></dd><small id="cfd-within"></small></div>
           </dl>
-          <div class="hud-flag" id="hud-flag" hidden>Gate rejected: airflow greyed out</div>
-        </div>
-      </div>
-      <div class="viewer-foot">
-        <div class="cp-legend" id="cp-legend" aria-hidden="true">
-          <span>Cp ≤ −0.8</span><i class="cp-ramp"></i><span>≥ +0.8</span>
-        </div>
-        <span class="dims" id="dims"></span>
-      </div>
-      <div class="flow-bar">
-        <div class="segmented" role="group" aria-label="Airflow" id="flow-modes">
-          <button type="button" data-flow="off" aria-pressed="true">Still</button>
-          <button type="button" data-flow="tunnel" aria-pressed="false">Wind tunnel</button>
-          <button type="button" data-flow="drive" aria-pressed="false">Driving</button>
-        </div>
-        <label class="speed" for="speed">
-          <span>Speed</span>
-          <input type="range" id="speed" min="30" max="200" step="5" value="110">
-          <output id="speed-value" for="speed">110 km/h</output>
-        </label>
-        <div class="flow-actions">
-          <button type="button" class="link-button" id="flow-pause" hidden>Pause</button>
-          <button type="button" class="link-button" id="fullscreen">Full screen</button>
-        </div>
-      </div>
-      <p class="chart-note" id="viewer-caption"></p>
-      <p class="chart-note viewer-warning" id="viewer-ignored" hidden></p>
-    </section>
-
-    <section class="panel results" aria-labelledby="results-title">
-      <div class="panel-head">
-        <h2 id="results-title">Prediction</h2>
-        <span class="timing" id="timing"></span>
-      </div>
-
-      <div class="verdict" id="verdict" data-state="pending">
-        <span class="verdict-icon" aria-hidden="true">…</span>
-        <div>
-          <div class="verdict-label" id="verdict-label">Waiting for the first prediction</div>
-          <div class="verdict-reason" id="verdict-reason"></div>
-        </div>
-      </div>
-
-      <div class="tiles">
-        <div class="tile tile-hero">
-          <div class="tile-label">Drag coefficient, Cd</div>
-          <div class="tile-value" id="cd-value">–</div>
-          <div class="tile-delta" id="cd-delta"></div>
-        </div>
-        <div class="tile">
-          <div class="tile-label">Lift coefficient, Cl</div>
-          <div class="tile-value" id="cl-value">–</div>
-          <div class="tile-delta" id="cl-delta"></div>
-        </div>
-        <div class="tile">
-          <div class="tile-label">Uncertainty, σ on Cd</div>
-          <div class="tile-value" id="sigma-value">–</div>
-          <div class="meter" id="sigma-meter" aria-hidden="true">
-            <div class="meter-fill" id="sigma-fill"></div>
-            <div class="meter-mark" id="sigma-mark"></div>
+          <div class="cfd-strip" id="cfd-strip" aria-hidden="true">
+            <span class="cfd-band2" id="cfd-band2"></span>
+            <span class="cfd-band1" id="cfd-band1"></span>
+            <span class="cfd-dot" id="cfd-dot"></span>
+            <span class="cfd-mark" id="cfd-mark"></span>
           </div>
-          <div class="tile-delta" id="sigma-note"></div>
-        </div>
-      </div>
-
-      <div class="cfd-check" id="cfd-check" hidden>
-        <div class="cfd-head">
-          <h3>Against CFD ground truth</h3>
-          <span class="cfd-id" id="cfd-id"></span>
-        </div>
-        <dl class="cfd-numbers">
-          <div><dt>CFD</dt><dd id="cfd-truth"></dd><small id="cfd-noise"></small></div>
-          <div><dt>Predicted</dt><dd id="cfd-pred"></dd><small id="cfd-sigma"></small></div>
-          <div><dt>Error</dt><dd id="cfd-error"></dd><small id="cfd-within"></small></div>
-        </dl>
-        <div class="cfd-strip" id="cfd-strip" aria-hidden="true">
-          <span class="cfd-band2" id="cfd-band2"></span>
-          <span class="cfd-band1" id="cfd-band1"></span>
-          <span class="cfd-dot" id="cfd-dot"></span>
-          <span class="cfd-mark" id="cfd-mark"></span>
-        </div>
-        <div class="cfd-legend" aria-hidden="true">
-          <span><i class="cfd-key-band"></i>Prediction ± σ, ± 2σ</span>
-          <span><i class="cfd-key-mark"></i>CFD</span>
-          <span class="cfd-scale" id="cfd-scale"></span>
-        </div>
-        <p class="chart-note" id="cfd-note"></p>
-      </div>
-
-      <div class="chart-block">
-        <div class="chart-head">
-          <h3>Mean pressure coefficient by region</h3>
-          <div class="legend" aria-hidden="true">
-            <span><i class="swatch swatch-neg"></i>Suction (Cp &lt; 0)</span>
-            <span><i class="swatch swatch-pos"></i>Pressure (Cp &gt; 0)</span>
+          <div class="cfd-legend" aria-hidden="true">
+            <span><i class="cfd-key-band"></i>Prediction ± σ, ± 2σ</span>
+            <span><i class="cfd-key-mark"></i>CFD</span>
+            <span class="cfd-scale" id="cfd-scale"></span>
           </div>
-        </div>
-        <div class="pressure" id="pressure" role="table" aria-label="Mean pressure coefficient by region"></div>
-        <p class="chart-note" id="pressure-note"></p>
-      </div>
+          <p class="chart-note" id="cfd-note"></p>
+        </section>
 
-      <div class="history-block">
-        <h3>This session</h3>
-        <table class="history">
-          <thead>
-            <tr><th scope="col">Design</th><th scope="col" class="num">Cd</th>
-              <th scope="col" class="num">σ</th><th scope="col">Verdict</th></tr>
-          </thead>
-          <tbody id="history"></tbody>
-        </table>
-        <p class="chart-note">Click a row to load that design again.</p>
+        <section class="panel" aria-labelledby="pressure-title">
+          <div class="chart-head">
+            <h2 id="pressure-title">Pressure by region <button type="button" class="info" data-info="cp" aria-label="What is Cp?">i</button></h2>
+            <div class="legend" aria-hidden="true">
+              <span><i class="swatch swatch-neg"></i>Suction</span>
+              <span><i class="swatch swatch-pos"></i>Pressure</span>
+            </div>
+          </div>
+          <div class="pressure" id="pressure" role="table" aria-label="Mean pressure coefficient by region"></div>
+          <p class="chart-note" id="pressure-note"></p>
+        </section>
+
+        <section class="panel" aria-labelledby="history-title">
+          <div class="panel-head">
+            <h2 id="history-title">This session</h2>
+            <span class="timing">Click a row to load it again</span>
+          </div>
+          <div class="table-scroll">
+            <table class="history">
+              <thead>
+                <tr><th scope="col">Design</th><th scope="col" class="num">Cd</th>
+                  <th scope="col" class="num">σ</th><th scope="col">Gate</th></tr>
+              </thead>
+              <tbody id="history"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
-    </section>
     </div>
   </main>
 

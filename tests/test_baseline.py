@@ -120,6 +120,92 @@ def test_gated_designs_never_count_and_never_steer(tmp_path):
     assert {row["best_cd_so_far"] for row in rows} == {rows[0]["cd"]}
 
 
+@pytest.mark.parametrize("method", baseline.METHODS)
+def test_a_gated_baseline_stops_the_run_incomplete(tmp_path, method):
+    """Same rule as the agent's comparison seam: no trusted start, no search."""
+    def evaluate(params, body_style):
+        return dict(EVALUATE(params, body_style), uncertainty=0.5)
+
+    rows, events = run(tmp_path, method, iterations=25, evaluator=evaluate)
+    assert len(rows) == 1 and not rows[0]["accepted"]
+    finished = events[-1]
+    assert finished["scored"] == 1 and finished["best_cd"] is None
+    assert finished["stop_reason"].startswith("baseline rejected: ")
+
+
+class Scripted:
+    """Proposes a fixed list of unit-cube points, recording what it is told."""
+    name = "random"
+
+    def __init__(self, points):
+        self.points = list(points)
+        self.told = []
+
+    def ask(self):
+        return self.points.pop(0)
+
+    def tell(self, x, score):
+        self.told.append(score)
+
+    def describe(self):
+        return {}
+
+
+def test_a_repeated_design_is_not_scored_twice(tmp_path, monkeypatch):
+    centre = baseline.to_vector(default_params())
+    a, b = centre + 0.1, centre - 0.1
+    # The second proposal rounds to the baseline, the fourth repeats the first.
+    script = Scripted([a, centre + 1e-9, b, a + 1e-9, centre + 0.05])
+    monkeypatch.setattr(baseline, "make_optimiser", lambda *args, **kwargs: script)
+    calls = []
+
+    def evaluate(params, body_style):
+        calls.append(params)
+        return EVALUATE(params, body_style)
+
+    rows, events = run(tmp_path, iterations=4, evaluator=evaluate)
+    keys = [tuple(sorted(row["params"].items())) for row in rows]
+    assert len(rows) == len(calls) == 4 and len(set(keys)) == 4
+    # Told the score it already had: the baseline's Cd, then a's.
+    assert script.told[1] == rows[0]["cd"] and script.told[3] == script.told[0]
+    assert [e.get("repeats_skipped") for e in events if e["type"] == "step"] == [0, 0, 1, 1]
+
+
+def test_an_optimiser_stuck_on_one_design_stops_visibly(tmp_path):
+    log = RunLog(tmp_path)
+    with pytest.raises(RuntimeError, match="already scored"):
+        baseline.run("cmaes", 5, "stuck", sigma=1e-9, evaluator=EVALUATE, thresholds=THRESHOLDS, log=log)
+    assert log.read_events("stuck")[-1]["stop_reason"].startswith("error: RuntimeError")
+
+
+def test_rate_limited_scoring_waits_and_retries(monkeypatch):
+    import requests
+
+    waits = []
+    monkeypatch.setattr(baseline.time, "sleep", waits.append)
+    answers = []
+
+    def limited(params, body_style):
+        if len(answers) < 2:
+            answers.append(429)
+            response = requests.Response()
+            response.status_code = 429
+            response.headers["Retry-After"] = "3"
+            raise requests.HTTPError(response=response)
+        return EVALUATE(params, body_style)
+
+    assert baseline._patient(limited)(default_params(), "fastback")["cd"] > 0
+    assert waits == [3.0, 3.0]
+
+    def broken(params, body_style):
+        response = requests.Response()
+        response.status_code = 500
+        raise requests.HTTPError(response=response)
+
+    with pytest.raises(requests.HTTPError):
+        baseline._patient(broken)(default_params(), "fastback")
+
+
 def test_cmaes_halves_its_step_when_a_generation_is_all_gated():
     rng = np.random.default_rng(0)
     cma = baseline.CMAES(np.full(4, 0.5), 0.2, np.zeros(4), np.ones(4), rng, popsize=6)

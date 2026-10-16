@@ -10,6 +10,9 @@ The browser gets the car's triangles plus two per-vertex fields:
     cp      an ILLUSTRATIVE pressure coefficient from the surface angle to the
             oncoming flow. It is not a prediction and the viewer labels it so.
             Stage 2's predicted surface pressure replaces it.
+    part    index into PARTS, so the studio view can give the car real
+            materials: painted panels, glass, tyres, lights and dark trim.
+            Appearance only; no prediction depends on it.
 
 web/serve.py serves this locally. If the hosted service wants it, a route is
 one line: return mesh_payload(request.params, request.body_style).
@@ -42,6 +45,10 @@ REGIONS: list[str] = [
 _R = {name: i for i, name in enumerate(REGIONS)}
 _NONE = -1
 
+# What each vertex is made of, for the studio materials.
+PARTS: list[str] = ["paint", "glass", "tyre", "headlight", "taillight", "trim"]
+_P = {name: i for i, name in enumerate(PARTS)}
+
 
 def mesh_payload(params: dict[str, float], body_style: str = DEFAULT_BODY_STYLE) -> dict:
     import trimesh
@@ -60,6 +67,10 @@ def mesh_payload(params: dict[str, float], body_style: str = DEFAULT_BODY_STYLE)
     normals = np.vstack([body_normals, vertex_normals(wheels.vertices, wheels.faces)])
     faces = np.vstack([body.faces, wheels.faces + len(body.vertices)])
     region = np.concatenate([body_region, wheel_region])
+    part = np.concatenate([
+        classify_parts(body.vertices, body_normals, body_region, shape),
+        np.full(len(wheels.vertices), _P["tyre"], dtype=np.int8),
+    ])
     cp = np.concatenate([
         illustrative_cp(body_normals, convexity(body.vertices, body.faces, body_normals),
                         body.vertices[:, 2]),
@@ -72,6 +83,8 @@ def mesh_payload(params: dict[str, float], body_style: str = DEFAULT_BODY_STYLE)
         "vertices": _b64(vertices.astype(np.float32)),
         "faces": _b64(faces.astype(np.uint32)),
         "region": _b64(region.astype(np.int8)),
+        "part": _b64(part.astype(np.int8)),
+        "parts": PARTS,
         "cp": _b64(cp.astype(np.float32)),
         "regions": REGIONS,
         "n_vertices": int(len(vertices)),
@@ -135,6 +148,42 @@ def classify_regions(vertices: np.ndarray, normals: np.ndarray, marks: dict) -> 
     return out
 
 
+def classify_parts(vertices: np.ndarray, normals: np.ndarray, region: np.ndarray, shape: dict) -> np.ndarray:
+    """Label each body vertex with what it is made of (an index into PARTS).
+
+    Glass is the windscreen, the rear glass and the side windows above the
+    belt line, split by a painted B-pillar. Lights sit in bands just under the
+    nose and tail tops, outboard. The underbody, the grille and the rear
+    valance are dark trim. Everything else is paint.
+    """
+    x, y, z = vertices[:, 0], vertices[:, 1], vertices[:, 2]
+    nx, ny, nz = normals[:, 0], normals[:, 1], normals[:, 2]
+    marks = shape["landmarks"]
+    length = marks["length"]
+    z_top = np.interp(x, shape["x"], shape["z_top"])
+    half = np.maximum(np.interp(x, shape["x"], shape["width"]), 1e-6)
+    side_y = np.abs(y) / half
+    out = np.full(len(vertices), _P["paint"], dtype=np.int8)
+
+    out[(region == _R["windscreen"]) & (z > _BELT_Z)] = _P["glass"]
+    out[(region == _R["rear_window"]) & (x < marks["deck_start"]) & (z > _BELT_Z)] = _P["glass"]
+    side_end = min(marks["deck_start"] - 0.10, marks["roof_end"] + 0.35)
+    b_pillar = marks["cowl"] + 0.5 * (side_end - marks["cowl"])
+    side_glass = ((np.abs(ny) > 0.45) & (z > _BELT_Z + 0.05) & (z < z_top - 0.06)
+                  & (x > marks["cowl"] + 0.08) & (x < side_end) & (np.abs(x - b_pillar) > 0.05))
+    out[side_glass] = _P["glass"]
+
+    out[nz < -0.5] = _P["trim"]
+    out[(nx < -0.5) & (z > 0.28) & (z < 0.46) & (side_y < 0.6)] = _P["trim"]      # grille
+    out[(nx > 0.5) & (z < 0.42) & (x > length - 0.3)] = _P["trim"]               # rear valance
+
+    out[(x < marks["hood_front"] + 0.14) & (z > z_top - 0.10) & (z < z_top - 0.025)
+        & (side_y > 0.5) & (side_y < 0.9) & (nx < 0)] = _P["headlight"]
+    out[(x > length - 0.35) & (z > z_top - 0.20) & (z < z_top - 0.04)
+        & (side_y > 0.35) & (nx > 0.05)] = _P["taillight"]
+    return out
+
+
 def illustrative_cp(normals: np.ndarray, kappa: np.ndarray | None = None,
                     z: np.ndarray | None = None) -> np.ndarray:
     """Pressure coefficient from the surface shape and the flow (+x). Not a model.
@@ -173,23 +222,18 @@ def convexity(vertices: np.ndarray, faces: np.ndarray, normals: np.ndarray,
     """
     v = np.asarray(vertices, dtype=np.float64)
     f = np.asarray(faces)
-    pairs = [(0, 1), (1, 2), (2, 0), (1, 0), (2, 1), (0, 2)]
-    nbr_sum = np.zeros_like(v)
-    nbr_d2 = np.zeros(len(v))
-    count = np.zeros(len(v))
-    for a, b in pairs:
-        np.add.at(nbr_sum, f[:, a], v[f[:, b]])
-        np.add.at(nbr_d2, f[:, a], np.sum((v[f[:, b]] - v[f[:, a]]) ** 2, axis=1))
-        np.add.at(count, f[:, a], 1)
-    count = np.maximum(count, 1)
+    n = len(v)
+    # Every directed edge of every face, as (from, to) vertex indices.
+    src = f[:, [0, 1, 2, 1, 2, 0]].T.ravel()
+    dst = f[:, [1, 2, 0, 0, 1, 2]].T.ravel()
+    count = np.maximum(np.bincount(src, minlength=n), 1).astype(np.float64)
+    nbr_sum = _scatter_add(src, v[dst], n)
+    nbr_d2 = np.bincount(src, weights=np.sum((v[dst] - v[src]) ** 2, axis=1), minlength=n)
     delta = nbr_sum / count[:, None] - v
     height = np.einsum("ij,ij->i", delta, normals)
     kappa = -2.0 * height / np.maximum(nbr_d2 / count, 1e-12)
     for _ in range(smoothing):
-        total = np.zeros(len(v))
-        for a, b in pairs:
-            np.add.at(total, f[:, a], kappa[f[:, b]])
-        kappa = 0.5 * kappa + 0.5 * total / count
+        kappa = 0.5 * kappa + 0.5 * np.bincount(src, weights=kappa[dst], minlength=n) / count
     return kappa
 
 
@@ -198,10 +242,14 @@ def vertex_normals(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
     v = np.asarray(vertices, dtype=np.float64)
     f = np.asarray(faces)
     face_n = np.cross(v[f[:, 1]] - v[f[:, 0]], v[f[:, 2]] - v[f[:, 0]])
-    out = np.zeros_like(v)
-    for k in range(3):
-        np.add.at(out, f[:, k], face_n)
+    out = _scatter_add(f.T.ravel(), np.tile(face_n, (3, 1)), len(v))
     return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-12)
+
+
+def _scatter_add(index: np.ndarray, values: np.ndarray, n: int) -> np.ndarray:
+    """Sum rows of `values` into `n` rows by `index`; np.add.at, several times faster."""
+    return np.stack([np.bincount(index, weights=values[:, k], minlength=n)
+                     for k in range(values.shape[1])], axis=1)
 
 
 def _b64(array: np.ndarray) -> str:

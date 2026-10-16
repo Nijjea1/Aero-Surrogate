@@ -3,6 +3,10 @@
     python -m src.optim.baseline --method cmaes --iterations 25
     python -m src.optim.baseline --method random --iterations 25 --seed 3
 
+    # one side of a Track B matched comparison (src/service/INTEGRATION.md)
+    python -m src.optim.baseline --method random --seed 0 --protocol runs/comparison-protocol.json \
+        --checkpoint checkpoints/params.pt --run-id comparison-random-001 --out runs/comparison-random-001.json
+
 This has to be a FAIR fight, so everything except the proposer is shared with
 the agent (src.agent.designer):
 
@@ -12,11 +16,22 @@ the agent (src.agent.designer):
                       CMA-ES centres its first generation there
     scoring           the same HTTP /evaluate call (or an injected evaluator)
     gate              the same rejection_reason with the service's thresholds;
-                      a gated design scores as infinitely bad
+                      a gated design scores as infinitely bad, and a gated
+                      baseline stops the run there, incomplete, as the agent's
+                      comparison seam (src.agent.comparison) does
     constraints       the same rules; the search box is narrowed so no
                       proposal breaks one, as the agent's are refused unscored
     run log           the same IterationRecords and run events, with
                       optimiser "random" or "cmaes" and empty reasoning
+    repeats           a proposal that rounds to a design already scored is
+                      not scored again (the agent's are refused the same
+                      way): the optimiser is told the score it already got
+                      and asked again, so no evaluation is spent on it
+
+With --protocol, scoring goes through Track B's frozen comparison protocol
+(src.agent.comparison): the predictor must be the protocol's checkpoint, every
+predictor call counts against the shared budget, and the run's summary is the
+format `python -m src.agent.compare_run pair` validates against an agent run.
 
 If the agent does not beat these, we report it anyway. "The LLM matched CMA-ES
 but produced an explainable trace and respected stated constraints" is an
@@ -229,7 +244,7 @@ def run(method: str, iterations: int, run_id: str, seed: int = 0, *,
                       if evaluator is None else "injected evaluator")
     if thresholds is None:
         thresholds = designer.service_thresholds() if evaluator is None else {}
-    evaluate = evaluator or designer.evaluate_design
+    evaluate = evaluator or _patient(designer.evaluate_design)
     log = log or RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
     log.reserve(run_id)
     log.append_event(run_id, {
@@ -240,22 +255,62 @@ def run(method: str, iterations: int, run_id: str, seed: int = 0, *,
     })
     state = {"scored": 0, "best_cd": None, "timings": []}
     try:
-        _drive(state, optimiser, iterations, run_id, log, evaluate, body_style, constraints, thresholds)
+        stop_reason = _drive(state, optimiser, iterations, run_id, log, evaluate, body_style, constraints,
+                             thresholds)
     except BaseException as exc:
         _finish(log, run_id, f"error: {type(exc).__name__}: {exc}", state)
         raise
-    _finish(log, run_id, "evaluation budget used", state)
+    _finish(log, run_id, stop_reason, state)
     return run_id
+
+
+# How many repeats in a row before a run gives up: an optimiser that only
+# proposes designs it has already scored has collapsed.
+_MAX_REPEATS = 200
+
+
+def _design_key(params: dict[str, float]) -> tuple[float, ...]:
+    return tuple(float(params[name]) for name in PARAM_NAMES)
+
+
+# The service rate-limits scoring per client (429 with Retry-After). A refused
+# request never reached the model, so waiting and retrying costs no budget.
+def _patient(evaluate: Callable[[dict[str, float], str], dict], retries: int = 8):
+    def call(params: dict[str, float], body_style: str) -> dict:
+        for attempt in range(retries + 1):
+            try:
+                return evaluate(params, body_style)
+            except requests.HTTPError as exc:
+                response = exc.response
+                if response is None or response.status_code != 429 or attempt == retries:
+                    raise
+                try:
+                    wait = float(response.headers.get("Retry-After", ""))
+                except ValueError:
+                    wait = 2.0 ** attempt
+                time.sleep(min(max(wait, 0.5), 30.0))
+        raise AssertionError("unreachable")
+    return call
 
 
 def _drive(state: dict, optimiser, iterations: int, run_id: str, log: RunLog,
            evaluate: Callable[[dict[str, float], str], dict], body_style: str,
-           constraints: list[Constraint], thresholds: dict) -> None:
+           constraints: list[Constraint], thresholds: dict) -> str:
+    """Score the run; return why it stopped."""
     started = time.monotonic()
+    told: dict[tuple[float, ...], float] = {}   # design scored -> what the optimiser was told
     for iteration in range(iterations):
         step_started = time.perf_counter()
         x = None if iteration == 0 else optimiser.ask()
         params = default_params() if x is None else to_params(x)
+        repeats = 0
+        while x is not None and _design_key(params) in told:
+            optimiser.tell(x, told[_design_key(params)])
+            repeats += 1
+            if repeats > _MAX_REPEATS:
+                raise RuntimeError("the optimiser kept proposing designs it had already scored")
+            x = optimiser.ask()
+            params = to_params(x)
         proposed = time.perf_counter()
         evaluation = evaluate(params, body_style)
         scored = time.perf_counter()
@@ -266,8 +321,9 @@ def _drive(state: dict, optimiser, iterations: int, run_id: str, log: RunLog,
         if reason is None and broken:
             # Only the baseline can reach here: the search box obeys the rules.
             reason = "reference only: " + "; ".join(broken)
+        told[_design_key(params)] = evaluation["cd"] if reason is None else math.inf
         if x is not None:
-            optimiser.tell(x, evaluation["cd"] if reason is None else math.inf)
+            optimiser.tell(x, told[_design_key(params)])
         if reason is None and (state["best_cd"] is None or evaluation["cd"] < state["best_cd"]):
             state["best_cd"] = evaluation["cd"]
         log.append(IterationRecord(
@@ -283,12 +339,54 @@ def _drive(state: dict, optimiser, iterations: int, run_id: str, log: RunLog,
         timing = {
             "iteration": iteration, "live": False, "propose_s": proposed - step_started,
             "model_calls": 0, "model_latency_s": 0.0, "failed_proposals": 0,
-            "score_s": scored - proposed,
+            "score_s": scored - proposed, "repeats_skipped": repeats,
             "surrogate_latency_ms": float(latency_ms) if isinstance(latency_ms, (int, float)) else None,
             "step_s": time.perf_counter() - step_started,
         }
         state["timings"].append(timing)
         log.append_event(run_id, {"type": "step", **timing})
+        if x is None and reason and not reason.startswith("reference only"):
+            # No trusted start means nothing fair to improve on.
+            return f"baseline rejected: {reason}"
+    return "evaluation budget used"
+
+
+def run_protocol(method: str, predictor, protocol, run_id: str, seed: int = 0, *,
+                 log: RunLog | None = None, sigma: float = 0.2, popsize: int | None = None) -> dict:
+    """One optimiser run under Track B's frozen comparison protocol.
+
+    The protocol fixes the checkpoint, gate thresholds, body style,
+    constraints and evaluation budget; compare_run.evaluator_for refuses a
+    predictor that is not the protocol's artifact, before anything is logged.
+    The run is logged like any other (so the run view and the benchmark see
+    it), and the returned summary records every predictor call. An unfinished
+    run is still summarised, marked incomplete, never dropped.
+    """
+    from ..agent.compare_run import evaluator_for   # Track B's comparison seam
+
+    score = evaluator_for(predictor, protocol)
+    log = log or RunLog(os.environ.get("AERO_RUNLOG_DIR", "runs/logs"))
+    if log.exists(run_id):
+        raise ValueError("comparison run ID exists; choose a fresh ID")
+    error = None
+    try:
+        run(method, protocol.evaluation_budget, run_id, seed, evaluator=score,
+            body_style=protocol.body_style, constraints=[parse_constraint(c) for c in protocol.constraints],
+            thresholds=protocol.thresholds, provenance=designer.predictor_provenance(predictor),
+            sigma=sigma, popsize=popsize, log=log)
+    except (ValueError, OSError, RuntimeError) as exc:
+        error = f"{type(exc).__name__}: {exc}"
+    events = log.read_events(run_id) if log.exists(run_id) else []
+    started = next((e for e in events if e.get("type") == "run_started"), {})
+    finished = next((e for e in reversed(events) if e.get("type") == "run_finished"), {})
+    reason = finished.get("stop_reason") or f"error: {error or 'run has no finish event'}"
+    generic = {"type", "mode", "optimiser", "seed", "body_style", "evaluation_budget", "constraints",
+               "surrogate", "gate_thresholds"}
+    return score.summary("random_search" if method == "random" else method, run_id, reason, metadata={
+        "seed": seed, "optimiser": method,
+        "method_settings": {k: v for k, v in started.items() if k not in generic},
+        "timing": finished.get("timing"), "error": error,
+    })
 
 
 def _finish(log: RunLog, run_id: str, stop_reason: str, state: dict) -> None:
@@ -308,9 +406,18 @@ def main() -> None:
                         help="Numeric rule, e.g. 'A_Car_Roof_Height>=0'. Repeatable.")
     parser.add_argument("--sigma", type=float, default=0.2, help="CMA-ES initial step, as a fraction of each range")
     parser.add_argument("--popsize", type=int, default=None, help="CMA-ES designs per generation (default 4+3ln n)")
+    parser.add_argument("--protocol", default=None,
+                        help="A frozen comparison protocol (python -m src.agent.compare_run protocol). Its budget, "
+                             "style and constraints replace --iterations, --body-style and --constraint")
+    parser.add_argument("--checkpoint", default=None, help="With --protocol: the protocol's checkpoint, scored in-process")
+    parser.add_argument("--out", default=None, help="With --protocol: where to write the comparison summary (must be new)")
     args = parser.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if args.protocol:
+        if not (args.checkpoint and args.out and args.run_id):
+            parser.error("--protocol needs --checkpoint, --run-id and --out")
+        raise SystemExit(_main_protocol(args))
     try:
         constraints = [parse_constraint(rule) for rule in args.constraint]
     except ValueError as exc:
@@ -332,6 +439,34 @@ def main() -> None:
     trusted = sum(row["accepted"] for row in rows)
     print(f"Run ID: {result}. {finished['scored']} scored, {trusted} trusted. "
           f"Best trusted Cd: {finished['best_cd']}")
+
+
+def _main_protocol(args) -> int:
+    import json
+    from pathlib import Path
+
+    from ..agent.comparison import ComparisonProtocol
+    from ..service.predictor import TorchPredictor
+
+    output = Path(args.out)
+    if output.exists():
+        print("Comparison stopped: output exists; choose a fresh path")
+        return 1
+    try:
+        protocol = ComparisonProtocol.from_dict(json.loads(Path(args.protocol).read_text(encoding="utf-8")))
+        report = run_protocol(args.method, TorchPredictor(args.checkpoint), protocol, args.run_id, args.seed,
+                              sigma=args.sigma, popsize=args.popsize)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("x", encoding="utf-8") as stream:
+            json.dump(report, stream, indent=2, allow_nan=False)
+            stream.write("\n")
+    except (ValueError, OSError, RuntimeError, KeyError, TypeError) as exc:
+        print(f"Comparison stopped: {exc}")
+        return 1
+    print(f"{report['method']} {report['run_id']}: {report['calls']} predictor calls, "
+          f"best trusted Cd {report['best_cd']}, {'complete' if report['complete'] else 'INCOMPLETE'} "
+          f"({report['stop_reason']}). Summary: {output}")
+    return 0 if report["complete"] else 1
 
 
 if __name__ == "__main__":
