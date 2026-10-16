@@ -340,7 +340,8 @@ export function createRace(viewer, { hud, panel }) {
     const leader = designLeads ? plan.design : plan.original;
     const interval = sim - timeAt(leader.samples, designLeads ? o.x : d.x);
     const level = gap < 0.005;
-    const behind = plan.mode === "coast" || !(interval > 0) ? `+${metres(gap)}` : `+${fmt(interval, interval < 10 ? 2 : 1)} s`;
+    // Under a hundredth of a second the interval would read +0.00 s: say the gap in metres instead.
+    const behind = plan.mode === "coast" || !(interval >= 0.01) ? `+${metres(gap)}` : `+${fmt(interval, interval < 10 ? 2 : 1)} s`;
     const rows = [
       { name: cars.design.label, colour: "var(--accent)", x: d.x },
       { name: cars.original.label, colour: "var(--silver)", x: o.x },
