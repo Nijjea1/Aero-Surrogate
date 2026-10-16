@@ -57,3 +57,54 @@ def test_the_run_is_physical(race):
 def test_road_loads_match_the_formula(race):
     v = 130 / 3.6
     assert race["drag130"] == pytest.approx(0.5 * 1.225 * v * v * 0.2217 * 2.2)
+
+
+MODES = """
+import { simulateRace, topSpeed, coastDistance, positionAt, timeAt } from "%s";
+const A = 2.2, slick = 0.20 * A, draggy = 0.24 * A;
+const out = {};
+for (const mode of ["distance", "top", "coast"]) {
+  const opts = { distance: 50000, v0: 130 / 3.6 };
+  const a = simulateRace(mode, { cdA: slick, ...opts }), b = simulateRace(mode, { cdA: draggy, ...opts });
+  out[mode] = { a: a.end, b: b.end, vmax: a.vmax, finished: a.finished };
+}
+const coast = simulateRace("coast", { cdA: slick, v0: 130 / 3.6 });
+const t = coast.end.t / 2, x = positionAt(coast.samples, t).x;
+out.coastClosed = coastDistance({ cdA: slick, v0: 130 / 3.6 });
+out.roundTrip = [t, timeAt(coast.samples, x)];
+out.topAnalytic = topSpeed({ cdA: slick });
+out.longFinish = simulateRace("distance", { cdA: slick, distance: 100000 }).finished;
+console.log(JSON.stringify(out));
+""" % PHYSICS
+
+
+@pytest.fixture(scope="module")
+def modes():
+    if NODE is None:
+        pytest.skip("node is not installed")
+    out = subprocess.run([NODE, "--input-type=module", "-e", MODES], capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_less_drag_wins_every_mode(modes):
+    assert modes["distance"]["a"]["t"] < modes["distance"]["b"]["t"]
+    assert modes["distance"]["a"]["x"] == pytest.approx(50000)
+    assert modes["top"]["a"]["v"] > modes["top"]["b"]["v"]
+    assert modes["coast"]["a"]["x"] > modes["coast"]["b"]["x"]
+    assert modes["coast"]["a"]["v"] == 0
+
+
+def test_long_races_finish_and_top_speed_matches_the_balance(modes):
+    """A 100 km race is no longer cut off at 300 s, and top speed is where power meets drag plus rolling."""
+    assert modes["longFinish"] and modes["distance"]["finished"]
+    p = 150e3
+    v = modes["topAnalytic"]
+    assert (0.5 * 1.225 * 0.20 * 2.2 * v * v + 0.010 * 1600 * 9.81) * v == pytest.approx(p, rel=1e-6)
+    assert modes["top"]["a"]["v"] == pytest.approx(v - 0.3 / 3.6, abs=0.01)
+
+
+def test_coast_down_matches_the_closed_form_and_time_inverts_position(modes):
+    assert modes["coast"]["a"]["x"] == pytest.approx(modes["coastClosed"], rel=2e-3)
+    t, back = modes["roundTrip"]
+    assert back == pytest.approx(t, abs=0.06)

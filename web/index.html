@@ -7,7 +7,7 @@
   <meta name="description" content="Drag, lift and a confidence verdict for a car design in milliseconds, with the airflow in 3D.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">
     {"imports": {
@@ -24,11 +24,11 @@
       <span class="logo" id="logo" aria-hidden="true"></span>
       <div>
         <h1>Aero Surrogate</h1>
-        <p class="tagline">Drag, lift and a trust verdict for a car design, in milliseconds.</p>
+        <p class="tagline">Drag and a trust verdict for a car design, in milliseconds.</p>
       </div>
     </div>
     <nav class="pages" aria-label="Pages">
-      <a href="index.html" aria-current="page">Designer</a>
+      <a href="index.html" aria-current="page">Design</a>
       <a href="runs.html" id="runs-link">Runs</a>
       <a href="results.html" id="results-link">Results</a>
     </nav>
@@ -52,7 +52,7 @@
   </div>
 
   <main class="studio">
-    <aside class="panel drawer" aria-labelledby="design-title">
+    <aside class="drawer" aria-labelledby="design-title">
       <div class="drawer-head">
         <div class="panel-head" style="margin: 0">
           <h2 id="design-title">Design</h2>
@@ -75,66 +75,54 @@
       <div class="drawer-body" id="sliders"></div>
     </aside>
 
-    <section class="stage-wrap" aria-label="3D view">
-      <div class="stage" id="stage">
-        <div class="viewer" id="viewer"></div>
-        <div class="viewer-message" id="viewer-message"><div><div class="loader"></div>Loading the 3D view…</div></div>
-        <div class="pins" id="pins" aria-label="Values on the car"></div>
+    <div class="stage-col">
+      <section class="stage-wrap" aria-label="3D view">
+        <div class="stage" id="stage">
+          <div class="viewer" id="viewer"></div>
+          <div class="viewer-message" id="viewer-message"><div><div class="loader"></div>Loading the 3D view…</div></div>
+          <div class="pins" id="pins" aria-label="Values on the car"></div>
 
-        <div class="hud hud-tl glass" id="hud">
-          <div class="hud-kicker"><span id="hud-scene">Road</span><span>· predicted</span></div>
-          <div class="hud-speed"><span id="hud-speed">110</span><small>km/h</small></div>
-          <dl>
-            <div><dt>Drag force <button type="button" class="info" data-info="drag" aria-label="What is drag force?">i</button></dt>
-              <dd id="hud-drag">–</dd><small id="hud-drag-delta"></small></div>
-            <div><dt>Power to push air <button type="button" class="info" data-info="power" aria-label="What is power to push the air?">i</button></dt>
-              <dd id="hud-power">–</dd></div>
-            <div><dt>Energy / 100 km <button type="button" class="info" data-info="energy" aria-label="What is energy per 100 km?">i</button></dt>
-              <dd id="hud-energy">–</dd><small id="hud-energy-delta"></small></div>
-            <div><dt>Lift <button type="button" class="info" data-info="lift" aria-label="What is lift?">i</button></dt>
-              <dd id="hud-lift">–</dd></div>
-          </dl>
-        </div>
-
-        <div class="hud hud-tr glass" id="hud-verdict">
-          <span class="verdict-chip" id="hud-chip" data-state="pending"><i></i><span id="hud-chip-text">Waiting</span></span>
-          <div class="hud-kicker" style="margin-top: 12px">Drag coefficient <button type="button" class="info" data-info="cd" aria-label="What is Cd?">i</button></div>
-          <div class="hud-cd" id="hud-cd">–</div>
-          <div class="hud-cd-delta" id="hud-cd-delta"></div>
-          <div class="hud-sigma">
-            <span>σ <span id="hud-sigma">–</span> · gate <span id="hud-threshold">–</span></span>
-            <div class="meter" id="hud-meter"><div class="meter-fill" id="hud-meter-fill"></div><div class="meter-mark" id="hud-meter-mark"></div></div>
+          <div class="stage-cap" id="stage-cap">
+            <span id="cap-scene">Road</span>
+            <span>V <b id="cap-speed">110 km/h</b></span>
+            <span>Re <b id="cap-re">–</b></span>
+            <span id="cap-extra"></span>
           </div>
-          <div class="hud-flag" id="hud-flag" hidden>Gate rejected: airflow greyed out</div>
-        </div>
-
-        <div class="stage-legend glass" id="cp-legend" hidden>
-          <span>Suction</span><i class="cp-ramp"></i><span>Pressure</span>
-          <button type="button" class="info" data-info="cp" aria-label="What is Cp?">i</button>
-        </div>
-        <div class="stage-legend glass" id="sigma-legend" hidden>
-          <span>Cp σ 0</span><i class="sigma-ramp"></i><span id="sigma-max">–</span>
-          <button type="button" class="info" data-info="cpsigma" aria-label="What is Cp σ?">i</button>
-        </div>
-
-        <div class="race-hud" id="race-hud" hidden></div>
-
-        <div class="dock glass" id="dock">
-          <span class="dock-label">Scene</span>
-          <div class="segmented" role="group" aria-label="Scene" id="scene-modes">
-            <button type="button" data-scene="studio" aria-pressed="false">Studio</button>
-            <button type="button" data-scene="tunnel" aria-pressed="false">Wind tunnel</button>
-            <button type="button" data-scene="drive" aria-pressed="true">Road</button>
-            <button type="button" data-scene="race" aria-pressed="false">Drag race</button>
+          <div class="stage-tag" id="stage-tag">
+            <div class="k" id="tag-state" data-state="pending">Cd</div>
+            <div class="v" id="tag-cd">–</div>
+            <div class="d" id="tag-drag"></div>
           </div>
-          <span class="dock-label">Paint</span>
-          <div class="segmented" role="group" aria-label="Colour the car by" id="viewer-modes">
-            <button type="button" data-mode="plain" aria-pressed="true">Studio</button>
-            <button type="button" data-mode="field" aria-pressed="false">Pressure</button>
-            <button type="button" data-mode="sigma" aria-pressed="false" id="sigma-mode" hidden
-              title="The surface-pressure model's uncertainty">σ</button>
-            <button type="button" data-mode="regions" aria-pressed="false">Regions</button>
+          <div class="hud-flag" id="hud-flag" hidden>The gate rejected this prediction: the airflow is greyed out</div>
+
+          <div class="stage-legend" id="cp-legend" hidden>
+            <span>Suction</span><i class="cp-ramp"></i><span>Pressure</span>
+            <button type="button" class="info" data-info="cp" aria-label="What is Cp?">i</button>
           </div>
+          <div class="stage-legend" id="sigma-legend" hidden>
+            <span>Cp σ 0</span><i class="sigma-ramp"></i><span id="sigma-max">–</span>
+            <button type="button" class="info" data-info="cpsigma" aria-label="What is Cp σ?">i</button>
+          </div>
+
+          <div class="race-hud" id="race-hud" hidden></div>
+        </div>
+
+        <div class="toolbar" id="dock">
+          <div><span class="dock-label">Scene</span>
+            <span class="segmented" role="group" aria-label="Scene" id="scene-modes">
+              <button type="button" data-scene="studio" aria-pressed="false">Studio</button>
+              <button type="button" data-scene="tunnel" aria-pressed="false">Wind tunnel</button>
+              <button type="button" data-scene="drive" aria-pressed="true">Road</button>
+              <button type="button" data-scene="race" aria-pressed="false">Race</button>
+            </span></div>
+          <div><span class="dock-label">Paint</span>
+            <span class="segmented" role="group" aria-label="Colour the car by" id="viewer-modes">
+              <button type="button" data-mode="plain" aria-pressed="true">Studio</button>
+              <button type="button" data-mode="field" aria-pressed="false">Pressure</button>
+              <button type="button" data-mode="sigma" aria-pressed="false" id="sigma-mode" hidden
+                title="The surface-pressure model's uncertainty">σ</button>
+              <button type="button" data-mode="regions" aria-pressed="false">Regions</button>
+            </span></div>
           <div class="swatches" id="swatches" role="group" aria-label="Paint colour"></div>
           <span class="dock-spacer"></span>
           <label class="speed" for="speed">
@@ -153,49 +141,71 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
           </button>
         </div>
-      </div>
-      <p class="stage-caption" id="viewer-caption"></p>
-      <p class="stage-caption viewer-warning" id="viewer-ignored" hidden></p>
-    </section>
+        <p class="stage-caption" id="viewer-caption"></p>
+        <p class="stage-caption viewer-warning" id="viewer-ignored" hidden></p>
+      </section>
 
-    <div class="panels">
-      <section class="panel results" aria-labelledby="results-title">
-        <div class="panel-head">
-          <h2 id="results-title">Prediction</h2>
-          <span class="timing" id="timing"></span>
+      <section class="race-panel" id="race-panel" aria-label="Race controls and timing" hidden>
+        <div class="race-controls">
+          <div><span class="field-label">Mode</span>
+            <span class="segmented" role="group" aria-label="Race mode" id="race-mode">
+              <button type="button" data-mode="distance" aria-pressed="true">Distance</button>
+              <button type="button" data-mode="top" aria-pressed="false">Top speed</button>
+              <button type="button" data-mode="coast" aria-pressed="false">Coast-down</button>
+            </span></div>
+          <label class="race-input" data-for="distance" for="race-distance"><span>Distance</span>
+            <div><input id="race-distance" inputmode="decimal" value="5"><em>km</em></div></label>
+          <label class="race-input" data-for="coast" for="race-v0" hidden><span>Start speed</span>
+            <div><input id="race-v0" inputmode="decimal" value="130"><em>km/h</em></div></label>
+          <label class="race-input" data-for="distance top" for="race-power"><span>Engine power</span>
+            <div><input id="race-power" inputmode="decimal" value="150"><em>kW</em></div></label>
+          <label class="race-input" data-for="distance top coast" for="race-mass"><span>Mass</span>
+            <div><input id="race-mass" inputmode="decimal" value="1600"><em>kg</em></div></label>
+          <div><span class="field-label">Playback</span>
+            <span class="segmented" role="group" aria-label="Playback speed" id="race-rate">
+              <button type="button" data-rate="auto" aria-pressed="true">Auto</button>
+              <button type="button" data-rate="1" aria-pressed="false">1×</button>
+              <button type="button" data-rate="10" aria-pressed="false">10×</button>
+              <button type="button" data-rate="100" aria-pressed="false">100×</button>
+              <button type="button" data-rate="skip" aria-pressed="false">Skip to finish</button>
+            </span></div>
+          <button type="button" class="button primary" id="race-go">Start race</button>
         </div>
-        <div class="verdict" id="verdict" data-state="pending">
-          <span class="verdict-icon" aria-hidden="true">…</span>
-          <div>
+        <div class="race-trace"><canvas id="race-trace" role="img" aria-label="Speed against time for both cars"></canvas></div>
+        <div class="race-ruler">
+          <div class="ruler" id="race-ruler"><div class="rail"></div>
+            <span class="mk" id="race-mk-o" style="background: var(--silver)" title="Original"></span>
+            <span class="mk" id="race-mk-d" style="background: var(--accent)" title="Your design"></span></div>
+          <div class="ruler-ticks" id="race-ticks"></div>
+        </div>
+      </section>
+
+      <section class="cluster" aria-labelledby="results-title">
+        <div class="cd-gauge">
+          <svg viewBox="0 0 256 146" id="cd-gauge" aria-hidden="true"></svg>
+          <div class="cd-read">
+            <div class="v" id="cd-value">–</div>
+            <div class="k">drag coefficient Cd <button type="button" class="info" data-info="cd" aria-label="What is Cd?">i</button></div>
+            <div class="d" id="cd-delta"></div>
+          </div>
+          <div class="verdict" id="verdict" data-state="pending">
             <div class="verdict-label" id="verdict-label">Waiting for the first prediction</div>
             <div class="verdict-reason" id="verdict-reason"></div>
           </div>
         </div>
-        <div class="tiles">
-          <div class="tile tile-hero">
-            <div class="tile-label">Drag, Cd <button type="button" class="info" data-info="cd" aria-label="What is Cd?">i</button></div>
-            <div class="tile-value" id="cd-value">–</div>
-            <div class="tile-delta" id="cd-delta"></div>
+        <div class="cluster-right">
+          <div class="meters-head">
+            <h2 id="results-title">Prediction</h2>
+            <span class="timing" id="timing"></span>
           </div>
-          <div class="tile">
-            <div class="tile-label">Lift, Cl <button type="button" class="info" data-info="cl" aria-label="What is Cl?">i</button></div>
-            <div class="tile-value" id="cl-value">–</div>
-            <div class="tile-delta" id="cl-delta"></div>
-          </div>
-          <div class="tile">
-            <div class="tile-label">Uncertainty σ <button type="button" class="info" data-info="sigma" aria-label="What is σ?">i</button></div>
-            <div class="tile-value" id="sigma-value">–</div>
-            <div class="meter" id="sigma-meter" aria-hidden="true">
-              <div class="meter-fill" id="sigma-fill"></div>
-              <div class="meter-mark" id="sigma-mark"></div>
-            </div>
-            <div class="tile-delta" id="sigma-note"></div>
-          </div>
+          <div class="meters" id="meters"></div>
         </div>
+      </section>
 
-        <div class="cfd-check" id="cfd-check" hidden>
+      <div class="panels">
+        <section class="panel span-2 cfd-check" id="cfd-check" aria-labelledby="cfd-title" hidden>
           <div class="cfd-head">
-            <h3>Against CFD ground truth <button type="button" class="info" data-info="cfd" aria-label="What is CFD ground truth?">i</button></h3>
+            <h3 id="cfd-title">Against CFD ground truth <button type="button" class="info" data-info="cfd" aria-label="What is CFD ground truth?">i</button></h3>
             <span class="cfd-id" id="cfd-id"></span>
           </div>
           <dl class="cfd-numbers">
@@ -215,36 +225,36 @@
             <span class="cfd-scale" id="cfd-scale"></span>
           </div>
           <p class="chart-note" id="cfd-note"></p>
-        </div>
-      </section>
+        </section>
 
-      <section class="panel" aria-labelledby="pressure-title">
-        <div class="chart-head">
-          <h2 id="pressure-title">Pressure by region <button type="button" class="info" data-info="cp" aria-label="What is Cp?">i</button></h2>
-          <div class="legend" aria-hidden="true">
-            <span><i class="swatch swatch-neg"></i>Suction</span>
-            <span><i class="swatch swatch-pos"></i>Pressure</span>
+        <section class="panel" aria-labelledby="pressure-title">
+          <div class="chart-head">
+            <h2 id="pressure-title">Pressure by region <button type="button" class="info" data-info="cp" aria-label="What is Cp?">i</button></h2>
+            <div class="legend" aria-hidden="true">
+              <span><i class="swatch swatch-neg"></i>Suction</span>
+              <span><i class="swatch swatch-pos"></i>Pressure</span>
+            </div>
           </div>
-        </div>
-        <div class="pressure" id="pressure" role="table" aria-label="Mean pressure coefficient by region"></div>
-        <p class="chart-note" id="pressure-note"></p>
-      </section>
+          <div class="pressure" id="pressure" role="table" aria-label="Mean pressure coefficient by region"></div>
+          <p class="chart-note" id="pressure-note"></p>
+        </section>
 
-      <section class="panel span-2" aria-labelledby="history-title">
-        <div class="panel-head">
-          <h2 id="history-title">This session</h2>
-          <span class="timing">Click a row to load that design again</span>
-        </div>
-        <div class="table-scroll">
-          <table class="history">
-            <thead>
-              <tr><th scope="col">Design</th><th scope="col" class="num">Cd</th>
-                <th scope="col" class="num">σ</th><th scope="col">Verdict</th></tr>
-            </thead>
-            <tbody id="history"></tbody>
-          </table>
-        </div>
-      </section>
+        <section class="panel" aria-labelledby="history-title">
+          <div class="panel-head">
+            <h2 id="history-title">This session</h2>
+            <span class="timing">Click a row to load it again</span>
+          </div>
+          <div class="table-scroll">
+            <table class="history">
+              <thead>
+                <tr><th scope="col">Design</th><th scope="col" class="num">Cd</th>
+                  <th scope="col" class="num">σ</th><th scope="col">Gate</th></tr>
+              </thead>
+              <tbody id="history"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </div>
   </main>
 

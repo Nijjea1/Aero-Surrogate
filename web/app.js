@@ -17,8 +17,9 @@ import {
   api, animateNumber, bindInfo, escapeHtml, fmt, hideTooltip, infoButton, infoHtml, initTheme, LOGO, pageUrl,
   REDUCED_MOTION, ServiceError, showTooltip, signed, toast,
 } from "./common.js";
-import { aeroLoads } from "./physics.js";
+import { aeroLoads, reynolds } from "./physics.js";
 import { bindField, meshIdentity } from "./fieldmap.js";
+import { createCdGauge, createMeters, niceCeil } from "./gauges.js";
 
 // Readable names, units and one line on what each dial does to the car.
 const PARAM_INFO = {
@@ -79,7 +80,7 @@ const SCENES = {
   studio: { label: "Studio", caption: "Drag to orbit, scroll to zoom. Hover a pin or the paint for what each number means." },
   tunnel: { label: "Wind tunnel", caption: "" },
   drive: { label: "Road", caption: "" },
-  race: { label: "Drag race", caption: "Same engine, same mass, same tyres: only the predicted drag differs. An illustration of what the prediction means, not a vehicle simulation." },
+  race: { label: "Race", caption: "Same engine, same mass, same tyres: only the predicted drag differs. An illustration of what the prediction means, not a vehicle simulation." },
 };
 const FLOW_CAPTION = "<strong>Airflow is an illustration driven by the prediction, not a simulation.</strong> " +
   "The smoke takes the pressure of each region it passes (colour, and speed by Bernoulli); the wake grows with " +
@@ -138,7 +139,18 @@ const state = {
   meshIdentity: null,      // { key, identity } of the car on screen
   field: null,             // the bound field (fieldmap.js) on the car on screen, or null
   fieldProblem: null,      // why a field could not be shown
+  cdGauge: null,           // the instrument cluster (gauges.js)
+  meters: null,
 };
+
+const METERS = [
+  { id: "sigma", label: "Uncertainty σ", info: "sigma" },
+  { id: "ood", label: "Distance from training data", info: "ood" },
+  { id: "drag", label: "Drag force", unit: "N", info: "drag" },
+  { id: "power", label: "Power to push the air", unit: "kW", info: "power" },
+  { id: "energy", label: "Energy, drag only", unit: "kWh/100 km", info: "energy" },
+  { id: "lift", label: "Lift", unit: "N", info: "lift" },
+];
 
 const $ = (id) => document.getElementById(id);
 
@@ -502,37 +514,31 @@ function renderResult() {
 
   const verdict = $("verdict");
   verdict.dataset.state = reason ? "rejected" : "trusted";
-  verdict.querySelector(".verdict-icon").textContent = reason ? "✕" : "✓";
-  $("verdict-label").innerHTML = `${reason ? "Rejected by the gate" : "Trusted by the gate"} ${infoButton("gate")}`;
+  $("verdict-label").innerHTML = `${reason ? "✕ Rejected by the gate" : "✓ Trusted by the gate"} ${infoButton("gate")}`;
   $("verdict-reason").textContent = reason ||
     `Inside the training distribution: ${distance}σ is below the ${fmt(threshold, 4)} threshold.`;
 
-  animateNumber($("cd-value"), e.cd, (v) => fmt(v, 4));
-  $("cl-value").textContent = liftPredicted() ? signed(e.cl, 4) : "–";
-  animateNumber($("sigma-value"), e.uncertainty, (v) => `± ${fmt(v, 4)}`);
   const baseline = state.baselines[baselineKey()];
   if (baseline === undefined) ensureBaseline();
+  animateNumber($("cd-value"), e.cd, (v) => fmt(v, 4));
+  state.cdGauge?.update({ cd: e.cd, baseline: baseline?.cd });
   renderDelta($("cd-delta"), e.cd, baseline?.cd, true);
-  if (liftPredicted()) renderDelta($("cl-delta"), e.cl, baseline?.cl, null);
-  else $("cl-delta").textContent = "Not predicted by this model";
 
-  // Meter spans 0 to 1.5x the threshold; the mark is the threshold itself.
-  const span = threshold * 1.5;
-  for (const [fill, mark, meter] of [["sigma-fill", "sigma-mark", "sigma-meter"], ["hud-meter-fill", "hud-meter-mark", "hud-meter"]]) {
-    $(fill).style.width = `${Math.min(e.uncertainty / span, 1) * 100}%`;
-    $(mark).style.left = `calc(${(threshold / span) * 100}% - 1px)`;
-    $(meter).dataset.over = String(e.uncertainty > threshold);
+  // The two numbers the gate reads, each against its limit.
+  const over = e.uncertainty > threshold;
+  state.meters?.set("sigma", {
+    value: e.uncertainty, max: niceCeil(threshold * 1.25), gate: threshold, fill: true, text: `±${fmt(e.uncertainty, 4)}`,
+    sub: over ? `above the ±${fmt(threshold, 4)} gate` : `inside the ±${fmt(threshold, 4)} gate`, good: !over,
+  });
+  const oodLimit = state.schema.ood_score_threshold;
+  if (typeof e.ood_score === "number" && typeof oodLimit === "number") {
+    state.meters?.set("ood", {
+      value: e.ood_score, max: niceCeil(oodLimit * 1.25), gate: oodLimit, fill: true, text: fmt(e.ood_score, 2),
+      sub: `${fmt(e.ood_score, 2)} of ${fmt(oodLimit, 2)} allowed`, good: e.ood_score <= oodLimit,
+    });
+  } else {
+    state.meters?.set("ood", { value: NaN, max: 1, off: true, text: "–", sub: "this model reports no distance" });
   }
-  $("sigma-note").textContent = `Gate threshold ${fmt(threshold, 4)}`;
-
-  // The HUD on the stage.
-  $("hud-chip").dataset.state = reason ? "rejected" : "trusted";
-  $("hud-chip-text").textContent = reason ? "Gate rejected" : "Trusted";
-  $("hud-chip").title = reason || "The gate trusts this prediction.";
-  animateNumber($("hud-cd"), e.cd, (v) => fmt(v, 4));
-  renderDelta($("hud-cd-delta"), e.cd, baseline?.cd, true);
-  $("hud-sigma").textContent = fmt(e.uncertainty, 4);
-  $("hud-threshold").textContent = fmt(threshold, 4);
 
   const latency = e.latency_ms > 0 ? `model ${fmt(e.latency_ms, 1)} ms · ` : "";
   $("timing").textContent = `${latency}round trip ${fmt(roundTrip, 0)} ms · ${e.model_version}`;
@@ -544,6 +550,7 @@ function renderResult() {
   updatePins();
   updateFlow();
   renderHud();
+  if (state.scene === "race" && state.race && !state.race.running) startRace();
 }
 
 // ---------------------------------------------------------------- surface fields
@@ -616,8 +623,8 @@ function renderDelta(el, value, base, lowerIsBetter) {
     return;
   }
   const delta = value - base;
-  const pct = base ? ` (${signed((100 * delta) / base, 1)}%)` : "";
-  el.textContent = `${signed(delta, 4)}${pct} vs baseline`;
+  el.textContent = Math.abs(delta) < 5e-5 ? "same as the original"
+    : `${base ? `${signed((100 * delta) / base, 1)} % ` : ""}(${signed(delta, 4)}) vs original`;
   if (lowerIsBetter === null || Math.abs(delta) < 1e-9) el.removeAttribute("data-good");
   else el.dataset.good = String(lowerIsBetter ? delta < 0 : delta > 0);
 }
@@ -777,7 +784,7 @@ function renderHistory() {
     const style = entry.bodyStyle ? ` · ${entry.bodyStyle}` : "";
     tr.innerHTML = `<td>${escapeHtml(entry.label + style)}</td><td class="num">${fmt(e.cd, 4)}</td>
       <td class="num">${fmt(e.uncertainty, 4)}</td>
-      <td><span class="tag ${ok ? "ok" : "no"}"><i></i>${ok ? "Trusted" : "Rejected"}</span></td>`;
+      <td><span class="tag ${ok ? "ok" : "no"}"><i></i>${ok ? "Trusted" : "Gated"}</span></td>`;
     tr.addEventListener("click", () => {
       state.params = { ...entry.params };
       state.label = entry.label;
@@ -841,7 +848,14 @@ async function initViewer() {
   try {
     const [{ createFlow }, { createRace }] = await Promise.all([import("./flow.js"), import("./race.js")]);
     state.flow = createFlow(state.viewer);
-    state.race = createRace(state.viewer, $("race-hud"));
+    state.race = createRace(state.viewer, {
+      hud: $("race-hud"),
+      panel: {
+        root: $("race-panel"), mode: $("race-mode"), rate: $("race-rate"), go: $("race-go"),
+        inputs: { distance: $("race-distance"), v0: $("race-v0"), power: $("race-power"), mass: $("race-mass") },
+        trace: $("race-trace"), mkD: $("race-mk-d"), mkO: $("race-mk-o"), ticks: $("race-ticks"),
+      },
+    });
   } catch (error) {
     console.error(error);
   }
@@ -889,30 +903,33 @@ function setScene(scene) {
   for (const button of $("scene-modes").querySelectorAll("button")) {
     button.setAttribute("aria-pressed", String(button.dataset.scene === scene));
   }
-  $("hud-scene").textContent = SCENES[scene].label;
   if (previous === "race" && scene !== "race") state.race?.stop();
   const flowMode = scene === "tunnel" ? "tunnel" : scene === "drive" ? "drive" : "off";
   state.flow?.setMode(flowMode);
   if (flowMode !== "off") state.flow?.setPaused(state.paused);
-  state.viewer.setStage(scene === "studio" ? "studio" : "none");
+  state.viewer.setStage(scene === "studio" ? "studio" : scene === "race" ? "race" : "none");
+  $("race-panel").hidden = scene !== "race";
+  if (scene === "race" && state.viewerMode !== "plain") setViewerMode("plain");
   if (scene === "studio") {
     state.viewer.scene.background = null;
     state.viewer.scene.fog = null;
     state.viewer.setView("orbit", { animate: previous !== scene });
   }
   state.pins?.setVisible(state.labels && scene !== "race");
-  $("hud").hidden = scene === "race";
-  $("hud-verdict").hidden = scene === "race";
-  if (scene === "race") startRace();
+  $("stage-tag").hidden = scene === "race";
+  $("stage-cap").hidden = scene === "race";
+  if (scene === "race") startRace({ go: true });
   syncPause();
   setViewerMode(state.viewerMode);
   renderHud();
 }
 
 // The race needs the original car of this style: its mesh and its prediction.
-async function startRace() {
+// go starts the lights; without it the race is set up with the new prediction
+// and waits for Start.
+async function startRace({ go = false } = {}) {
   if (!state.race || !state.current || !state.area) {
-    toast("The race needs a prediction and the 3D car first.");
+    if (go) toast("The race needs a prediction and the 3D car first.");
     return;
   }
   const style = state.bodyStyle;
@@ -926,12 +943,11 @@ async function startRace() {
   const base = state.baselines[baselineKey()];
   if (!base || state.scene !== "race") return;
   const e = state.current.evaluation;
-  state.race.start({
-    design: { cd: e.cd, area: state.area, label: state.current.label === "Baseline" ? "Design (baseline)" : "Your design",
-      trusted: !rejectionReason(e, state.current.bodyStyle) },
-    original: { cd: base.cd, area: state.baselineMesh[style].frontal_area_m2, label: "Original", payload: state.baselineMesh[style],
-      paint: state.paint === state.paints.Graphite ? state.paints["Liquid silver"] : state.paints.Graphite },
+  state.race.configure({
+    design: { cd: e.cd, area: state.area, label: "Design", trusted: !rejectionReason(e, state.current.bodyStyle) },
+    original: { cd: base.cd, area: state.baselineMesh[style].frontal_area_m2, label: "Original", payload: state.baselineMesh[style] },
   });
+  if (go) state.race.start();
 }
 
 // Hand the current prediction to the airflow. Called whenever the prediction,
@@ -949,36 +965,69 @@ function updateFlow() {
   });
 }
 
+// Everything that depends on the chosen speed: the force meters, the tag on
+// the stage and its caption line.
 function renderHud() {
   const speedKmh = state.speedKmh;
   $("speed-value").textContent = `${speedKmh} km/h`;
-  $("hud-speed").textContent = String(speedKmh);
   const [lo, hi] = [Number($("speed").min), Number($("speed").max)];
-  $("speed-fill").style.left = "0%";
   $("speed-fill").style.width = `${((speedKmh - lo) / (hi - lo)) * 100}%`;
-  if (!state.current || !state.area) return;
+  $("cap-scene").textContent = { studio: "Studio", tunnel: "Test section", drive: "Road", race: "Race" }[state.scene];
+  $("cap-speed").textContent = `${speedKmh} km/h`;
+  $("cap-extra").textContent = state.scene === "tunnel" ? "rolling road on" : "";
+  const length = state.viewer?.frame?.length;
+  if (length) {
+    const re = reynolds(speedKmh, length);
+    const exp = Math.floor(Math.log10(re));
+    $("cap-re").textContent = `${fmt(re / 10 ** exp, 1)} × 10${superscript(exp)}`;
+  }
+  if (!state.current) return;
   const e = state.current.evaluation;
+  const reason = rejectionReason(e, state.current.bodyStyle);
+  $("tag-state").dataset.state = reason ? "rejected" : "trusted";
+  $("tag-state").textContent = reason ? "Cd · gated" : "Cd · trusted";
+  $("tag-cd").textContent = fmt(e.cd, 4);
+  $("hud-flag").hidden = !reason || state.scene === "studio" || state.scene === "race";
+  if (!state.area) return;
   const now = aeroLoads({ cd: e.cd, cl: e.cl, sigma: e.uncertainty, area: state.area, speedKmh });
+  $("tag-drag").textContent = `${fmt(now.drag, 0)} N at ${speedKmh} km/h`;
   const baseline = state.baselines[baselineKey()];
   const base = baseline && state.baselineArea
     ? aeroLoads({ cd: baseline.cd, cl: baseline.cl, area: state.baselineArea, speedKmh })
     : null;
-  $("hud-drag").textContent = `${fmt(now.drag, 0)} N ± ${fmt(now.dragSigma, 0)}`;
-  $("hud-power").textContent = `${fmt(now.power, 1)} kW`;
-  $("hud-energy").textContent = `${fmt(now.energyPer100km, 2)} kWh`;
-  $("hud-lift").textContent = !liftPredicted() ? "not predicted"
-    : now.lift < 0 ? `${fmt(-now.lift, 0)} N down` : `${fmt(now.lift, 0)} N up`;
-  hudDelta($("hud-drag-delta"), base && now.drag - base.drag, (d) => `${signed(d, 0)} N vs baseline`);
-  hudDelta($("hud-energy-delta"), base && now.energyPer100km - base.energyPer100km,
-    (d) => `${signed(d, 2)} kWh vs baseline`);
-  $("hud-flag").hidden = !rejectionReason(e, state.current.bodyStyle) || state.scene === "studio";
+  // Scales are ruled from the original car, so they hold still while the dials move.
+  const top = (value, ref) => niceCeil(1.6 * (ref ?? value));
+  const versus = (delta, digits, unit, fallback) => {
+    if (!base) return { sub: fallback };
+    if (Math.abs(delta) < 10 ** -digits / 2) return { sub: fallback || "same as the original" };
+    return { sub: `${signed(delta, digits)} ${unit} vs original`, good: delta < 0 };
+  };
+  state.meters?.set("drag", {
+    value: now.drag, max: top(now.drag, base?.drag), ref: base?.drag, text: fmt(now.drag, 0),
+    ...versus(base ? now.drag - base.drag : 0, 0, "N", `±${fmt(now.dragSigma, 0)} N at ${speedKmh} km/h`),
+  });
+  state.meters?.set("power", {
+    value: now.power, max: top(now.power, base?.power), ref: base?.power, text: fmt(now.power, 1),
+    ...versus(base ? now.power - base.power : 0, 1, "kW", `at ${speedKmh} km/h`),
+  });
+  state.meters?.set("energy", {
+    value: now.energyPer100km, max: top(now.energyPer100km, base?.energyPer100km), ref: base?.energyPer100km,
+    text: fmt(now.energyPer100km, 2),
+    ...versus(base ? now.energyPer100km - base.energyPer100km : 0, 2, "kWh", `per 100 km at ${speedKmh} km/h`),
+  });
+  if (!liftPredicted()) {
+    state.meters?.set("lift", { value: NaN, min: -100, max: 100, off: true, text: "Not predicted", sub: "this model predicts drag only" });
+  } else {
+    const span = niceCeil(1.6 * Math.max(Math.abs(now.lift), Math.abs(base?.lift ?? 0), 10));
+    state.meters?.set("lift", {
+      value: now.lift, min: -span, max: span, ref: base?.lift, text: signed(now.lift, 0),
+      sub: now.lift < 0 ? `${fmt(-now.lift, 0)} N of downforce` : `${fmt(now.lift, 0)} N lifting the car`,
+    });
+  }
 }
 
-function hudDelta(el, delta, text) {
-  const show = typeof delta === "number" && state.current.label !== "Baseline";
-  el.textContent = show ? text(delta) : "";
-  if (show && Math.abs(delta) > 1e-9) el.dataset.good = String(delta < 0);
-  else el.removeAttribute("data-good");
+function superscript(n) {
+  return String(n).replace(/[0-9-]/g, (c) => ("-" === c ? "⁻" : "⁰¹²³⁴⁵⁶⁷⁸⁹"[Number(c)]));
 }
 
 function setViewerMode(mode) {
@@ -1032,7 +1081,7 @@ async function refreshMesh(params) {
   if (seq !== state.meshSeq) return;   // a newer shape is on its way
   $("viewer-message").hidden = true;
   state.viewer.setMesh(payload);
-  if (state.paint) state.viewer.setPaint(state.paint);
+  if (state.paint && state.scene !== "race") state.viewer.setPaint(state.paint);
   // A new car carries no field: the matching one binds once both halves are in.
   state.field = null;
   state.fieldProblem = null;
@@ -1135,6 +1184,8 @@ async function start() {
   initTheme();
   bindInfo();
   $("logo").innerHTML = LOGO;
+  state.cdGauge = createCdGauge($("cd-gauge"));
+  state.meters = createMeters($("meters"), METERS);
   $("runs-link").href = pageUrl("runs.html");
   $("results-link").href = pageUrl("results.html");
   document.addEventListener("fullscreenchange", () => state.viewer?.render());

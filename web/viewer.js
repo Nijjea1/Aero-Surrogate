@@ -33,9 +33,9 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 const CP_RANGE = 0.6;   // saturate early so typical suction and pressure both read
 const COLORS = {
-  neg: new THREE.Color("#3b8cff"),      // suction
-  pos: new THREE.Color("#ff5a5f"),      // pressure
-  mid: new THREE.Color("#a3adb8"),      // Cp = 0
+  neg: new THREE.Color("#4f86e0"),      // suction
+  pos: new THREE.Color("#e0553f"),      // pressure
+  mid: new THREE.Color("#a9adb4"),      // Cp = 0
   none: new THREE.Color("#5d6672"),     // surface no region covers, or no value yet
   sigmaLo: new THREE.Color("#3a2a0c"),  // Cp uncertainty: one amber hue, dark to light
   sigmaHi: new THREE.Color("#ffd27a"),
@@ -45,7 +45,7 @@ export const PAINTS = {
   Graphite: "#2b3036",
   "Racing red": "#c4141b",
   "Arctic white": "#eef1f4",
-  Cyan: "#14b8d4",
+  "Signal orange": "#e8551c",
 };
 const PART = { paint: 0, glass: 1, tyre: 2, headlight: 3, taillight: 4, trim: 5 };
 // Draw groups in the studio look. Paint, glass and trim share one clear-coated
@@ -84,7 +84,7 @@ export function createViewer(container, { onHover } = {}) {
   key.shadow.bias = -0.0004;
   key.shadow.radius = 4;
   scene.add(key);
-  const rimCool = new THREE.DirectionalLight(0x7fdcff, 1.1);   // cyan edge light from behind
+  const rimCool = new THREE.DirectionalLight(0xc8d6ff, 1.0);   // cool edge light from behind
   rimCool.position.set(6, 3, -5);
   scene.add(rimCool);
   const rimWarm = new THREE.DirectionalLight(0xffd2a8, 0.5);
@@ -189,18 +189,19 @@ export function createViewer(container, { onHover } = {}) {
     render();
   }
 
-  // The studio is lit like a showroom; outdoors (road, tunnel, race) the key
-  // light turns to a cool moon and reflections dim, so the paint does not
-  // glow white against a night sky.
+  // The studio is lit like a showroom; outdoors (road, tunnel) the key light
+  // turns to a cool moon and reflections dim, so the paint does not glow white
+  // against a night sky. The race is floodlit, so both paints read at a glance.
   let envScale = 0.55;
   function setStage(name) {
     const indoor = name === "studio";
+    const floodlit = name === "race";
     studio.visible = indoor;
-    envScale = indoor ? 0.55 : 0.4;
-    key.intensity = indoor ? 1.5 : 1.15;
-    key.color.set(indoor ? "#ffffff" : "#cfdcff");
-    hemi.intensity = indoor ? 0.3 : 0.3;
-    rimCool.intensity = indoor ? 1.1 : 0.7;
+    envScale = indoor ? 0.55 : floodlit ? 0.75 : 0.4;
+    key.intensity = indoor ? 1.5 : floodlit ? 1.9 : 1.15;
+    key.color.set(indoor || floodlit ? "#ffffff" : "#cfdcff");
+    hemi.intensity = floodlit ? 0.55 : 0.3;
+    rimCool.intensity = indoor ? 1.1 : floodlit ? 0.9 : 0.7;
     for (const c of cars) c.setEnvScale(envScale);
     render();
   }
@@ -260,7 +261,11 @@ export function createViewer(container, { onHover } = {}) {
   const perf = { workMs: 8, quality: "high" };
   function frame(now) {
     if (!animator || !visible) { looping = false; return; }
-    const dt = Math.min((now - last) / 1000, 0.05);  // a hidden tab must not jump
+    // The true frame time, so anything keyed to the clock (the race) keeps
+    // real time however slow the frames. A gap of a second or more is a
+    // hidden or stalled tab, not a frame: it counts as nothing.
+    const gap = (now - last) / 1000;
+    const dt = gap >= 1 ? 0 : gap;
     last = now;
     const started = performance.now();
     animator(dt, now / 1000);
@@ -347,6 +352,7 @@ export function createViewer(container, { onHover } = {}) {
     onResize: (fn) => { resizeListeners.add(fn); fn(size.x * pixelRatio, size.y * pixelRatio, size.x, size.y); },
     scene, camera, controls, renderer, perf, car: null, frame: null,
     get mode() { return mode; },
+    get paint() { return paint; },
   };
   return api;
 }
@@ -598,8 +604,8 @@ function decode(b64, Type) {
 
 // ---------------------------------------------------------------- the studio
 
-// A glossy dark floor that fades into the backdrop, and a faint cyan
-// turntable ring. Each car brings its own contact shadow.
+// A glossy dark floor that fades into the backdrop, and a faint turntable
+// ring. Each car brings its own contact shadow.
 function makeStudio() {
   const group = new THREE.Group();
   const fade = radialTexture([[0, "rgba(255,255,255,1)"], [0.55, "rgba(255,255,255,0.9)"], [1, "rgba(255,255,255,0)"]]);
@@ -611,7 +617,7 @@ function makeStudio() {
   floor.receiveShadow = true;
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(3.15, 3.19, 160),
-    new THREE.MeshBasicMaterial({ color: "#22d3ee", transparent: true, opacity: 0.22 }),
+    new THREE.MeshBasicMaterial({ color: "#8a8d93", transparent: true, opacity: 0.2 }),
   );
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.003;

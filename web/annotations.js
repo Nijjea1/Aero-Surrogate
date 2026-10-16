@@ -34,10 +34,10 @@ export function createAnnotations(viewer, host, { describe }) {
   const toCamera = new THREE.Vector3();
   const dragAt = new THREE.Vector3();
 
-  // ---- the drag arrow: a glowing shaft and head behind the tail, pointing
-  // backwards (cars face -X), as long as the drag force is large.
+  // ---- the drag arrow: a shaft and head behind the tail, pointing backwards
+  // (cars face -X), as long as the drag force is large.
   const arrow = new THREE.Group();
-  const glow = new THREE.MeshStandardMaterial({ color: "#ffb020", emissive: "#ff9a00", emissiveIntensity: 1.6, roughness: 0.4 });
+  const glow = new THREE.MeshStandardMaterial({ color: "#ff6a2b", emissive: "#ff5f1f", emissiveIntensity: 0.9, roughness: 0.4 });
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 16), glow);
   shaft.rotation.z = Math.PI / 2;
   const head = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.26, 24), glow);
@@ -85,7 +85,7 @@ export function createAnnotations(viewer, host, { describe }) {
     for (const [name, el] of Object.entries(pins)) {
       const v = values[name];
       const has = v && typeof v.value === "number";
-      el.style.setProperty("--pin", has ? cpColor(v.value) : "#5d6672");
+      el.style.setProperty("--pin", has ? cpColor(v.value) : "#6f7075");
       el.innerHTML = `${escapeHtml(REGION_NAMES[name] || name)} <b>${has ? signed(v.value, 2) : "–"}</b>`;
       el.setAttribute("aria-label", `${REGION_NAMES[name] || name}: Cp ${has ? signed(v.value, 2) : "not available"}`);
     }
@@ -128,6 +128,27 @@ export function createAnnotations(viewer, host, { describe }) {
     } else {
       arrow.visible = false;
       dragPin.style.display = "none";
+    }
+    declutter([...Object.values(pins), dragPin]);
+  }
+
+  // Labels that would overlap are stacked: each later one moves down (or up,
+  // if there is more room above) just clear of those already placed.
+  function declutter(els) {
+    const placed = [];
+    const shown = els.filter((el) => el.style.display !== "none" && el.dataset.away !== "true");
+    shown.sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));
+    for (const el of shown) {
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const x = parseFloat(el.style.left), base = parseFloat(el.style.top);
+      let y = base;
+      for (let tries = 0; tries < 8; tries++) {
+        const hit = placed.find((p) => Math.abs(p.x - x) < (p.w + w) / 2 + 4 && Math.abs(p.y - y) < (p.h + h) / 2 + 3);
+        if (!hit) break;
+        y = hit.y + (hit.h + h) / 2 + 3;
+      }
+      if (y !== base) el.style.top = `${y}px`;
+      placed.push({ x, y, w, h });
     }
   }
   viewer.onRender(place);

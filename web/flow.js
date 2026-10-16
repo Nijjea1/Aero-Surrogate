@@ -53,8 +53,8 @@ const HAZE = 220;                  // soft puffs in the wake
 const LINE_PX = { tunnel: 2.2, drive: 1.8 };
 
 const COLOR = {
-  neg: new THREE.Color("#3d8bff"),
-  pos: new THREE.Color("#ff4747"),
+  neg: new THREE.Color("#4f86e0"),
+  pos: new THREE.Color("#e0553f"),
   mid: new THREE.Color("#8e98a3"),
   grey: new THREE.Color("#6f7781"),
   haze: new THREE.Color("#6f8faf"),
@@ -108,12 +108,9 @@ export function createFlow(viewer) {
   scenery.add(road.mesh, roadside.group);
   scenery.visible = false;
   viewer.scene.add(scenery);
-  const floor = new THREE.GridHelper(18, 36, 0x22d3ee, 0x2a3644);   // tunnel mode: depth cues
-  floor.material.transparent = true;
-  floor.material.opacity = 0.35;
-  floor.position.set(1.5, 0.001, 0);
-  floor.visible = false;
-  viewer.scene.add(floor);
+  const tunnel = makeTunnel();               // tunnel mode: the test section
+  tunnel.group.visible = false;
+  viewer.scene.add(tunnel.group);
   let travel = 0;                           // m the road has moved, for the roadside
   let warmed = false;
   let clock = 0;     // simulation time: every wobble and swirl runs on this, never the wall clock
@@ -484,8 +481,9 @@ export function createFlow(viewer) {
   }
 
   const stats = { frameMs: 0 };   // exponential mean of the work per frame
-  function tick(dt) {
+  function tick(frameDt) {
     if (!shape || !field) return;
+    const dt = Math.min(frameDt, 0.05);   // the integration stays stable on a slow frame
     if (!warmed) { warmUp(); warmed = true; }
     const started = performance.now();
     clock += dt;
@@ -501,6 +499,12 @@ export function createFlow(viewer) {
       wheelAngle += (U / shape.wheelR) * dt;
       viewer.car?.spin(wheelAngle);
       sweepCamera(dt);
+    } else if (mode === "tunnel") {
+      // The rolling road runs at the air speed, and turns the wheels with it.
+      const U = roadSpeed();
+      tunnel.belt.offset.x -= (U * dt) / tunnel.tile;
+      wheelAngle += (U / shape.wheelR) * dt;
+      viewer.car?.spin(wheelAngle);
     }
   }
 
@@ -565,7 +569,7 @@ export function createFlow(viewer) {
     mode = next;
     group.visible = mode !== "off";
     scenery.visible = mode === "drive";
-    floor.visible = mode === "tunnel";
+    tunnel.group.visible = mode === "tunnel";
     setAtmosphere(mode);
     reset();
     autoCamera = true;
@@ -646,6 +650,56 @@ function makeRoadside() {
   }
   place(0);
   return { group, place };
+}
+
+// The test section: a measuring grid on the wall behind the car (0.1 m minor,
+// 0.5 m major lines) and a rolling road under it that runs at the air speed.
+function makeTunnel() {
+  const group = new THREE.Group();
+  const grid = document.createElement("canvas");
+  grid.width = grid.height = 256;
+  const g = grid.getContext("2d");
+  g.fillStyle = "#0d1116";
+  g.fillRect(0, 0, 256, 256);
+  for (let k = 0; k <= 10; k++) {
+    const at = Math.round((k / 10) * 256);
+    g.fillStyle = k % 5 === 0 ? "rgba(120,160,210,0.28)" : "rgba(120,160,210,0.11)";
+    g.fillRect(at - (k % 5 === 0 ? 1 : 0), 0, k % 5 === 0 ? 2 : 1, 256);
+    g.fillRect(0, at - (k % 5 === 0 ? 1 : 0), 256, k % 5 === 0 ? 2 : 1);
+  }
+  const gridTexture = new THREE.CanvasTexture(grid);
+  gridTexture.wrapS = gridTexture.wrapT = THREE.RepeatWrapping;
+  gridTexture.colorSpace = THREE.SRGBColorSpace;
+  gridTexture.anisotropy = 4;
+  gridTexture.repeat.set(26, 7);
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(26, 7), new THREE.MeshBasicMaterial({ map: gridTexture }));
+  wall.position.set(1.5, 3.5, -3.6);
+
+  const beltCanvas = document.createElement("canvas");
+  beltCanvas.width = 256;
+  beltCanvas.height = 64;
+  const b = beltCanvas.getContext("2d");
+  b.fillStyle = "#16181c";
+  b.fillRect(0, 0, 256, 64);
+  b.fillStyle = "rgba(255,255,255,0.07)";
+  b.fillRect(0, 0, 3, 64);
+  b.fillRect(128, 0, 3, 64);
+  const belt = new THREE.CanvasTexture(beltCanvas);
+  belt.wrapS = belt.wrapT = THREE.RepeatWrapping;
+  belt.colorSpace = THREE.SRGBColorSpace;
+  belt.anisotropy = 8;
+  const tile = 1;                            // m of belt per texture repeat
+  belt.repeat.set(26 / tile, 1);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 7.2), new THREE.MeshStandardMaterial({ color: "#0b0d10", roughness: 0.9 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(1.5, 0.0004, 0);
+  floor.receiveShadow = true;
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(26, 2.8), new THREE.MeshStandardMaterial({ map: belt, roughness: 0.75, envMapIntensity: 0.2 }));
+  road.rotation.x = -Math.PI / 2;
+  road.position.set(1.5, 0.0008, 0);
+  road.receiveShadow = true;
+  group.add(wall, floor, road);
+  return { group, belt, tile };
 }
 
 function skyTexture(zenith, mid, horizon) {
