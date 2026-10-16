@@ -1165,7 +1165,43 @@
   },
   "data_scaling": {
     "test_set": "random split test, fixed for every point",
-    "model": [],
+    "model": [
+      {
+        "n_train": 146,
+        "r2": 0.7783539584852315,
+        "mae": 0.00848817214589453,
+        "coverage_1sigma": 0.7344,
+        "checkpoint": "runs/scaling/scaling-005-random/best.pt"
+      },
+      {
+        "n_train": 292,
+        "r2": 0.8093095133078825,
+        "mae": 0.0076955019448154615,
+        "coverage_1sigma": 0.7744,
+        "checkpoint": "runs/scaling/scaling-010-random/best.pt"
+      },
+      {
+        "n_train": 729,
+        "r2": 0.8496388611558919,
+        "mae": 0.006866071644837785,
+        "coverage_1sigma": 0.7984,
+        "checkpoint": "runs/scaling/scaling-025-random/best.pt"
+      },
+      {
+        "n_train": 1458,
+        "r2": 0.8565221172347283,
+        "mae": 0.006565113119315609,
+        "coverage_1sigma": 0.6304,
+        "checkpoint": "runs/scaling/scaling-050-random/best.pt"
+      },
+      {
+        "n_train": 2915,
+        "r2": 0.8778214066616057,
+        "mae": 0.006021588837611133,
+        "coverage_1sigma": 0.6496,
+        "checkpoint": "runs/scaling/scaling-100-random/best.pt"
+      }
+    ],
     "linear_reference": [
       {
         "n_train": 58,
@@ -1197,7 +1233,10 @@
         "r2": 0.8352341038460126,
         "mae": 0.007258325834440814
       }
-    ]
+    ],
+    "command": "python -m src.eval.scaling update --metrics web/results/metrics.json --splits runs/splits.json runs/scaling/scaling-005-random/best.pt runs/scaling/scaling-010-random/best.pt runs/scaling/scaling-025-random/best.pt runs/scaling/scaling-050-random/best.pt runs/scaling/scaling-100-random/best.pt",
+    "updated_at": "2026-10-16T08:00:17+00:00",
+    "subsets": "nested random subsets of the training split (seed 1000), validation and test fixed; each point is its own training run, so the full-data point can differ a little from the headline model"
   },
   "field": {
     "available": false,
@@ -1221,8 +1260,7 @@
   "warnings": [
     "at the contract's fallback OOD threshold (3.0) the gate passes 0.0% of ordinary test designs vs 99.7% at the checkpoint's calibrated 4.93: the service must pass the checkpoint's threshold",
     "2-sigma coverage is 0.89 against 0.95 expected: the error bars are too narrow",
-    "sigma barely ranks designs by risk (rank correlation with the error 0.13): it says how wide the bars are on average, not which designs to distrust",
-    "no --scaling checkpoints: the data-scaling curve has the linear reference only"
+    "sigma barely ranks designs by risk (rank correlation with the error 0.13): it says how wide the bars are on average, not which designs to distrust"
   ],
   "label": "Provisional: a local CPU training run, not the submission checkpoints"
 }

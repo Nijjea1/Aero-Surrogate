@@ -45,10 +45,13 @@
   <main class="results-page">
     <section class="panel" aria-labelledby="headline-title">
       <div class="panel-head">
-        <h2 id="headline-title">Headline</h2>
+        <h2 id="headline-title">The answer</h2>
         <span class="timing" id="provenance"></span>
       </div>
-      <div class="tiles tiles-4" id="headline"></div>
+      <p class="answer-line" id="headline-line"></p>
+      <div class="table-scroll">
+        <table class="history headline-table"><tbody id="headline"></tbody></table>
+      </div>
       <details class="caveats" id="caveats" hidden>
         <summary id="caveats-summary"></summary>
         <ul class="warnings" id="warnings"></ul>
@@ -91,7 +94,7 @@
 
     <section class="panel" aria-labelledby="scaling-title">
       <div class="panel-head"><h2 id="scaling-title">More data, better model?</h2></div>
-      <p class="lede">R² on the same fixed test set as the training set grows.</p>
+      <p class="lede">The same model retrained on growing slices of the training data, every point graded on the same 625 test designs.</p>
       <div class="legend run-legend" id="scaling-legend"></div>
       <div class="chart" id="scaling"></div>
       <p class="chart-note" id="scaling-note"></p>

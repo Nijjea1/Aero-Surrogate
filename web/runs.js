@@ -138,6 +138,7 @@ function defaultSelection(wanted) {
 // ---------------------------------------------------------------- rendering
 
 function render() {
+  renderAnswer();
   renderList();
   renderLegend();
   renderChart();
@@ -335,6 +336,34 @@ function verdictOf(r) {
   if (r.accepted) return { cls: "ok", text: "Trusted" };
   if (isReference(r)) return { cls: "ref", text: "Reference" };
   return { cls: "no", text: "Gated" };
+}
+
+// The page's one answer: which compared run found the lowest drag the gate
+// trusts, by how much against the unmodified car, and how the others did.
+function renderAnswer() {
+  const line = $("answer-line");
+  const sub = $("answer-sub");
+  if (!state.runs.length) {
+    line.textContent = "No runs yet.";
+    sub.textContent = "Start an agent run below, or run an optimiser from the repo root with the commands listed.";
+    return;
+  }
+  const rows = selectedRuns().map(({ run }) => ({ run, s: summarise(run) })).filter(({ s }) => s.best !== null);
+  if (!rows.length) {
+    line.textContent = "No compared run has a trusted design yet.";
+    sub.textContent = "Tick a run in the list to compare it.";
+    return;
+  }
+  rows.sort((a, b) => a.s.best - b.s.best);
+  const pct = (s) => (s.start ? (100 * (s.best - s.start)) / s.start : null);
+  const [lead, ...rest] = rows;
+  const change = pct(lead.s);
+  line.innerHTML = `${escapeHtml(labelOf(lead.run))} found the lowest trusted drag: Cd <b>${fmt(lead.s.best, 4)}</b>` +
+    `${change === null ? "" : `, ${signed(change, 1)} % against the unmodified car`}, at evaluation ${lead.s.bestAt} of ${lead.s.budget}.`;
+  sub.textContent = rest.length
+    ? `${rest.map(({ run, s }) => `${labelOf(run)} reached ${fmt(s.best, 4)}${pct(s) === null ? "" : ` (${signed(pct(s), 1)} %)`}`).join("; ")}. ` +
+      "Every run is scored by the same model and gate."
+    : "Tick more runs to compare them on the same chart.";
 }
 
 function renderCompare() {

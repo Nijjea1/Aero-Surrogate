@@ -763,6 +763,13 @@ optgroup, option { background: var(--surface); color: var(--text-primary); }
 .bar-value { font: 12.5px var(--mono); min-width: 4.5em; text-align: right; }
 .marker-key { display: inline-block; width: 2px; height: 12px; background: var(--text-primary); vertical-align: -2px; }
 
+.results-page .answer-line { margin: 0 0 14px; }
+.headline-table td { cursor: default; }
+.headline-table tbody tr:hover { background: transparent; }
+.headline-table td:first-child { color: var(--text-secondary); width: 34%; }
+.headline-table td.num { font-size: 15px; width: 16%; }
+.headline-table td.muted { color: var(--text-muted); font-size: 12px; }
+
 .skeleton { position: relative; overflow: hidden; color: transparent !important; background: var(--surface-3); }
 
 @media (prefers-reduced-motion: reduce) {
