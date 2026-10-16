@@ -136,7 +136,15 @@ export function createAnnotations(viewer, host, { describe }) {
   // if there is more room above) just clear of those already placed.
   function declutter(els) {
     const placed = [];
+    const W = host.clientWidth;
     const shown = els.filter((el) => el.style.display !== "none" && el.dataset.away !== "true");
+    // Keep every label inside the stage: on a narrow screen a pin near the
+    // edge would otherwise be cut off.
+    for (const el of shown) {
+      const half = el.offsetWidth / 2 + 6;
+      const x = parseFloat(el.style.left);
+      if (W > 2 * half) el.style.left = `${Math.min(W - half, Math.max(half, x))}px`;
+    }
     shown.sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));
     for (const el of shown) {
       const w = el.offsetWidth, h = el.offsetHeight;

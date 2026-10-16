@@ -135,6 +135,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .topbar-end { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .service { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font: 12px var(--mono); white-space: nowrap; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+.service .service-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .service .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); flex: none; }
 .service[data-state="ok"] .dot { background: var(--good); }
 .service[data-state="down"] .dot { background: var(--critical); }
