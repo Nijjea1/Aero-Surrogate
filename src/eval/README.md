@@ -65,6 +65,23 @@ replaces `data_scaling.model` and leaves every other graded number alone. On CPU
 the five runs take about five minutes in all. The same checkpoints can instead
 be passed to the harness with `--scaling` in a full regrade.
 
+## Surface pressure (stage 2)
+
+```powershell
+# with a full grade
+python -m src.eval.harness ... --field-checkpoint runs/fields/best.pt
+# or into the published metrics, leaving every other number alone
+python -m src.eval.fields --checkpoint runs/fields/best.pt --metrics web/results/metrics.json
+```
+
+Graded on the checkpoint's own held-out cars (`splits["test"]`, whole runs),
+from `data/drivaerml/fields/run_<n>.npz` (`python -m src.data.fields --extract`).
+It reports Cp R², MAE and σ coverage against two references with nothing
+learned about the car (the training mean everywhere, and the nearest point
+on any training car), the error per region, and the pressure drag
+integrated over each car's predicted and measured field. A missing
+checkpoint or missing arrays are reported in `field.reason`, never a crash.
+
 ## Agent against the baselines
 
 ```powershell

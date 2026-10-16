@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
   <script type="module" src="results.js"></script>
 </head>
 <body>
@@ -90,6 +91,16 @@
       <p class="lede" id="gate-lede"></p>
       <div class="bars" id="gate"></div>
       <p class="chart-note" id="gate-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="field-title">
+      <div class="panel-head"><h2 id="field-title">Surface pressure on cars it never saw</h2></div>
+      <p class="lede" id="field-lede"></p>
+      <div class="chart-pair" id="field-body" hidden>
+        <div><h3>Cp R² on the held-out cars</h3><div class="bars" id="field-acc"></div></div>
+        <div><h3>Typical Cp error by region</h3><div class="bars" id="field-regions"></div></div>
+      </div>
+      <p class="chart-note" id="field-note"></p>
     </section>
 
     <section class="panel" aria-labelledby="scaling-title">
