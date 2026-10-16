@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 350" width="1280" height="350" role="img"
+     aria-label="Pipeline: design dials to surrogate to trust gate to Nemotron agent, which proposes the next design">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#727379"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#f0605a"/>
+    </marker>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#ff5f1f"/>
+    </marker>
+  </defs>
+  <style>
+    .dash { stroke-dasharray: 6 6; animation: march 1s linear infinite; }
+    @keyframes march { to { stroke-dashoffset: -12; } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+  <rect width="1280" height="350" rx="6" fill="#0f1012"/>
+  <g font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif">
+    <text x="40" y="44" fill="#ececec" font-size="18" font-weight="600">One design, one loop</text>
+    <text x="40" y="68" fill="#727379" font-size="15">thousands of times faster than a CFD run, and refused when the model would be guessing</text>
+    
+    <g transform="translate(40 128)">
+      <rect width="270" height="118" rx="4" fill="#16171a" stroke="#2a2c30"/>
+      <rect width="4" height="118" fill="#2a2c30"/>
+      <text x="22" y="34" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="13">1</text>
+      <text x="44" y="34" fill="#ececec" font-size="21" font-weight="600">Design</text>
+      <text x="22" y="66" fill="#a3a4a9" font-size="15">16 shape dials and a body style</text>
+      <text x="22" y="96" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="12.5">src/geometry</text>
+    </g>
+    <g transform="translate(350 128)">
+      <rect width="270" height="118" rx="4" fill="#16171a" stroke="#2a2c30"/>
+      <rect width="4" height="118" fill="#ff5f1f"/>
+      <text x="22" y="34" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="13">2</text>
+      <text x="44" y="34" fill="#ececec" font-size="21" font-weight="600">Surrogate</text>
+      <text x="22" y="66" fill="#a3a4a9" font-size="15">Cd, its σ and a distance score</text>
+      <text x="22" y="96" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="12.5">src/train · 0.25 ms</text>
+    </g>
+    <g transform="translate(660 128)">
+      <rect width="270" height="118" rx="4" fill="#16171a" stroke="#2a2c30"/>
+      <rect width="4" height="118" fill="#2a2c30"/>
+      <text x="22" y="34" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="13">3</text>
+      <text x="44" y="34" fill="#ececec" font-size="21" font-weight="600">Trust gate</text>
+      <text x="22" y="66" fill="#a3a4a9" font-size="15">σ and distance from training data</text>
+      <text x="22" y="96" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="12.5">src/service/gate.py</text>
+    </g>
+    <g transform="translate(970 128)">
+      <rect width="270" height="118" rx="4" fill="#16171a" stroke="#2a2c30"/>
+      <rect width="4" height="118" fill="#ff5f1f"/>
+      <text x="22" y="34" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="13">4</text>
+      <text x="44" y="34" fill="#ececec" font-size="21" font-weight="600">Design agent</text>
+      <text x="22" y="66" fill="#a3a4a9" font-size="15">Nemotron 3 on Token Factory</text>
+      <text x="22" y="96" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="12.5">src/agent</text>
+    </g>
+    <path d="M316 187.0 H342" stroke="#727379" stroke-width="1.5" marker-end="url(#a)"/><path d="M626 187.0 H652" stroke="#727379" stroke-width="1.5" marker-end="url(#a)"/><path d="M936 187.0 H962" stroke="#727379" stroke-width="1.5" marker-end="url(#a)"/>
+    <path class="dash" d="M795.0 120 V84 H1105.0 V118" fill="none" stroke="#f0605a" stroke-width="1.6" marker-end="url(#r)"/>
+    <text x="807.0" y="78" fill="#f0605a" font-size="13.5">gated: the reason goes back to the agent, the design never counts</text>
+    <path class="dash" d="M1105.0 254 V316 H175.0 V256" fill="none" stroke="#ff5f1f" stroke-width="1.6" marker-end="url(#o)"/>
+    <text x="189.0" y="308" fill="#ff5f1f" font-size="13.5">the agent's next hypothesis: one change to the dials, with what it expects to happen</text>
+    <circle r="6" fill="#ff5f1f">
+      <animateMotion dur="5s" repeatCount="indefinite"
+        path="M175.0 187.0 H1105.0 V316 H175.0 V187.0"/>
+    </circle>
+  </g>
+</svg>

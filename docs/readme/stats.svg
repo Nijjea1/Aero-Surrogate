@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 234" width="1280" height="234" role="img"
+     aria-label="Headline results: accuracy, speed, out-of-distribution detection and optimisation gain">
+  <style>
+    .fill { transform-box: fill-box; transform-origin: left; animation: grow 1.4s cubic-bezier(.2,.8,.2,1) both; }
+    .rise { animation: rise 0.9s cubic-bezier(.2,.8,.2,1) both; }
+    @keyframes grow { from { transform: scaleX(0); } }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+  <rect width="1280" height="234" rx="6" fill="#0f1012"/>
+  <g font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif">
+    <g transform="translate(16 16)">
+      <rect width="296" height="178" rx="4" fill="#16171a" stroke="#2a2c30"/>
+      <text class="rise" x="24" y="72" fill="#ececec" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="44" font-weight="500" style="animation-delay:0.00s">0.868</text>
+      <text x="24" y="108" fill="#a3a4a9" font-size="17">R² on designs it never saw</text>
+      <text x="24" y="136" fill="#727379" font-size="13.5">95% of the 0.912 the CFD noise allows</text>
+      <rect x="24" y="168" width="248" height="3" fill="#2a2c30"/><rect class="fill" x="24" y="168" width="236.0" height="3" fill="#ff5f1f" style="animation-delay:0.0s"/>
+    </g>
+    <g transform="translate(328 16)">
+      <rect width="296" height="178" rx="4" fill="#16171a" stroke="#2a2c30"/>
+      <text class="rise" x="24" y="72" fill="#ececec" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="44" font-weight="500" style="animation-delay:0.15s">0.25 ms</text>
+      <text x="24" y="108" fill="#a3a4a9" font-size="17">per design, on a CPU</text>
+      <text x="24" y="136" fill="#727379" font-size="13.5">CFD takes hours for one</text>
+      
+    </g>
+    <g transform="translate(640 16)">
+      <rect width="296" height="178" rx="4" fill="#16171a" stroke="#2a2c30"/>
+      <text class="rise" x="24" y="72" fill="#ececec" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="44" font-weight="500" style="animation-delay:0.30s">100%</text>
+      <text x="24" y="108" fill="#a3a4a9" font-size="17">of an unseen notchback flagged</text>
+      <text x="24" y="136" fill="#727379" font-size="13.5">while 0.3% of ordinary designs are</text>
+      <rect x="24" y="168" width="248" height="3" fill="#2a2c30"/><rect class="fill" x="24" y="168" width="248.0" height="3" fill="#ff5f1f" style="animation-delay:0.4s"/>
+    </g>
+    <g transform="translate(952 16)">
+      <rect width="296" height="178" rx="4" fill="#16171a" stroke="#2a2c30"/>
+      <text class="rise" x="24" y="72" fill="#ececec" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="44" font-weight="500" style="animation-delay:0.45s">−4.9%</text>
+      <text x="24" y="108" fill="#a3a4a9" font-size="17">median drag change, CMA-ES</text>
+      <text x="24" y="136" fill="#727379" font-size="13.5">25 evaluations, 5 runs, same gate</text>
+      
+    </g>
+    <text x="20" y="222" fill="#727379" font-size="13">Provisional: a local CPU training run, not the submission checkpoints</text>
+  </g>
+</svg>
