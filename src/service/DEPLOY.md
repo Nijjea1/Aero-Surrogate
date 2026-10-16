@@ -231,11 +231,18 @@ billed calls) after deploying.
 | `AERO_PUBLIC_RUN_BUDGET_USD` | `0.10` | service | spend ceiling per public run |
 | `AERO_ADMIN_RUN_BUDGET_USD` | `0.50` | service | spend ceiling per admin run |
 | `AERO_PUBLIC_DAILY_BUDGET_USD` | `1.00` | service | total public spend per UTC day |
-| `AERO_RATE_LIMIT_PER_MINUTE` | `120` | service | `POST /evaluate`, `/compare` and every `GET`/`POST` under `/runs`, per client IP per minute; `0` = off |
+| `AERO_RATE_LIMIT_PER_MINUTE` | `120` | service | `POST /evaluate`, `/compare`, `/fields` and every `GET`/`POST` under `/runs`, per client IP per minute; `0` = off |
 | `AERO_MAX_BODY_BYTES` | `65536` | service | largest accepted request body (>= 1024); larger gets 413 |
 | `AERO_RUNLOG_DIR` | `runs/logs` (image: `/data/logs`) | service, agent | run logs; must be writable; same directory for service and agent |
 | `AERO_TRUST_PROXY` | `0` | service | `1` = take the client IP from the last `X-Forwarded-For` entry; only behind your own reverse proxy |
 | `AERO_CHECKPOINT` | empty (stub) | service | params-v1 checkpoint to serve; failure to load fails startup |
+| `AERO_FIELD_CHECKPOINT` | unset (fields disabled) | service | independent fields-v1 artifact; configured invalid artifact fails startup |
+| `AERO_FIELD_MAX_FACES` | `50000` | service | reject larger canonical meshes; all permitted faces are predicted |
+| `AERO_FIELD_MAX_VERTICES` | `50000` | service | canonical mesh vertex ceiling |
+| `AERO_FIELD_MAX_CLOUD` | `4096` | service | maximum checkpoint geometry-cloud size (hard ceiling 4096) |
+| `AERO_FIELD_CHUNK_SIZE` | `256` | service | query points per CPU inference chunk (hard ceiling 4096) |
+| `AERO_FIELD_MAX_CLASSIFIER_POINTS` | `100000` | service | region-classifier reference ceiling |
+| `AERO_FIELD_MAX_RESPONSE_BYTES` | `12000000` | service | serialized field-response ceiling |
 | `AERO_SPEND_LEDGER` | `<repo>/runs/spend.jsonl` (image: `/data/spend.jsonl`) | agent | spend ledger (JSONL) the cap is enforced against |
 | `AERO_SPEND_CAP_USD` | `5.0` | agent | hard cap on total spend recorded in the ledger |
 | `NEBIUS_API_KEY` | unset | agent | Token Factory key; needed only for live agent runs |
@@ -243,3 +250,26 @@ billed calls) after deploying.
 | `NEMOTRON_MODEL` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | agent | default model when a run names none |
 | `AERO_ENV_FILE` | `<repo>/.env` | agent | `.env` file the agent loads (real environment wins); in Docker use `--env-file` instead |
 | `AERO_SERVICE_URL` | `http://127.0.0.1:8000` | agent CLI | where the command-line designer finds the service |
+
+The default CPU image now includes trimesh and scipy for field inference; the
+stub-only build still omits Torch/geometry. To enable fields, mount the trusted
+field artifact read-only and set `AERO_FIELD_CHECKPOINT=/checkpoints/fields.pt`.
+Scalar and field checkpoints are independent; neither is substituted for the
+other. `/ready` includes configured field readiness, and `/health.fields`
+describes availability, identity and limitations.
+
+`POST /fields` shares scoring rate/body limits and has a separate single
+inference slot (503 with Retry-After when busy). These are conservative work
+bounds, not a hard CPU-time deadline or a validated production benchmark. The
+classifier/Torch may use the available CPU pool. Measure real-checkpoint latency
+and peak RSS on the target VM before selecting larger limits or increasing
+concurrency. See [INTEGRATION.md](INTEGRATION.md) for the exact payload and mesh
+hash convention. Cp sigma never participates in the Cd trust gate.
+
+Before exposing a real scalar deployment, run `python -m src.service.qualify`
+with its checkpoint/reference pack and `--service-url https://<api-origin>`.
+This verifies readiness, full model identity, advertised schema, /evaluate,
+/compare and shared-agent-gate parity. It does not spend Token Factory credits.
+Avneet's native scalar_reference.json is accepted directly. The separate
+verify_fields command requires the original extracted source NPZ because the
+field reference JSON does not contain the model's full geometry cloud.

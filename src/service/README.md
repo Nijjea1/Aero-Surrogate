@@ -7,6 +7,11 @@ runs live on Nemotron through Token Factory, or as a free scripted fixture with
 `--dry-run`. The stub claims no aerodynamic accuracy, calibrated OOD
 detection, or real inference speed.
 
+Stage-2 fields are a separate optional capability: set `AERO_FIELD_CHECKPOINT`
+and call `POST /fields`. This does not change `/evaluate` or its trust gate.
+Checkpoint qualification, the field/viewer contract, bounded real-agent evidence,
+and fair-comparison integration are specified in **[INTEGRATION.md](INTEGRATION.md)**.
+
 ## Setup on Windows PowerShell
 
 Run from the repository root:
@@ -131,6 +136,7 @@ Open `http://127.0.0.1:8000/docs` for interactive requests.
 | GET /ready | `{"ready": true}`, or 503 with `problems` when the predictor is missing or the log directory is not writable (container health check) |
 | GET /schema | Bounds, body styles, default parameters, pressure regions, the thresholds the serving predictor uses |
 | POST /evaluate | `{"params": <complete parameter object>, "body_style": "fastback"}` returns Evaluation (`body_style` optional) |
+| POST /fields | Same validated design request; separate per-face Cp/sigma response tied to an exact viewer mesh hash; 503 when disabled/busy |
 | POST /compare | `{"design_a": {"params": ...}, "design_b": {"params": ...}}` |
 | GET /history/{run_id} | Array of IterationRecord objects; 404 for an absent run |
 | POST /runs | Start an agent run in the background (see Run control below); 202 with its status |
@@ -254,6 +260,13 @@ uncertainty head. Model input is built by walking the checkpoint's
 `preprocess.param_columns` in order and standardised with its `norm_stats`,
 following `docs/HANDOFF.md` section 3.
 
+Category-held-out checkpoints are refused for ordinary serving. The global
+body-style list alone does not establish a model's training coverage. Startup
+also validates finite model weights/probes and the OOD detector's method,
+statistics, calibration metadata and distance representation. Full SHA-256 and
+source fingerprints are additive under `/health.provenance`; the existing
+top-level `checkpoint_sha256` remains its short display value.
+
 What the real model does and does not produce (`/health` -> `output_provenance`):
 
 | Field | Source |
@@ -281,7 +294,11 @@ names are rejected. Logs live at `runs/logs/<run_id>.jsonl` and are Git-ignored.
 Malformed completed records produce a visible error. Incomplete trailing
 records are excluded from history, and appending to such a log is refused.
 
-Next milestones: run start/status/cancel API for the UI, hosted
-authentication and deployment, and the real checkpoint once Avneet's
-`train.py` stamps schema 2.0.0 (it currently hard-codes 1.0.0, which the loader
-refuses).
+The run-control API and hosting guards are implemented. Real-model qualification
+and live evidence still require Avneet's compatible checkpoints/reference outputs.
+The 4be514d pull fixes both trainers' schema stamp and adds independent reference
+exporters. `verify_checkpoint` now accepts Avneet's native scalar JSON directly;
+`qualify` additionally checks readiness, service routes and agent-gate parity,
+and `verify_fields` checks exact fixed-query parity using the original NPZ. The UI and
+optimiser integrations remain Paramveer's work; Track B supplies the tested APIs
+and comparison evaluator described in INTEGRATION.md.
