@@ -206,7 +206,7 @@ def build_scalar(repo: Path, out_dir: Path) -> dict:
     payload = {
         "kind": "scalar_reference",
         "generated_utc": datetime.now(timezone.utc).isoformat(),
-        "generated_by": "src/train/reference.py --scalar",
+        "generated_by": f"src/train/reference.py --scalar @ {git_commit()}",
         "independent_of": "src.service.predictor.TorchPredictor",
         "tolerance": TOLERANCE,
         "tolerance_note": ("compare cd, uncertainty and ood_score to within "
@@ -228,7 +228,12 @@ def build_scalar(repo: Path, out_dir: Path) -> dict:
                 "drivaernet-category checkpoint deliberately holds one out"),
         },
         "training": {
-            "git_commit": git_commit(),
+            # The revision the WEIGHTS were trained at, read back out of the
+            # checkpoint -- NOT the revision this pack was generated at, which
+            # diverges the moment the pack is regenerated and rides in
+            # generated_by instead. Track B cross-checks this one against the
+            # checkpoint it loaded, so it has to be the training revision.
+            "git_commit": ckpt.get("git_commit"),
             "seed": ckpt["config"].get("seed"),
             "config": ckpt.get("config"),
         },
@@ -274,7 +279,8 @@ def build_fields(repo: Path, out_dir: Path, n_points: int = 64) -> dict:
     splits = ckpt["splits"]
     run = splits["test"][0]
 
-    arrays, meta = load_run(repo / "data" / "drivaerml" / "fields" / f"run_{run}.npz")
+    npz_path = repo / "data" / "drivaerml" / "fields" / f"run_{run}.npz"
+    arrays, meta = load_run(npz_path)
     rng = np.random.default_rng(0)
     take = np.sort(rng.choice(len(arrays["cp"]), size=n_points, replace=False))
 
@@ -303,7 +309,7 @@ def build_fields(repo: Path, out_dir: Path, n_points: int = 64) -> dict:
     payload = {
         "kind": "field_reference",
         "generated_utc": datetime.now(timezone.utc).isoformat(),
-        "generated_by": "src/train/reference.py --fields",
+        "generated_by": f"src/train/reference.py --fields @ {git_commit()}",
         "independent_of": "src.train.field_predict.FieldPredictor",
         "tolerance": TOLERANCE,
         "checkpoint": {
@@ -325,9 +331,26 @@ def build_fields(repo: Path, out_dir: Path, n_points: int = 64) -> dict:
                 "held_out_agreement": 0.986,
             },
         },
-        "training": {"git_commit": git_commit(),
+        "training": {"git_commit": ckpt.get("git_commit"),  # training, not generation
                      "seed": ckpt["config"].get("seed"),
                      "config": ckpt.get("config")},
+        "source": {
+            # Replaying this pack needs the original extracted arrays: the JSON
+            # rounds coordinates and omits the cloud entirely. Hash it so a
+            # transferred copy can be authenticated instead of assumed.
+            "path": str(npz_path.relative_to(repo)),
+            "sha256": sha256(npz_path),
+            "bytes": npz_path.stat().st_size,
+            "run": int(run),
+            "n_cells": int(len(arrays["cp"])),
+            "n_cloud_available": int(len(arrays["cloud_xyz"])),
+            "query_indices": take.astype(int).tolist(),
+            "cloud_indices": np.sort(cloud_idx).astype(int).tolist(),
+            "selection_note": ("query_indices and cloud_indices index the "
+                               "arrays in this NPZ directly, in this order. "
+                               "They are given explicitly so the selection "
+                               "never has to be re-derived from an rng seed."),
+        },
         "conventions": {
             "length_units": "metres",
             "normals": "outward from the surface, unit length",

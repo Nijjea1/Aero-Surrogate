@@ -157,12 +157,42 @@ Use it, so the conversion cannot drift between training and serving.
 
 ## 4. What stage 1 still cannot do
 
-**`pressure_summary` cannot be filled.** Stage 1 predicts one scalar. The eight
-`PRESSURE_REGIONS` keys arrive with surface fields in stage 2. Until then the
-service should return the stub's values, and the demo must not imply otherwise.
+Agreed policy with Track B, and what `/health.output_provenance` reports:
 
-**`cl` is predicted but not validated.** The data has `Average Cl`; we train on
-`Average Cd`. Treat lift as unmeasured for now.
+| Output | Provenance | What the service returns |
+|---|---|---|
+| `cd` | `model` | the prediction |
+| `uncertainty` | `model` | Cd sigma, the model's own heteroscedastic head |
+| `ood_score` | `model` | parameter-space Mahalanobis distance |
+| `cl` | `placeholder` | **always `0.0`, labelled** |
+| `pressure_summary` | `unavailable` | **empty `{}`** |
+
+**`pressure_summary` is empty, not stubbed.** Stage 1 predicts one scalar; the
+eight `PRESSURE_REGIONS` keys cannot come out of it. Returning the stub's
+invented numbers was the earlier instruction and it was wrong — a plausible
+number with no model behind it is worse than a missing one, because nothing
+downstream can tell the difference. The service returns `{}` and the UI shows
+the regions as unavailable. Stage 2's `POST /fields` is what actually fills
+them, from the learned region classifier (98.6% held-out agreement).
+
+**`cl` is a labelled placeholder, not a prediction.** Stage 1 trains on
+`Average Cd` only, so its `cl` is the constant `0.0` and is flagged
+`placeholder` in provenance. Stage 2 *does* integrate lift from the predicted
+pressure field, and it is measured, and it is **not good enough to act on**:
+
+| | model, per-car MAE | trivial baseline |
+|---|---|---|
+| Cd | **0.0326** | 0.0496 (predict the test mean) |
+| Cl | 0.0802 | 0.1043 (predict zero) |
+
+Drag beats its baseline by 34%. Lift beats its by 23% **and gets the sign wrong
+on one of five held-out cars** (run 12: true +0.1285, predicted −0.0189). A
+wrong-signed lift coefficient is worse than no lift coefficient: it points
+downforce the wrong way. So no endpoint serves Cl as a prediction, and no
+derived lift load or effect is displayed anywhere.
+
+Both stage-2 integrals are also **pressure-only**: the viscous term, roughly 8%
+of total Cd, is not predicted by this model at all.
 
 ---
 
@@ -194,12 +224,16 @@ Real DrivAerNet, 4,165 designs, 19 inputs:
 Per category on the random split: fastback 0.773, notchback 0.862,
 estateback 0.827.
 
-**Report R² against 0.906, not 1.0.** The dataset's `Std Cd` column is the
-solver's own run-to-run spread (mean 0.0064), which caps any model at
+**Report R² against the noise ceiling, not 1.0.** The dataset's `Std Cd` column
+is the solver's own run-to-run spread (mean 0.0064), which caps any model at
 
-    R²_max = 1 - mean(Std Cd²) / var(Average Cd) = 0.906
+    R²_max = 1 - mean(Std Cd²) / var(Average Cd)
 
-So 0.875 is **96% of achievable**, and our predicted sigma (0.0072) sits on the
+That is **0.906 over all 4,165 designs** and **0.9122 on the test split**. Use
+the split one against a split R², never the dataset-wide one — they are not the
+same number and quoting the looser one flatters the result.
+
+So 0.875 is **96% of achievable** on its own split, and our predicted sigma (0.0072) sits on the
 solver's own noise — the model has correctly concluded most of its residual is
 label noise, not model error. A model predicting sigma well below 0.0064 would
 be overconfident by construction.

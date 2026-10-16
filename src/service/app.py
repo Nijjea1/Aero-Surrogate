@@ -7,7 +7,8 @@ Implemented endpoints:
     GET  /ready               -> 200 when the predictor is loaded and the log dir is writable, else 503
     GET  /schema              -> param bounds, body styles, defaults, thresholds
     POST /evaluate            -> Evaluation (the contract)
-    POST /compare             -> field delta between two designs
+    POST /compare             -> scalar and regional-summary delta between two designs
+    POST /fields              -> optional per-face Cp/sigma on the canonical viewer mesh
     GET  /history/{run_id}    -> the run log
     POST /runs                -> start an agent run (202); see src/service/runs.py
     GET  /runs                -> recent runs, newest first
@@ -47,6 +48,7 @@ from src.service.runs import (
 )
 from src.service.security import AuthError, caller_role
 from src.service.settings import Settings
+from src.service.provenance import describe_predictor
 
 
 class DesignRequest(BaseModel):
@@ -94,7 +96,7 @@ _RUN_ERROR_STATUS = {RunRequestError: 422, RunLimitError: 429, RunUnavailable: 5
 
 
 def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = None,
-               settings: Settings | None = None) -> FastAPI:
+               settings: Settings | None = None, *, field_service=None) -> FastAPI:
     """Inject a predictor, log or settings for tests; otherwise read the environment."""
     settings = settings or Settings.from_env()
     trust_proxy = settings.trust_proxy
@@ -107,6 +109,22 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
             os.environ.get("AERO_CHECKPOINT") or None
         )
         application.state.runlog = log
+        # Fields are an independent optional capability. Keep the default stub
+        # service importable without the Torch/geometry stack, and fail startup
+        # on a bad configured artifact rather than fabricate a pressure field.
+        fields = field_service
+        if fields is None and settings.field_checkpoint:
+            from src.service.fields import FieldLimits, FieldService
+
+            fields = FieldService.load(settings.field_checkpoint, limits=FieldLimits(
+                max_faces=settings.field_max_faces,
+                max_vertices=settings.field_max_vertices,
+                max_cloud=settings.field_max_cloud,
+                chunk_size=settings.field_chunk_size,
+                max_classifier_points=settings.field_max_classifier_points,
+                max_response_bytes=settings.field_max_response_bytes,
+            ))
+        application.state.field_service = fields
         # A manager set before startup (tests: fake proposers, a fixed clock) is kept.
         if getattr(application.state, "run_manager", None) is None:
             application.state.run_manager = RunManager(application.state.predictor, log, settings)
@@ -145,6 +163,8 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
         problems = []
         if getattr(application.state, "predictor", None) is None:
             problems.append("predictor not loaded")
+        if settings.field_checkpoint and getattr(application.state, "field_service", None) is None:
+            problems.append("configured field predictor not loaded")
         log = getattr(application.state, "runlog", None)
         if log is None or not is_writable_dir(log.root):
             problems.append("run log directory not writable")
@@ -164,7 +184,11 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
                 "schema_version": SCHEMA_VERSION,
                 "model_version": getattr(predictor, "model_version", None),
                 "checkpoint_sha256": getattr(predictor, "checkpoint_sha256", None),
-                "output_provenance": dict(getattr(predictor, "output_provenance", {}) or {})}
+                "output_provenance": dict(getattr(predictor, "output_provenance", {}) or {}),
+                "provenance": describe_predictor(predictor),
+                "fields": (application.state.field_service.provenance()
+                           if application.state.field_service is not None else
+                           {"available": False, "reason": "no field checkpoint configured"})}
 
     @application.get("/schema")
     def schema():
@@ -184,6 +208,23 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
             Design(params=request.params, body_style=request.body_style,
                    design_id=request.design_id)
         )
+
+    @application.post("/fields")
+    def fields(request: DesignRequest):
+        service = application.state.field_service
+        if service is None:
+            raise HTTPException(status_code=503, detail="surface fields unavailable: no checkpoint configured")
+        from src.service.fields import FieldInputError, FieldOutputError, FieldUnavailable
+
+        try:
+            return service.predict(Design(params=request.params, body_style=request.body_style,
+                                          design_id=request.design_id))
+        except FieldUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc), headers={"Retry-After": "1"}) from None
+        except FieldInputError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+        except FieldOutputError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from None
 
     @application.post("/compare")
     def compare(request: CompareRequest):

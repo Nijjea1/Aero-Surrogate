@@ -67,6 +67,13 @@ class Settings:
     max_body_bytes: int = 65536
     trust_proxy: bool = False
     runlog_dir: str = "runs/logs"
+    field_checkpoint: str | None = None
+    field_max_faces: int = 50_000
+    field_max_vertices: int = 50_000
+    field_max_cloud: int = 4096
+    field_chunk_size: int = 256
+    field_max_classifier_points: int = 100_000
+    field_max_response_bytes: int = 12_000_000
 
     @classmethod
     def from_env(cls, env: dict | None = None) -> "Settings":
@@ -83,7 +90,7 @@ class Settings:
         token = (env.get("AERO_ADMIN_TOKEN") or "").strip() or None
         if token is not None and len(token) < 16:
             raise ValueError("AERO_ADMIN_TOKEN must be at least 16 characters")
-        return cls(
+        settings = cls(
             cors_origins=parsed,
             admin_token=token,
             public_runs=_flag(env, "AERO_PUBLIC_RUNS", default.public_runs),
@@ -103,4 +110,22 @@ class Settings:
                                    minimum=1024),
             trust_proxy=_flag(env, "AERO_TRUST_PROXY", default.trust_proxy),
             runlog_dir=(env.get("AERO_RUNLOG_DIR") or "").strip() or default.runlog_dir,
+            field_checkpoint=(env.get("AERO_FIELD_CHECKPOINT") or "").strip() or None,
+            field_max_faces=_number(env, "AERO_FIELD_MAX_FACES", default.field_max_faces,
+                                    integer=True, minimum=1),
+            field_max_vertices=_number(env, "AERO_FIELD_MAX_VERTICES", default.field_max_vertices,
+                                       integer=True, minimum=3),
+            field_max_cloud=_number(env, "AERO_FIELD_MAX_CLOUD", default.field_max_cloud,
+                                    integer=True, minimum=1),
+            field_chunk_size=_number(env, "AERO_FIELD_CHUNK_SIZE", default.field_chunk_size,
+                                     integer=True, minimum=1),
+            field_max_classifier_points=_number(
+                env, "AERO_FIELD_MAX_CLASSIFIER_POINTS", default.field_max_classifier_points,
+                integer=True, minimum=1),
+            field_max_response_bytes=_number(
+                env, "AERO_FIELD_MAX_RESPONSE_BYTES", default.field_max_response_bytes,
+                integer=True, minimum=1024),
         )
+        if settings.field_max_cloud > 4096 or settings.field_chunk_size > 4096:
+            raise ValueError("AERO_FIELD_MAX_CLOUD and AERO_FIELD_CHUNK_SIZE must be <= 4096")
+        return settings

@@ -253,7 +253,8 @@ class TorchPredictor(BasePredictor):
         self._np, self._torch, self._split_prediction = np, torch, split_prediction
 
         self.checkpoint_path = str(path)
-        self.checkpoint_sha256 = _file_sha256(path)[:12]
+        self.checkpoint_sha256_full = _file_sha256(path)
+        self.checkpoint_sha256 = self.checkpoint_sha256_full[:12]
         self.device = torch.device(device)
 
         # weights_only=False unpickles arbitrary Python objects, which means
@@ -273,6 +274,41 @@ class TorchPredictor(BasePredictor):
                 f"checkpoint was trained against schema {ckpt['schema_version']!r}; "
                 f"this service speaks {SCHEMA_VERSION!r}"
             )
+        # The frozen contract knows globally valid styles, not the styles a
+        # particular training split saw. Do not expose an experimental held-out
+        # model as supporting all three bodies until serving has that policy.
+        if ckpt.get("held_out_category") is not None:
+            raise CheckpointError("held-out-category checkpoints are not served; use an all-style checkpoint")
+        # New handoffs declare their actual training coverage. The global
+        # BODY_STYLES list only says what a design may name, not what a model
+        # saw. Preserve older artifacts' missing metadata as unknown, while
+        # refusing explicit evidence of incomplete or inconsistent coverage.
+        trained_styles = ckpt.get("trained_body_styles")
+        if trained_styles is not None:
+            if (not isinstance(trained_styles, list) or
+                    not all(isinstance(style, str) for style in trained_styles) or
+                    len(trained_styles) != len(BODY_STYLES) or set(trained_styles) != set(BODY_STYLES)):
+                raise CheckpointError("trained_body_styles must include each contract body style exactly once")
+        splits = ckpt.get("splits")
+        if splits is not None:
+            if not isinstance(splits, dict) or set(splits) != {"train", "val", "test"}:
+                raise CheckpointError("checkpoint splits must declare train, val and test design IDs")
+            seen_ids = set()
+            for name, ids in splits.items():
+                if (not isinstance(ids, list) or not ids or
+                        not all(isinstance(value, str) and value.strip() for value in ids) or
+                        len(ids) != len(set(ids)) or seen_ids.intersection(ids)):
+                    raise CheckpointError(f"checkpoint split {name} must contain unique disjoint design IDs")
+                seen_ids.update(ids)
+        training_revision = ckpt.get("git_commit")
+        if training_revision is not None and (not isinstance(training_revision, str) or not training_revision.strip()):
+            raise CheckpointError("training git_commit must be nonempty text when provided")
+        self.trained_body_styles = sorted(trained_styles) if trained_styles is not None else None
+        self.training_git_revision = training_revision
+        self.training_split_counts = {name: len(ids) for name, ids in splits.items()} if splits else None
+        self.training_seed = ckpt.get("config", {}).get("seed") if isinstance(ckpt.get("config"), dict) else None
+        if self.training_seed is not None and (type(self.training_seed) is not int or self.training_seed < 0):
+            raise CheckpointError("training seed must be a nonnegative integer when provided")
 
         spec = ckpt["preprocess"]
         version = spec.get("version") if isinstance(spec, dict) else None
@@ -314,6 +350,8 @@ class TorchPredictor(BasePredictor):
         try:
             model = build_model(ckpt["config"])
             model.load_state_dict(ckpt["state_dict"])  # strict: a partial load is a wrong model
+            if any(not torch.isfinite(value).all() for value in model.state_dict().values()):
+                raise ValueError("model weights and buffers must be finite")
             model.to(self.device).eval()
             with torch.inference_mode():
                 probe = model(torch.zeros((1, n_inputs), dtype=torch.float32, device=self.device))
@@ -325,10 +363,16 @@ class TorchPredictor(BasePredictor):
                 f"(mean, log-variance). A model without an uncertainty head would report "
                 f"zero uncertainty, which the gate would read as certainty."
             )
+        if not torch.isfinite(probe).all():
+            raise CheckpointError("model probe must produce finite mean and log-variance")
+        probe_mu, probe_sigma = split_prediction(probe)
+        if (not torch.isfinite(probe_mu * self._target_std + self._target_mean).all()
+                or not torch.isfinite(probe_sigma * self._target_std).all()):
+            raise CheckpointError("decoded model probe must be finite")
         self._model = model
 
         self._ood = None
-        if ckpt.get("ood"):
+        if ckpt.get("ood") is not None:
             try:
                 detector = OODDetector.from_dict(ckpt["ood"])
                 ood_mean = np.asarray(detector.mean, dtype=np.float64)
@@ -343,8 +387,49 @@ class TorchPredictor(BasePredictor):
                 raise CheckpointError(f"OOD detector measures '{space}', but params-v1 needs 'parameters'")
             if ood_mean.shape != (n_inputs,) or cov_inv.shape != (n_inputs, n_inputs):
                 raise CheckpointError("OOD detector dimensions do not match the input columns")
-            if not math.isfinite(threshold) or threshold <= 0:
+            if (isinstance(detector.threshold, bool) or not isinstance(detector.threshold, (int, float))
+                    or not math.isfinite(threshold) or threshold <= 0):
                 raise CheckpointError(f"OOD detector threshold {threshold} is not calibrated")
+            if not np.all(np.isfinite(ood_mean)) or not np.all(np.isfinite(cov_inv)):
+                raise CheckpointError("OOD detector mean and covariance must be finite")
+            if (isinstance(detector.quantile, bool) or not isinstance(detector.quantile, (int, float))
+                    or not math.isfinite(detector.quantile) or not 0 < detector.quantile < 1
+                    or type(detector.n_train) is not int or detector.n_train < 4
+                    or type(detector.diagonal) is not bool):
+                raise CheckpointError("OOD detector calibration metadata is invalid")
+            if (not isinstance(detector.train_scores, dict) or not detector.train_scores
+                    or any(not isinstance(name, str) or isinstance(value, bool)
+                           or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0
+                           for name, value in detector.train_scores.items() if name != "calibrated_on")
+                    or detector.train_scores.get("calibrated_on", "val") not in ("train", "val")):
+                raise CheckpointError("OOD detector training score statistics must be finite and nonnegative")
+            if detector.method not in ("mahalanobis", "knn"):
+                raise CheckpointError(f"unsupported OOD detector method {detector.method!r}")
+            if detector.method == "mahalanobis":
+                # Numerical roundoff is allowed, but an indefinite matrix would
+                # produce negative squared distances that score() clips to zero.
+                scale = max(1.0, float(np.max(np.abs(cov_inv))))
+                tolerance = 1e-8 * scale
+                if (not np.allclose(cov_inv, cov_inv.T, rtol=1e-8, atol=tolerance)
+                        or float(np.linalg.eigvalsh(cov_inv).min()) < -tolerance
+                        or not np.any(cov_inv > tolerance)):
+                    raise CheckpointError("OOD inverse covariance must be symmetric positive semidefinite and nonzero")
+            else:
+                try:
+                    reference = np.asarray(detector.reference, dtype=np.float64)
+                    valid = (reference.ndim == 2 and reference.shape[1] == n_inputs
+                             and np.all(np.isfinite(reference)) and type(detector.k) is int
+                             and 1 <= detector.k <= len(reference))
+                except (TypeError, ValueError):
+                    valid = False
+                if not valid:
+                    raise CheckpointError("OOD knn reference and k are invalid")
+            try:
+                probe_score = detector.score_one(np.zeros((1, n_inputs), dtype=np.float64))
+            except Exception as exc:
+                raise CheckpointError(f"OOD detector probe failed: {exc}") from exc
+            if not math.isfinite(probe_score) or probe_score < 0:
+                raise CheckpointError("OOD detector probe must be finite and nonnegative")
             self._ood = detector
 
         # The checkpoint carries no calibrated sigma cutoff, so the contract's
@@ -358,6 +443,7 @@ class TorchPredictor(BasePredictor):
         self.model_version = (ckpt_version if isinstance(ckpt_version, str) and ckpt_version.strip()
                               else f"sha256-{self.checkpoint_sha256}")
         self.held_out_category = ckpt.get("held_out_category")
+        self.preprocess_version = PARAMS_PREPROCESS_VERSION
         self.output_provenance = {
             "cd": "model",
             "uncertainty": "model",
