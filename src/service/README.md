@@ -136,7 +136,7 @@ Open `http://127.0.0.1:8000/docs` for interactive requests.
 | GET /ready | `{"ready": true}`, or 503 with `problems` when the predictor is missing or the log directory is not writable (container health check) |
 | GET /schema | Bounds, body styles, default parameters, pressure regions, the thresholds the serving predictor uses |
 | POST /evaluate | `{"params": <complete parameter object>, "body_style": "fastback"}` returns Evaluation (`body_style` optional) |
-| POST /fields | Same validated design request; separate per-face Cp/sigma response tied to an exact viewer mesh hash; 503 when disabled/busy |
+| POST /fields | Same validated design request; separate per-face Cp/sigma response tied to an exact viewer mesh hash; 503 when disabled/busy. Replies over 1 KB are gzipped when the client sends `Accept-Encoding: gzip` (browsers do; the real-model reply drops from about 990 KB to about 410 KB) |
 | POST /compare | `{"design_a": {"params": ...}, "design_b": {"params": ...}}` |
 | GET /history/{run_id} | Array of IterationRecord objects; 404 for an absent run |
 | POST /runs | Start an agent run in the background (see Run control below); 202 with its status |
@@ -205,6 +205,18 @@ threshold, or ood_score (distance from the training set) above its threshold.
 In the stub, one parameter at its limit trips the uncertainty check and many
 parameters pushed out together trip the ood_score check; both are development
 fixtures, not calibrated detection.
+
+On the real checkpoint the uncertainty cutoff (0.013, from the contract; the
+checkpoint carries no calibrated one) is dormant. Avneet measured the largest
+sigma over 4,000 designs drawn uniformly from the whole legal box at 0.01057, and
+over the 625 held-out designs at 0.01033: none reaches 0.013. Over the same
+4,000 the ood_score gate (threshold 4.9348, the checkpoint's 0.99 validation
+quantile) rejects 6.12%. Every real-model rejection therefore comes from
+ood_score. The cutoff stays because it is frozen into the comparison protocol and
+a dormant gate is harmless; describe the gate as an out-of-distribution check,
+not as uncertainty filtering it is not doing. Field predictions have no OOD
+detector at all (the field checkpoint has no `ood` key): label them "predicted,
+not trusted", never "trusted with caveats".
 
 ## Configuration
 

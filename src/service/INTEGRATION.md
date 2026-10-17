@@ -234,7 +234,9 @@ Field capability/provenance is under `/health.fields`, separate from scalar outp
 ## Fair comparison packet for Paramveer
 
 First scenario: all-zero baseline, one style/constraint set, same real checkpoint,
-gate thresholds and 25 predictor calls per method. Start with seeded random search
+gate thresholds and 25 predictor calls per method. Agreed with Paramveer on
+Oct 16: matched seeds use 25 evaluations for every method. The 10-call Nano
+request in the run-control packet is a cheap smoke run, not a comparison budget. Start with seeded random search
 versus one agent run; CMA-ES and repeated statistical comparisons are later work.
 
 ```powershell

@@ -29,3 +29,7 @@ docs/personal/
 
 # Local audit notes and probes
 .audit-track-b/
+
+# Teammate artifact bundles travel outside Git
+aero-handover-*/
+aero-handover-*.zip
