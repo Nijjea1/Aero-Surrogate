@@ -24,6 +24,8 @@ from src.service.fields import FieldLimits, FieldService
 MAX_REFERENCE_BYTES = 2_000_000
 MAX_SOURCE_BYTES = 64_000_000
 MAX_SAMPLE_POINTS = 256
+SOURCE_UNAUTHENTICATED = "The supplied original source NPZ is required; its hash is recorded, not authenticated by the pack."
+SOURCE_AUTHENTICATED = "The supplied source NPZ matches the SHA-256 the reference pack declares."
 
 
 def _read_bounded(path: str | Path, maximum: int, label: str) -> bytes:
@@ -126,7 +128,33 @@ def _validate_manifest(manifest):
             seen.add(run)
     if sample["run"] not in runs["test"]:
         raise ValueError("reference sample run must be held out in test")
+    _validate_source_block(manifest, count)
     return arrays
+
+
+def _validate_source_block(manifest, count: int) -> None:
+    """Optional pack-declared source identity and explicit selection.
+
+    Older packs omit it; then the source hash is only recorded. When present it
+    must be complete, because a partial block would authenticate nothing.
+    """
+    source = manifest.get("source")
+    if source is None:
+        return
+    if not isinstance(source, dict):
+        raise ValueError("reference source must be an object")
+    if not isinstance(source.get("sha256"), str) or not re.fullmatch("[0-9a-f]{64}", source["sha256"]):
+        raise ValueError("reference source sha256 must be a full lowercase digest")
+    if source.get("run") != manifest["sample"]["run"]:
+        raise ValueError("reference source run differs from sample run")
+    for key, size in (("query_indices", count), ("cloud_indices", None)):
+        indices = source.get(key)
+        if (not isinstance(indices, list) or not indices or len(indices) > 200_000 or
+                any(type(item) is not int or item < 0 for item in indices) or
+                len(set(indices)) != len(indices)):
+            raise ValueError(f"reference source {key} must be unique nonnegative integers")
+        if size is not None and len(indices) != size:
+            raise ValueError(f"reference source {key} must list exactly {size} entries")
 
 
 def _load_source(payload: bytes):
@@ -193,7 +221,7 @@ def verify_fields(checkpoint: str, manifest: object, source_npz: str | None = No
               "region_classifier_qualified": False, "uncertainty_calibration_qualified": False,
               "source_authenticated_by_reference_hash": False,
               "limitations": ["The reference pack omits its cloud and rounds sample coordinates.",
-                              "The supplied original source NPZ is required; its hash is recorded, not authenticated by the pack.",
+                              SOURCE_UNAUTHENTICATED,
                               "Parity is not CFD accuracy, viewer orientation validation, field trust or calibration."],
               "provenance": None, "results": {}}
     try:
@@ -210,6 +238,12 @@ def verify_fields(checkpoint: str, manifest: object, source_npz: str | None = No
             raise ValueError("original --source-npz is required: the reference does not contain the actual cloud or unrounded queries")
         payload = _read_bounded(source_npz, MAX_SOURCE_BYTES, "source NPZ")
         report["source_npz_sha256"] = hashlib.sha256(payload).hexdigest()
+        declared = manifest.get("source")
+        if declared is not None:
+            if report["source_npz_sha256"] != declared["sha256"]:
+                raise ValueError("source NPZ SHA-256 differs from the hash the reference pack declares")
+            report["source_authenticated_by_reference_hash"] = True
+            report["limitations"][1] = SOURCE_AUTHENTICATED
         arrays, meta = _load_source(payload)
         sample = manifest["sample"]
         if meta.get("run") != sample["run"] or type(meta.get("run")) is not int:
@@ -224,6 +258,18 @@ def verify_fields(checkpoint: str, manifest: object, source_npz: str | None = No
         n_cloud = manifest["checkpoint"]["preprocess"]["n_cloud"]
         cloud_indices = np.sort(rng.choice(len(arrays["cloud_xyz"]),
                                           size=min(n_cloud, len(arrays["cloud_xyz"])), replace=False))
+        selection_from = "seed 0 replay"
+        if declared is not None:
+            # The pack's explicit indices are authoritative; the seed replay is
+            # kept only as a cross-check so a generator change is visible.
+            listed_take = np.asarray(declared["query_indices"])
+            listed_cloud = np.asarray(declared["cloud_indices"])
+            if listed_take.max() >= len(arrays["cp"]) or listed_cloud.max() >= len(arrays["cloud_xyz"]):
+                raise ValueError("reference source indices exceed the source arrays")
+            report["seed_replay_matches_listed_indices"] = bool(
+                np.array_equal(listed_take, take) and np.array_equal(listed_cloud, cloud_indices))
+            take, cloud_indices = listed_take, listed_cloud
+            selection_from = "indices listed by the reference pack"
         for key, source, decimals in (("query_xyz", "query_xyz", 6), ("query_normal", "query_normal", 6),
                                        ("query_area_m2", "query_area", 9)):
             if not np.array_equal(arrays[source][take].round(decimals), expected[key]):
@@ -237,6 +283,8 @@ def verify_fields(checkpoint: str, manifest: object, source_npz: str | None = No
             raise ValueError("checkpoint SHA-256 differs from reference")
         if service.predictor.version != identity["version"] or service.predictor.preprocess != identity["preprocess"]:
             raise ValueError("checkpoint version/preprocess differs from reference")
+        if len(cloud_indices) != min(n_cloud, len(arrays["cloud_xyz"])):
+            raise ValueError("listed cloud_indices count differs from the checkpoint n_cloud")
         # FieldService deliberately does not retain training split payloads. Read
         # only the same fingerprinted bounded bytes to verify this reference is
         # actually held out by the loaded artifact rather than only by its JSON.
@@ -259,7 +307,8 @@ def verify_fields(checkpoint: str, manifest: object, source_npz: str | None = No
             raise ValueError("field model returned malformed/nonfinite decoded outputs")
         if (observed["sigma"] <= 0).any():
             raise ValueError("field model returned nonpositive decoded sigma")
-        report["selection"] = {"run": sample["run"], "seed": 0, "query_indices": take.tolist(),
+        report["selection"] = {"run": sample["run"], "seed": 0, "from": selection_from,
+                               "query_indices": take.tolist(),
                                "cloud_indices": cloud_indices.tolist(), "inputs": "original unrounded float32 source tensors"}
         report["software"] = {"numpy": np.__version__, "torch": str(torch.__version__)}
         report["absolute_tolerance"] = manifest["tolerance"]

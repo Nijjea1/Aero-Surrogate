@@ -58,8 +58,12 @@ def test_exact_source_replays_independent_pack_without_endpoint_claim(reference_
     assert report["geometry_preprocessing_qualified"] is False
     assert report["region_classifier_qualified"] is False
     assert report["uncertainty_calibration_qualified"] is False
-    assert report["source_authenticated_by_reference_hash"] is False
+    # The generator now declares its source, so the hash authenticates it.
+    assert report["source_authenticated_by_reference_hash"] is True
     assert report["source_npz_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert report["source_npz_sha256"] == manifest["source"]["sha256"]
+    assert report["selection"]["from"] == "indices listed by the reference pack"
+    assert report["seed_replay_matches_listed_indices"] is True
     assert report["provenance"]["checkpoint_sha256"] == manifest["checkpoint"]["sha256"]
     rng = np.random.default_rng(0)
     take = np.sort(rng.choice(64, size=32, replace=False))
@@ -72,6 +76,60 @@ def test_exact_source_replays_independent_pack_without_endpoint_claim(reference_
     # silently promoted into a Track B certification.
     assert "coefficient_claims_supported" not in report
     json.dumps(report, allow_nan=False)
+
+
+def test_pack_without_source_block_records_but_does_not_authenticate(reference_pack):
+    _, checkpoint, source, manifest = reference_pack
+    legacy = copy.deepcopy(manifest)
+    legacy.pop("source")
+    report = verify_fields(checkpoint, legacy, str(source))
+    assert report["passed"], report["errors"]
+    assert report["source_authenticated_by_reference_hash"] is False
+    assert report["selection"]["from"] == "seed 0 replay"
+    assert "not authenticated" in report["limitations"][1]
+
+
+def test_source_whose_hash_differs_from_the_pack_is_rejected(reference_pack, tmp_path):
+    _, checkpoint, source, manifest = reference_pack
+    with np.load(source, allow_pickle=False) as original:
+        arrays = {key: original[key] for key in original.files}
+    # Same arrays, different bytes: the content checks alone would accept it.
+    resaved = tmp_path / "resaved.npz"
+    np.savez(resaved, **arrays)
+    assert hashlib.sha256(resaved.read_bytes()).hexdigest() != manifest["source"]["sha256"]
+    report = verify_fields(checkpoint, manifest, str(resaved))
+    assert report["passed"] is False
+    assert report["source_authenticated_by_reference_hash"] is False
+    assert "SHA-256 differs" in " ".join(report["errors"])
+
+
+def test_listed_indices_drive_the_selection(reference_pack):
+    _, checkpoint, source, manifest = reference_pack
+    shifted = copy.deepcopy(manifest)
+    # A different but valid selection must be used, then fail on the rounded inputs.
+    shifted["source"]["query_indices"] = [i for i in range(64) if i not in manifest["source"]["query_indices"]][:32]
+    report = verify_fields(checkpoint, shifted, str(source))
+    assert report["passed"] is False
+    assert report["seed_replay_matches_listed_indices"] is False
+    assert "differs from rounded reference sample" in " ".join(report["errors"])
+
+
+@pytest.mark.parametrize("mutation,message", [
+    (lambda s: s.update(sha256="ABC"), "source sha256"),
+    (lambda s: s.update(run=999), "source run"),
+    (lambda s: s["query_indices"].pop(), "exactly"),
+    (lambda s: s["query_indices"].__setitem__(1, s["query_indices"][0]), "unique"),
+    (lambda s: s["cloud_indices"].__setitem__(0, -1), "nonnegative"),
+    (lambda s: s["cloud_indices"].pop(), "n_cloud"),
+    (lambda s: s["query_indices"].__setitem__(0, 10**6), "exceed the source arrays"),
+])
+def test_malformed_source_block_fails(reference_pack, mutation, message):
+    _, checkpoint, source, manifest = reference_pack
+    modified = copy.deepcopy(manifest)
+    mutation(modified["source"])
+    report = verify_fields(checkpoint, modified, str(source))
+    assert report["passed"] is False
+    assert message in " ".join(report["errors"]), report
 
 
 def test_missing_original_source_is_visible(reference_pack, tmp_path):
@@ -148,7 +206,10 @@ def test_source_decompression_bound_checked_before_loading(reference_pack, tmp_p
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("cloud_xyz.npy", b"0" * 3000)
     assert path.stat().st_size < 1500
-    report = verify_fields(checkpoint, manifest, str(path))
+    # Without a declared hash, the bound is what stops the bomb (a declared
+    # hash rejects it even earlier, before any decompression).
+    legacy = {key: value for key, value in manifest.items() if key != "source"}
+    report = verify_fields(checkpoint, legacy, str(path))
     assert not report["passed"] and "decompressed" in " ".join(report["errors"])
 
 
