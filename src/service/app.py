@@ -28,6 +28,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, StrictInt, field_validator
 
@@ -49,6 +50,8 @@ from src.service.runs import (
 from src.service.security import AuthError, caller_role
 from src.service.settings import Settings
 from src.service.provenance import describe_predictor
+
+GZIP_MINIMUM_BYTES = 1024
 
 
 class DesignRequest(BaseModel):
@@ -148,6 +151,9 @@ def create_app(predictor: BasePredictor | None = None, runlog: RunLog | None = N
 
     # Added before CORS so CORS stays outermost and 413/429 replies carry its headers.
     application.state.rate_limiter = RateLimiter(settings.rate_limit_per_minute)
+    # Innermost: a /fields reply is ~770 KB of JSON and compresses well. Small
+    # replies (including the one-time cancel token) stay uncompressed.
+    application.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_BYTES)
     application.add_middleware(BodySizeMiddleware, max_bytes=settings.max_body_bytes)
     application.add_middleware(RateLimitMiddleware, limiter=application.state.rate_limiter,
                                trust_proxy=trust_proxy)

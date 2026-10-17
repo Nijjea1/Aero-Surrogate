@@ -110,7 +110,8 @@ small MLP (one forward pass per `/evaluate`). A small CPU VM with 2 vCPU,
        reverse_proxy 127.0.0.1:8000
    }
    ```
-   and `sudo systemctl reload caddy`.
+   and `sudo systemctl reload caddy`. No `encode` directive is needed: the
+   service already gzips large replies (`/fields`) and Caddy passes them through.
 5. **Settings behind the proxy:**
    - `AERO_CORS_ORIGINS` = the exact origin the frontend is served from
      (scheme + host + port, no path, no trailing slash), e.g.

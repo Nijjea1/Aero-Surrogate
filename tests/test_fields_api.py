@@ -89,3 +89,31 @@ def test_fields_share_scoring_rate_limit(tmp_path):
                                rate_limit_per_minute=1), field_service=Fields())) as client:
         assert client.post("/fields", json={"params": default_params()}).status_code == 200
         assert client.post("/evaluate", json={"params": default_params()}).status_code == 429
+
+
+class LargeFields(Fields):
+    def predict(self, design):
+        count = 20_000
+        return {"association": "face", "cp": [0.123456] * count, "sigma": [0.0123] * count,
+                "face_indices": list(range(count))}
+
+
+def test_large_field_replies_are_gzipped_and_decode_identically(tmp_path):
+    with TestClient(create_app(StubPredictor(), settings=Settings(runlog_dir=str(tmp_path)),
+                               field_service=LargeFields())) as client:
+        body = {"params": default_params()}
+        packed = client.post("/fields", json=body, headers={"Accept-Encoding": "gzip",
+                                                            "Origin": "http://localhost:5173"})
+        plain = client.post("/fields", json=body, headers={"Accept-Encoding": "identity"})
+        assert packed.headers["content-encoding"] == "gzip"
+        assert packed.headers["access-control-allow-origin"] == "http://localhost:5173"
+        assert "content-encoding" not in plain.headers
+        assert int(packed.headers["content-length"]) < len(plain.content) // 5
+        assert packed.json() == plain.json()
+
+
+def test_small_replies_stay_uncompressed(tmp_path):
+    with TestClient(create_app(StubPredictor(), settings=Settings(runlog_dir=str(tmp_path)))) as client:
+        response = client.get("/health", headers={"Accept-Encoding": "gzip"})
+        assert len(response.content) < 1024
+        assert "content-encoding" not in response.headers
