@@ -187,7 +187,8 @@ def test_run_records_logbook_lines_and_hypothesis_hits(tmp_path, monkeypatch):
                  provenance="synthetic stub")
     log = RunLog(tmp_path)
     rows = log.read("logbook")
-    assert rows[0]["reasoning"].startswith("Synthetic scripted baseline")  # baseline unchanged
+    # A live baseline is real: never labelled synthetic, never a logbook line.
+    assert rows[0]["reasoning"] == designer.LIVE_BASELINE_REASONING
     assert [read_logbook(r["reasoning"])["verdict"] for r in rows[1:]] == [
         "as expected", "opposite to expected", None, "as expected", "as expected", "within noise"]
     assert rows[2]["reasoning"].endswith("Cd 0.29000 → 0.29500 (+0.00500) vs iteration 1, trusted — opposite to expected")

@@ -99,6 +99,9 @@ def describe_provenance(health: dict) -> str:
     return f"{health.get('predictor', 'model')} surrogate {version}"
 
 
+LIVE_BASELINE_REASONING = "Baseline: the unmodified body (all offsets zero), scored before any model call."
+
+
 def scripted_proposer(history: list[dict]) -> dict:
     """Offline stand-in for Nemotron. Build this FIRST."""
     if not history:
@@ -321,6 +324,9 @@ def _drive(state: dict, iterations: int, run_id: str, dry_run: bool, log: RunLog
         if dry_run or not history:
             proposal = scripted_proposer(history)
             params, reasoning = proposal["params"], proposal["reasoning"]
+            if not dry_run:
+                # A live run's baseline is real, not a synthetic fixture.
+                reasoning = LIVE_BASELINE_REASONING
         else:
             try:
                 proposal = proposer.propose(
