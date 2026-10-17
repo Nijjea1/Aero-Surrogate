@@ -48,6 +48,9 @@ Rules:
   understand that region (too uncertain, or too unlike its training data).
   Do not repeat or extend a rejected move; go back toward trusted designs.
 - An accepted result is trusted, not necessarily better. Keep what lowers Cd.
+- A Cd change smaller than about 0.0002 is marginal. Once a parameter's effect
+  has flattened out, stop fine-tuning it and test a parameter you have not
+  tried yet; the state message lists them. Spend the budget exploring.
 - Do not propose a design that was already scored.
 - The observed result is recorded by the server, never by you."""
 
@@ -56,6 +59,8 @@ EXPECTED_EFFECTS = {"lower_cd": "lower Cd", "higher_cd": "higher Cd", "no_change
 # A Cd change smaller than this is "within noise", and is what no_change means.
 CD_NOISE_TOLERANCE = 1e-5
 HYPOTHESIS_MAX_CHARS = 200
+# Below this a Cd change is "marginal" in the prompt: a hint to explore, not a verdict.
+MARGINAL_CD = 2e-4
 
 
 def _param_description(name: str) -> str:
@@ -272,6 +277,8 @@ def state_message(history: list[dict], *, body_style: str, evaluations_left: int
     else:
         lines.append("No trusted design yet: changes apply to the baseline body.")
     lines.append("Constraints enforced by code: " + (", ".join(map(str, constraints)) or "none") + ".")
+    untried = [name for name in PARAM_BOUNDS if all(float(row["params"][name]) == 0.0 for row in history)]
+    lines.append("Parameters not yet changed this run: " + (", ".join(untried) or "none") + ".")
     lines.append(f"Most recent attempts (newest last, {min(window, len(history))} of {len(history)}):")
     lines.extend(_attempt_line(row) for row in history[-window:])
     last = _last_step_line(history)
@@ -458,6 +465,6 @@ class NemotronProposer:
                 f"Cd {b['cd'] - a['cd']:+.5f}; accepted {a['accepted']} -> {b['accepted']}")
 
 
-__all__ = ["CD_NOISE_TOLERANCE", "Cancelled", "EXPECTED_EFFECTS", "NemotronProposer", "NoProposal", "Proposal",
+__all__ = ["CD_NOISE_TOLERANCE", "MARGINAL_CD", "Cancelled", "EXPECTED_EFFECTS", "NemotronProposer", "NoProposal", "Proposal",
            "ProviderError", "SYSTEM_PROMPT", "TOOLS", "design_key", "judge", "logbook_entry", "read_logbook",
            "state_message"]

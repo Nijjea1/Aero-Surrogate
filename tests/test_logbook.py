@@ -142,6 +142,24 @@ def test_state_message_shows_last_expectation_against_observation():
     assert "Last step: expected lower Cd, but the gate rejected it (no trusted result)." in text
 
 
+def test_state_message_lists_parameters_not_yet_tried():
+    history = [row(0, BASE, 0.3), logged(1, dict(BASE, B_Ramp_Angle=5.0), 0.29, 0.3),
+               logged(2, dict(BASE, B_Ramp_Angle=5.0, A_Car_Length=10.0), 0.31, 0.29)]
+    text = state_message(history, body_style="fastback", evaluations_left=3, total_evaluations=5,
+                         constraints=[], best_pressure=None, provenance="synthetic stub", window=8)
+    line = next(l for l in text.splitlines() if l.startswith("Parameters not yet changed this run: "))
+    # A parameter counts as tried even when its step was worse or rejected.
+    assert "B_Ramp_Angle" not in line and "A_Car_Length" not in line
+    assert "B_Diffusor_Angle" in line and line.count(", ") == len(BASE) - 3
+
+
+def test_prompt_steers_away_from_marginal_fine_tuning():
+    from src.agent.nemotron import MARGINAL_CD, SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+    assert f"smaller than about {MARGINAL_CD:.4f} is marginal" in prompt
+    assert "test a parameter you have not tried yet" in prompt
+
+
 def test_state_message_with_logbook_history_stays_bounded():
     history = [row(0, BASE, 0.3)] + [
         logged(i, dict(BASE, B_Ramp_Angle=float(i % 10), B_Diffusor_Angle=float(i % 7)), 0.3 - i * 1e-4, 0.3)
