@@ -7,7 +7,7 @@ JSON formats are supported without reshaping them.
 ## Track B status: October 16, 2026, real artifacts present
 
 Bundle checksums verified (all 12 match SHA256SUMS). Offline suite with the
-real files present: **870 passed, 3 skipped**. The 3 skips need Avneet's full
+real files present: **956 passed, 3 skipped** (after merging Paramveer's PRs #8-#17). The 3 skips need Avneet's full
 parameter table, extracted fields or geometry checkpoint, which Track B does
 not serve.
 
@@ -43,16 +43,55 @@ for the model; scoring takes about 1.5 ms. No live run hit the gate:
 on the real checkpoint every rejection comes from ood_score (see the service
 README), and the demo shows it with the pack's genuine-rejection design.
 
+### Matched comparison: agent against the optimisers
+
+One frozen protocol (`runs/matched-20261016/protocol.json`): real checkpoint,
+fastback, all-zero start, no constraints, the shared gate, 25 predictor calls
+per run. Five runs per method; Nemotron Super with the effects memory
+(commit "Give the agent a memory..."), random search and CMA-ES through
+Paramveer's `src.optim.baseline --protocol`. All ten agent/optimiser pairs pass
+`compare_run pair`. Frontal area is computed afterwards with
+`src.geometry.params.frontal_area` on each run's best design; the objective
+itself is still Cd.
+
+| Method | Median Cd change | Runs | Median frontal-area change | Median Cd × A change | Gated (per run) | Cost |
+|---|---|---|---|---|---|---|
+| Random search | -2.79% | -3.42, -2.79, 0.00, -4.13, -0.64 | +4.55% | **+0.98%** | 1, 2, 1, 1, 1 | free |
+| CMA-ES | -3.84% | -3.84, -3.78, -1.71, -4.32, -4.53 | +3.26% | **-0.45%** | 0 each | free |
+| Nemotron Super | **-3.88%** | -4.49, -1.16, -4.33, -3.88, -2.35 | 0.00% | **-3.37%** | 0 each | $0.134 total |
+
+On Cd alone the agent is level with CMA-ES and ahead of random search. Both
+optimisers find much of their Cd gain by widening or raising the car, which
+grows frontal area, so their drag area (what the drag force depends on) barely
+moves. The agent kept area flat in four of five runs (one run widened the car
+to the limit). Five runs per method are descriptive, not a significance test,
+and every number is a surrogate prediction. This is the data for the team's
+objective decision; under a Cd × A objective all three methods would need
+rerunning.
+
+### Local hosting rehearsal (no VM yet)
+
+The real service under uvicorn with both real checkpoints, an admin token,
+public runs on and rate limiting at 120/min (`runs/rehearsal-20261016/`):
+/ready, /health identity, the five pack designs through /evaluate (the genuine
+rejection returns ood_score 7.07 against 4.93), /fields gzipped from 991 KB to
+412 KB in 0.8 s, CORS preflight, a public over-limit run refused (422), a wrong
+cancel token refused (403), cancel with the right token, and live runs over
+HTTP on all three body styles. `python -m src.service.rehearse` then ran 3 of 3
+Super runs to completion with the cancel check (fastback -3.87%, notchback
+-2.21%, estateback -5.16%, $0.086). Nano found no improvement in one 10-step
+public run: use Super for the demo.
+
 | Workstream | Status | Remaining |
 |---|---|---|
-| Real scalar serving | Qualified on the real bytes | Repeat `qualify --service-url` against the deployed service |
-| Agent evidence | Nano10 and two Super25 runs recorded | Matched seeds once the objective is agreed |
-| Surface fields | Real checkpoint replayed and source authenticated; replies gzipped | Real latency/RSS on the VM; orientation check in Paramveer's viewer |
-| UI integration | Paramveer's PR #13 implements run start/cancel and /fields binding | Merge #8 → #12 → #13, then browser check against the real service |
-| Fair comparison | 25 evaluations per method agreed | Objective decision (Cd or Cd × frontal area), Paramveer's `--protocol` adapter, matched recordings |
-| Deployment/reliability | CPU image, Caddy instructions | Nebius VM, remote qualification, 20-run rehearsal |
+| Real scalar serving | Qualified on the real bytes, rehearsed over HTTP | `qualify --service-url` against the VM |
+| Agent evidence | Nano10, Super25 runs, 5 matched Super runs | Rerun if the objective changes |
+| Surface fields | Replayed, source authenticated, gzipped, 0.8 s locally | Latency/RSS on the VM; orientation check in the viewer |
+| UI integration | PRs #8-#17 merged; start/cancel and /fields binding in the page | Browser check against the hosted service |
+| Fair comparison | Matched recordings for all three methods | Team objective decision; Paramveer adds the agent rows to the results page |
+| Deployment/reliability | Image, Caddy guide, `rehearse` command, local rehearsal | Nebius VM, remote qualification, `rehearse --runs 20` |
 
-Spend ledger after these runs: about $0.094 of the $5 cap.
+Spend ledger after all of this: about $0.39 of the $5 cap.
 
 ## Stage 1: checkpoint and reference handoff
 

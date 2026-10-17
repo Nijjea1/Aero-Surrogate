@@ -122,9 +122,19 @@ small MLP (one forward pass per `/evaluate`). A small CPU VM with 2 vCPU,
      the real client address. Only set it when the API is reachable solely
      through the proxy (step 3 binds to loopback for exactly this reason);
      otherwise a client could pick its own IP.
-6. **Point the frontend at it:** `https://<frontend>/?api=https://api.aero.example.com`.
-   An HTTPS page cannot call a plain-HTTP API, which is another reason for
-   step 4.
+6. **Point the frontend at it:** set `AERO_WEB_API=https://api.aero.example.com`
+   on the web container ([web/DEPLOY.md](../../web/DEPLOY.md)); `?api=` still
+   overrides it for testing. An HTTPS page cannot call a plain-HTTP API, which
+   is another reason for step 4.
+7. **Prove it from outside** (from a laptop, through HTTPS):
+   ```bash
+   # Free: identity, routes and gate parity against the independent references.
+   python -m src.service.qualify --checkpoint runs/drivaernet-random/best.pt      --references runs/handover/scalar_reference.json      --service-url https://api.aero.example.com --out runs/remote-qualification.json
+   # Spends credit: 20 live Super runs plus a cancel, stopped at $0.75.
+   AERO_ADMIN_TOKEN=... python -m src.service.rehearse --service-url https://api.aero.example.com      --runs 20 --model super --max-spend 0.75 --out runs/reliability-20.json
+   ```
+   Set the token in your shell only for that command; it is never a flag and
+   never written to the report.
 
 ## 4. Serving a real checkpoint
 
