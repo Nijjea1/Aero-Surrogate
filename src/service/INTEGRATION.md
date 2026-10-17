@@ -1,34 +1,58 @@
 # Track B integration and real-model qualification
 
 Owner: Pranoy. Implemented against contracts 2.0.0. Updated for Avneet's
-4be514d handoff. This specification is committed locally with the Track B
-implementation; teammates receive it when Pranoy authorizes a push.
-Avneet's native scalar/field JSON formats are supported without reshaping them.
-The actual ignored model/reference artifacts are still not present locally.
+6319c7a handoff bundle (aero-handover-2026-10-15). Avneet's native scalar/field
+JSON formats are supported without reshaping them.
 
-## Track B audit: October 15, 2026
+## Track B status: October 16, 2026, real artifacts present
 
-The implementation passes the full offline suite: **852 passed, 5 skipped**.
-Each logical implementation commit was tested as an isolated staged tree before
-commit. Skips require the unfetched parameter table, extracted fields or actual
-local checkpoints; they are not evidence that those artifacts were qualified.
-Warnings are the existing Starlette/httpx deprecation and intentional old-name
-geometry warnings. The CPU image rebuild succeeds; 80 agent/comparison tests and
-native scalar service qualification pass inside it with networking disabled.
-The scalar qualification uses an explicitly synthetic trainer/exporter fixture.
+Bundle checksums verified (all 12 match SHA256SUMS). Offline suite with the
+real files present: **870 passed, 3 skipped**. The 3 skips need Avneet's full
+parameter table, extracted fields or geometry checkpoint, which Track B does
+not serve.
 
-| Workstream | Implemented and tested | Remaining acceptance evidence |
+Keep the field source NPZ outside `data/drivaerml/fields/` unless the whole
+extracted dataset is there: `tests/test_handover.py` treats a folder holding
+only `run_3.npz` as a dataset and fails to split one run. Track B keeps it at
+`runs/handover/source/run_3.npz`; the pack authenticates it by hash, not path.
+
+Qualified on this machine, offline, against the real bytes
+(`runs/qualify-pranoy-20261016/`):
+
+| Check | Result |
+|---|---|
+| `verify_checkpoint` | passed, 5/5 designs including the genuine rejection |
+| `qualify` | passed, in-process: /ready, /health, /schema, 5 /evaluate, 10 /compare, shared agent gate |
+| `verify_fields` | passed and source authenticated by the pack's hash; Cp within 3.6e-7, sigma within 1.8e-7 (tolerance 1e-4) |
+
+Live agent evidence on the real checkpoint (fastback, no constraints, each run
+qualified before any provider call; `runs/evidence-20261016/`):
+
+| Run | Model | Scored | Baseline Cd | Best trusted Cd | Change | Rejections | Cost | Median step |
+|---|---|---|---|---|---|---|---|---|
+| real-nano-20261016-001 | Nano | 10 | 0.22456 | 0.22380 | -0.34% | 0 | $0.0022 | 1.07 s |
+| real-super-20261016-001 | Super | 25 | 0.22456 | 0.22157 | -1.33% | 0 | $0.0218 | 1.66 s |
+| real-super-20261016-002 | Super | 25 | 0.22456 | 0.21797 | -2.93% | 0 | $0.0250 | 1.77 s |
+
+Run 002 used the exploration guidance added after run 001 fine-tuned two
+parameters for twenty steps. Single runs at temperature 0.6 are anecdotes, not
+a method comparison. The best design's predicted sd is about 0.005, so run
+001's gain is inside one sd and run 002's is just over it. These are surrogate
+predictions, not CFD-confirmed improvements. About 98% of each step is waiting
+for the model; scoring takes about 1.5 ms. No live run hit the gate:
+on the real checkpoint every rejection comes from ood_score (see the service
+README), and the demo shows it with the pack's genuine-rejection design.
+
+| Workstream | Status | Remaining |
 |---|---|---|
-| Real scalar serving | Strict loader, identity, independent native references, route/gate parity | Transfer actual weights and references; qualify their bytes and deployed service |
-| Agent evidence | Qualification before spending, fresh run identity, honest complete/partial summaries | Nano10, inspect trace, then Super25; report improvement/rejection only if observed |
-| Surface fields | Startup checks, bounded per-face inference, mesh identity, exact-source reference replay | Actual weights and source NPZ; real latency/RSS and training-to-viewer orientation/domain checks |
-| UI integration | Concrete run, field mapping and unavailable-output packet below | Paramveer agreement, frontend wiring and browser verification |
-| Fair comparison | Frozen conditions, budget accounting, rejected-baseline stop for both methods | Paramveer optimiser adapter and matched real-model recordings |
-| Deployment/reliability | CPU image and offline integration checks, Caddy deployment instructions | Nebius public deployment, remote qualification and approved 20-run rehearsal |
+| Real scalar serving | Qualified on the real bytes | Repeat `qualify --service-url` against the deployed service |
+| Agent evidence | Nano10 and two Super25 runs recorded | Matched seeds once the objective is agreed |
+| Surface fields | Real checkpoint replayed and source authenticated; replies gzipped | Real latency/RSS on the VM; orientation check in Paramveer's viewer |
+| UI integration | Paramveer's PR #13 implements run start/cancel and /fields binding | Merge #8 → #12 → #13, then browser check against the real service |
+| Fair comparison | 25 evaluations per method agreed | Objective decision (Cd or Cd × frontal area), Paramveer's `--protocol` adapter, matched recordings |
+| Deployment/reliability | CPU image, Caddy instructions | Nebius VM, remote qualification, 20-run rehearsal |
 
-No provider calls were made during this audit. The spend ledger remains
-$0.045402. A push, production deployment and the larger reliability spend have
-not been performed. The teammate-owned code and frozen contracts are unchanged.
+Spend ledger after these runs: about $0.094 of the $5 cap.
 
 ## Stage 1: checkpoint and reference handoff
 
@@ -40,7 +64,7 @@ artifacts with training revision/config, split/seed, hashes and independent
 references. Those real files must be transferred separately from a Git pull:
 the repository ignores runs/ and *.pt.
 
-Reported artifact identities (handoff metadata, not locally verified bytes):
+Artifact identities (verified locally against the bundle on Oct 16):
 
 - Single all-style scalar: `49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a`,
   expected at `runs/drivaernet-random/best.pt`.
@@ -189,7 +213,7 @@ evidence. Check region and Cp agreement on real data before labeling it trusted.
 The new native field pack is supported by a separate offline parity command:
 
 ```powershell
-.\.venv\Scripts\python.exe -m src.service.verify_fields --checkpoint runs/fields/best.pt --references runs/handover/field_reference.json --source-npz data/drivaerml/fields/run_3.npz --out runs/field-parity.json
+.\.venv\Scripts\python.exe -m src.service.verify_fields --checkpoint runs/fields/best.pt --references runs/handover/field_reference.json --source-npz runs/handover/source/run_3.npz --out runs/field-parity.json
 ```
 
 Use the extracted source for the run actually named by the pack (the handoff
