@@ -153,11 +153,56 @@ def test_state_message_lists_parameters_not_yet_tried():
     assert "B_Diffusor_Angle" in line and line.count(", ") == len(BASE) - 3
 
 
+def moved(iteration, base, params, cd, base_cd, accepted=True, reason=None):
+    entry = proposal("lower_cd", base_cd=base_cd, base_iteration=iteration - 1)
+    entry.params, entry.base_params = params, dict(base)
+    return dict(row(iteration, params, cd, accepted, reason),
+                reasoning=logbook_entry(entry, cd, None if accepted else reason))
+
+
+def test_state_message_keeps_every_measured_effect_beyond_the_window():
+    ramp = dict(BASE, B_Ramp_Angle=5.0)
+    history = [row(0, BASE, 0.3), moved(1, BASE, ramp, 0.29, 0.3)]
+    history += [moved(i, ramp, dict(ramp, A_Car_Length=float(i)), 0.29 + i * 1e-5, 0.29) for i in range(2, 14)]
+    history.append(moved(14, ramp, dict(ramp, A_Car_Width=50.0, A_Car_Length=1.0), 0.1, 0.29,
+                         accepted=False, reason="ood 9 exceeds 4.9"))
+    text = state_message(history, body_style="fastback", evaluations_left=3, total_evaluations=20,
+                         constraints=[], best_pressure=None, provenance="synthetic stub", window=4)
+    assert "it 1:" not in text  # outside the attempt window...
+    effects = {line.split(":")[0]: line for line in text.splitlines()
+               if line.split(":")[0] in BASE and "→" in line}
+    assert effects["B_Ramp_Angle"] == "B_Ramp_Angle: 0→5 -0.01000"  # ...but still remembered
+    assert effects["A_Car_Width"] == "A_Car_Width: 0→50 rejected (with A_Car_Length)"
+    assert effects["A_Car_Length"].count(";") == 2  # bounded per parameter
+    assert effects["A_Car_Length"].endswith("0→1 rejected (with A_Car_Width)")
+    # Every length move was worse here, so only the latest three are kept.
+    assert effects["A_Car_Length"].startswith("A_Car_Length: 0→12 +")
+
+
+def test_best_move_survives_the_per_parameter_bound():
+    history = [row(0, BASE, 0.3), moved(1, BASE, dict(BASE, B_Ramp_Angle=5.0), 0.29, 0.3)]
+    history += [moved(i, dict(BASE, B_Ramp_Angle=5.0), dict(BASE, B_Ramp_Angle=5.0 + i), 0.29 + i * 1e-4, 0.29)
+                for i in range(2, 7)]
+    text = state_message(history, body_style="fastback", evaluations_left=3, total_evaluations=20,
+                         constraints=[], best_pressure=None, provenance="synthetic stub", window=4)
+    line = next(l for l in text.splitlines() if l.startswith("B_Ramp_Angle: "))
+    assert line == "B_Ramp_Angle: 0→5 -0.01000; 5→10 +0.00050; 5→11 +0.00060"
+    assert len(text) < 2500
+
+
+def test_baseline_and_scripted_rows_add_no_effects():
+    history = [row(0, BASE, 0.3), row(1, dict(BASE, B_Ramp_Angle=1.0), 0.29)]
+    text = state_message(history, body_style="fastback", evaluations_left=3, total_evaluations=5,
+                         constraints=[], best_pressure=None, provenance="synthetic stub", window=8)
+    assert "Measured Cd change per move" not in text
+
+
 def test_prompt_steers_away_from_marginal_fine_tuning():
     from src.agent.nemotron import MARGINAL_CD, SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
     assert f"smaller than about {MARGINAL_CD:.4f} is marginal" in prompt
     assert "test a parameter you have not tried yet" in prompt
+    assert "roughly a quarter of its range" in prompt
 
 
 def test_state_message_with_logbook_history_stays_bounded():

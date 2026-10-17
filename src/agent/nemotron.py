@@ -51,6 +51,9 @@ Rules:
 - A Cd change smaller than about 0.0002 is marginal. Once a parameter's effect
   has flattened out, stop fine-tuning it and test a parameter you have not
   tried yet; the state message lists them. Spend the budget exploring.
+- Test an untried parameter with a decisive move, roughly a quarter of its
+  range, in the direction you expect to help; refine promising ones later
+  with smaller moves. The state message keeps every effect measured so far.
 - Do not propose a design that was already scored.
 - The observed result is recorded by the server, never by you."""
 
@@ -188,6 +191,49 @@ def logbook_entry(proposal: Proposal, cd: float, reject_reason: str | None) -> s
             f"Expected: {expected} | Observed: {observed}")
 
 
+_CHANGE_FIELD = re.compile(r" \| Change: (.*?) \| Expected: ")
+_CHANGE_ITEM = re.compile(r"(\w+) ([^\s,]+) → ([^\s,]+)")
+EFFECTS_PER_PARAMETER = 3
+
+
+def _measured_effects(history: list[dict]) -> list[str]:
+    """Every measured move per parameter, so effects outlive the attempt window.
+
+    Built from the server-written logbook lines only: a move's Cd change, or
+    that the gate rejected it. Joint moves are marked with their partner.
+    """
+    moves: dict[str, list[str]] = {}
+    for row in history:
+        entry = read_logbook(row.get("reasoning"))
+        change = _CHANGE_FIELD.search(row.get("reasoning") or "") if entry else None
+        if not change:
+            continue
+        items = _CHANGE_ITEM.findall(change.group(1))
+        result = "rejected" if entry["rejected"] else (
+            f"{entry['delta']:+.5f}" if entry["delta"] is not None else None)
+        if result is None:
+            continue
+        for name, old, new in items:
+            if name not in PARAM_BOUNDS:
+                continue
+            partners = [other for other, _, _ in items if other != name]
+            note = f" (with {', '.join(partners)})" if partners else ""
+            score = entry["delta"] if entry["delta"] is not None else float("inf")
+            moves.setdefault(name, []).append((score, f"{old}→{new} {result}{note}"))
+    lines = []
+    for name in PARAM_BOUNDS:
+        shown = moves.get(name)
+        if not shown:
+            continue
+        if len(shown) > EFFECTS_PER_PARAMETER:
+            # Keep the best move so far, then the most recent ones.
+            best = min(shown, key=lambda move: move[0])
+            recent = [move for move in shown if move is not best][-(EFFECTS_PER_PARAMETER - 1):]
+            shown = [best, *recent] if best[0] < 0 else shown[-EFFECTS_PER_PARAMETER:]
+        lines.append(f"{name}: " + "; ".join(text for _, text in shown))
+    return lines
+
+
 _LOGBOOK = re.compile(r" \| Expected: (lower Cd|higher Cd|no change in Cd)[^|]* \| Observed: (.*)$")
 _OBSERVED_DELTA = re.compile(r"\(([+-]\d+\.\d+)\) vs iteration")
 
@@ -279,6 +325,11 @@ def state_message(history: list[dict], *, body_style: str, evaluations_left: int
     lines.append("Constraints enforced by code: " + (", ".join(map(str, constraints)) or "none") + ".")
     untried = [name for name in PARAM_BOUNDS if all(float(row["params"][name]) == 0.0 for row in history)]
     lines.append("Parameters not yet changed this run: " + (", ".join(untried) or "none") + ".")
+    effects = _measured_effects(history)
+    if effects:
+        lines.append(f"Measured Cd change per move, all steps (up to {EFFECTS_PER_PARAMETER} per parameter: "
+                     "the best, then the latest):")
+        lines.extend(effects)
     lines.append(f"Most recent attempts (newest last, {min(window, len(history))} of {len(history)}):")
     lines.extend(_attempt_line(row) for row in history[-window:])
     last = _last_step_line(history)
