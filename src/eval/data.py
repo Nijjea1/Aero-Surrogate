@@ -161,13 +161,46 @@ def make_category_splits(ids, categories: dict, held_out: str | None = None,
 
 
 def load_splits(path) -> dict:
-    """runs/splits.json as src.data.dataset.write_splits writes it, normalised
-    to {"random": {...}, "category": {..., "held_out_category": str}}."""
+    """Load a direct split export or the complete training handover package.
+
+    Both formats normalise to random/category groups. Reject malformed,
+    duplicated or overlapping IDs before they can inflate evaluation scores.
+    """
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    out = {"random": payload["random"], "source": str(path), "seed": payload.get("seed")}
-    if "held_out_category" in payload:
-        cat = dict(payload["held_out_category"])
-        cat["held_out_category"] = cat.pop("_held_out_category", [None])[0]
+    if not isinstance(payload, dict):
+        raise ValueError("split file must contain a JSON object")
+    if "stage1" in payload:
+        try:
+            payload = payload["stage1"]["parameters"]
+        except (KeyError, TypeError):
+            raise ValueError("handover split file has no stage1.parameters split object") from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("random"), dict):
+        raise ValueError("split file needs a random split object (or stage1.parameters.random)")
+
+    def checked(group, name):
+        if not isinstance(group, dict):
+            raise ValueError(f"{name} split must be an object")
+        out = {}
+        for key in ("train", "val", "test"):
+            ids = group.get(key)
+            if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or not i for i in ids):
+                raise ValueError(f"{name}.{key} must be a nonempty list of design IDs")
+            if len(set(ids)) != len(ids):
+                raise ValueError(f"{name}.{key} contains duplicate design IDs")
+            out[key] = list(ids)
+        check_disjoint(out)
+        return out
+
+    out = {"random": checked(payload["random"], "random"), "source": str(path), "seed": payload.get("seed")}
+    category = payload.get("held_out_category", payload.get("category"))
+    if category is not None:
+        cat = checked(category, "category")
+        held = category.get("held_out_category", category.get("_held_out_category"))
+        if isinstance(held, list) and len(held) == 1:
+            held = held[0]
+        if not isinstance(held, str) or not held:
+            raise ValueError("category split needs a held_out_category name")
+        cat["held_out_category"] = held
         out["category"] = cat
     return out
 

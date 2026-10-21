@@ -68,9 +68,9 @@ KNOWN_RUNS: list[dict] = [
         "name": "stage1-ensemble",
         "config": "configs/drivaernet.yaml",
         "run": "drivaernet-ensemble-random",
-        "role": "Five-member deep ensemble. Reaches the noise ceiling "
-                "(R^2 0.9132 vs ceiling 0.9122). REPORT THIS as the stage-1 "
-                "headline, not the single model.",
+        "role": "Five-member deep ensemble. Historical test R^2 0.9132; "
+                "not the served single model. Report only with independent "
+                "grading and a distinct artifact identity.",
         "report": True,
         "ensemble": True,
     },
@@ -285,18 +285,15 @@ input to the harness that does.
 `stage1-geometry` trained on 18 DrivAerML cars and has a negative test R². It
 exists to prove the geometry pipeline runs, not to be a result.
 
-The stage-1 headline is **`stage1-ensemble`**, not the single model:
+The release headline must describe the artifact actually served. The current
+single model reports historical test R² 0.8750; a separate five-member ensemble
+reports 0.9132. Do not mix these identities.
 
-| | test R² | noise ceiling (this split) |
-|---|---|---|
-| single model | 0.8750 | 0.9122 |
-| ensemble of 5 | **0.9132** | 0.9122 |
-
-**Report R² against the ceiling of the split you evaluated, not 1.0 and not a
-dataset-wide number.** `Std Cd` in the DrivAerNet table is the CFD solver's own
-run-to-run spread, and `R²_max = 1 - mean(Std Cd²)/var(Cd)` differs by subset:
-0.906 over all 4,165 designs, 0.9122 on this test split. At 0.9132 the
-remaining error is solver noise.
+The dataset's `Std Cd` describes solver coefficient variability, not a proven
+error variance of the averaged regression label. The historical ratio
+`1 - mean(Std Cd²)/var(Cd)` is not a validated R² ceiling or evidence that
+remaining prediction error is irreducible. Grade held-out R², MAE and interval
+coverage directly.
 
 ## Four kinds of checkpoint, not interchangeable
 

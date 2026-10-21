@@ -92,3 +92,53 @@ def test_committed_results_files_are_publishable():
         json.loads(text)
         assert "Users" not in text and "/home/" not in text, f"{name} names a local disk"
     assert json.loads((web / "metrics.json").read_text(encoding="utf-8")).get("label")
+
+
+def _matched_summary(method, run_id, *, delta=1, budget=2):
+    from src.agent.comparison import BudgetedEvaluator, ComparisonProtocol
+    from src.contracts import default_params
+
+    protocol = ComparisonProtocol("a" * 64, "fixture-v1", "revision", .01, 10., evaluation_budget=budget)
+
+    def score(params, style):
+        return {"cd": .3 - params["B_Ramp_Angle"] * .001, "cl": 0., "uncertainty": .002,
+                "ood_score": 1., "in_distribution": True, "pressure_summary": {}}
+
+    evaluator = BudgetedEvaluator(score, protocol)
+    evaluator(default_params(), "fastback")
+    evaluator(dict(default_params(), B_Ramp_Angle=delta), "fastback")
+    return evaluator.summary(method, run_id, "evaluation budget used", metadata={
+        "provider_model": "nvidia/nemotron-3-super-120b-a12b", "seed": 0,
+        "usage": {"cost_usd": .02} if method == "nemotron" else {},
+        "timing": {"step_s_median": 1.2, "step_s_total": 2.4}})
+
+
+def test_matched_export_checks_protocol_and_aggregates_actual_calls(tmp_path):
+    source = tmp_path / "input"
+    source.mkdir()
+    for method in ("nemotron", "cmaes", "random"):
+        (source / f"{method}.json").write_text(json.dumps(_matched_summary(method, method)))
+    result = benchmark.build_matched(source, publish_to=tmp_path / "public")
+    assert result["comparisons"][0]["n_runs"] == 3
+    methods = result["comparisons"][0]["methods"]
+    assert methods[0]["label"] == "Nemotron Super"
+    assert methods[0]["final_pct"]["median"] == pytest.approx(-1 / 3)
+    assert methods[0]["cost_usd_median"] == .02
+    assert methods[0]["sum_step_s_median"] == 2.4
+    assert len(result["published_runs"]) == 3
+    assert len(list((tmp_path / "public").glob("*.json"))) == 3
+    # Numeric tampering cannot become a headline by merely editing a summary.
+    bad = json.loads((source / "random.json").read_text())
+    bad["best_cd"] = .01
+    (source / "random.json").write_text(json.dumps(bad))
+    with pytest.raises(ValueError, match="does not match"):
+        benchmark.build_matched(source)
+
+
+def test_matched_export_retains_incomplete_evidence_but_excludes_aggregate(tmp_path):
+    for method, budget in (("nemotron", 2), ("random", 3)):
+        data = _matched_summary(method, method, budget=budget)
+        # Different declared budgets cannot be compared at all.
+        (tmp_path / f"{method}.json").write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="protocols differ"):
+        benchmark.build_matched(tmp_path)

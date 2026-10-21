@@ -39,7 +39,11 @@ def r2_score(y_true, y_pred) -> float:
 
 
 def regression_metrics(y_true, y_pred, r2_ceiling: float | None = None) -> dict:
-    """R2, MAE, RMSE, max error, n; plus R2 as a share of the noise ceiling."""
+    """R2, MAE, RMSE, max error and n.
+
+    ``r2_ceiling`` is a deprecated compatibility argument. Solver iteration
+    spread does not establish label-error variance, so it cannot normalise R2.
+    """
     y_true, y_pred = _arrays(y_true, y_pred)
     err = np.abs(y_pred - y_true)
     out = {
@@ -50,9 +54,6 @@ def regression_metrics(y_true, y_pred, r2_ceiling: float | None = None) -> dict:
         "max_error": float(err.max()) if len(err) else float("nan"),
         "mean_true": float(y_true.mean()) if len(y_true) else float("nan"),
     }
-    if r2_ceiling is not None and r2_ceiling > 0:
-        out["r2_ceiling"] = float(r2_ceiling)
-        out["share_of_ceiling"] = out["r2"] / r2_ceiling
     return out
 
 
@@ -72,12 +73,11 @@ def per_category(y_true, y_pred, categories, r2_ceilings: dict | None = None) ->
 
 
 def noise_ceiling(y_true, label_std) -> dict:
-    """The R2 a perfect model of the mean would still not beat.
+    """Deprecated name for a descriptive solver-spread reference calculation.
 
-    DrivAerNet's `Std Cd` is the solver's own run-to-run spread on each design,
-    so even the true mean misses each label by that much:
-
-        R2_max = 1 - mean(Std Cd^2) / var(Average Cd)
+    Std Cd describes coefficient variation, not the error variance of Average
+    Cd. The old ratio is retained for historical reproduction only. It is not
+    an attainable-R2 bound or proof that residuals are irreducible label noise.
     """
     y_true, label_std = _arrays(y_true, label_std)
     var = float(y_true.var())
@@ -86,7 +86,9 @@ def noise_ceiling(y_true, label_std) -> dict:
         "n": int(len(y_true)),
         "var_cd": var,
         "mean_label_std": float(label_std.mean()),
-        "r2_ceiling": 1.0 - noise / var if var > 0 else float("nan"),
+        "solver_spread_ratio_reference": 1.0 - noise / var if var > 0 else float("nan"),
+        "is_performance_bound": False,
+        "interpretation": "solver coefficient spread; uncertainty of averaged labels is not established",
     }
 
 
@@ -153,8 +155,9 @@ def calibration_curve(y_true, y_pred, sigma, n_bins: int = 10,
     if noise_floor is not None:
         # The labels themselves are this noisy; a smaller sigma claims more
         # certainty than the simulation that produced them.
-        out["noise_floor"] = float(noise_floor)
-        out["share_below_noise_floor"] = float((sigma < noise_floor).mean())
+        out["label_std_reference"] = float(noise_floor)
+        out["share_below_label_std_reference"] = float((sigma < noise_floor).mean())
+        out["label_std_reference_note"] = "descriptive solver spread, not a lower bound on prediction uncertainty"
     return out
 
 

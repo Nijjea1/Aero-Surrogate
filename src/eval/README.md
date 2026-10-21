@@ -120,9 +120,14 @@ agent. Agent runs cost money, so start them yourself with
 | `speed` | ms per design, one at a time and batched | |
 | `warnings` | anything that makes a number less trustworthy than it looks | |
 
-R² is reported against the noise ceiling as well as 1.0. DrivAerNet's
-`Std Cd` is the solver's own run-to-run spread, so even a perfect model of the
-mean can't beat about 0.91.
+R² and MAE are measured directly on the frozen held-out split. The dataset's
+`Std Cd` is a descriptive solver-spread reference, not the error variance of
+`Average Cd`; it establishes neither an attainable-R² ceiling nor an uncertainty
+floor. The historical ratio is retained under `data.label_variability` with
+`is_performance_bound: false`, and is excluded from headline metrics.
+
+The harness accepts direct split exports and a complete handover package
+(`stage1.parameters`). Malformed, duplicated or overlapping IDs are rejected.
 
 ## Reading the reliability diagram
 

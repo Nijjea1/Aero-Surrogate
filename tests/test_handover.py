@@ -38,11 +38,12 @@ def test_the_negative_r2_model_is_marked_do_not_report():
     assert "DO NOT REPORT" in geometry["role"]
 
 
-def test_the_ensemble_is_the_reportable_stage1_headline():
+def test_ensemble_evidence_cannot_be_mistaken_for_the_served_single_model():
     ens = next(e for e in KNOWN_RUNS if e["name"] == "stage1-ensemble")
     assert ens["report"] is True
     assert ens.get("ensemble") is True
-    assert "REPORT THIS" in ens["role"]
+    assert "not the served single model" in ens["role"]
+    assert "independent grading" in ens["role"]
 
 
 def test_run_names_are_unique():

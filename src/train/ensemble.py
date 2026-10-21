@@ -3,65 +3,20 @@
     python -m src.train.ensemble --config configs/drivaernet.yaml --members 5
     python -m src.train.ensemble --config configs/drivaernet.yaml --split category
 
-WHY THIS IS THE RIGHT FIX, NOT JUST A NICER NUMBER
+The ensemble separates mean predictive variance from disagreement between
+members. Neither term alone guarantees calibrated uncertainty or reliable OOD
+detection. All members can share the same extrapolation error.
 
-A single heteroscedastic model reports ONE kind of uncertainty: how noisy the
-labels are near this input. That is aleatoric, it is irreducible, and the
-Gaussian NLL learns it well -- stage 1's predicted sigma (0.0072) lands on the
-solver's own run-to-run spread (0.0064).
+Historical training-side test measurements (not the served single model):
 
-What it cannot report is the other kind: "I have never seen anything like
-this". Nothing in training teaches that, because every training example is by
-construction familiar. Measured consequences, both in this repo:
+    single model        R2 0.8750
+    best member         R2 0.9092
+    ensemble of 5       R2 0.9132
 
-  * held out a body style -> cd error roughly doubled while sigma widened 20%,
-    so 1-sigma coverage fell to 0.49 (src/train/train.py)
-  * eight feature-space OOD methods on the geometry path -> the best caught
-    26% of out-of-distribution designs, Mahalanobis caught 0%
-    (src/train/ood.py)
-
-An ensemble gets at it structurally. Train M models from different random
-inits; where the data constrains the function they agree, and where it does
-not they diverge, because nothing pinned them together there. The spread of
-their means IS an epistemic signal, and it needs no OOD estimator, no density
-model and no feature space.
-
-THE DECOMPOSITION
-
-With members predicting (mu_i, sigma_i), the predictive mean and variance of
-the mixture are
-
-    mu    = (1/M) sum mu_i
-    var   = (1/M) sum sigma_i^2      <- ALEATORIC: label noise
-          + (1/M) sum (mu_i - mu)^2  <- EPISTEMIC: disagreement
-
-(Lakshminarayanan, Pritzel & Blundell, 2017.) The two terms answer different
-questions and the project needs both: aleatoric says "this quantity is noisy",
-epistemic says "do not trust me here at all". The agent's gate wants the
-second, and until now we had no working source for it.
-
-COST: M times the training. That is affordable precisely because stage 1 is
-small -- the parametric model trains in about two seconds -- which is also why
-the plan lists an ensemble as the fallback when a single variance head proves
-unstable. It did prove unstable, so here it is.
-
-MEASURED, ON REAL DrivAerNet, 5 MEMBERS
----------------------------------------
-It delivers on accuracy and does NOT deliver on OOD. Both are recorded because
-the second is the more interesting finding.
-
-ACCURACY -- the ensemble reaches the noise ceiling:
-
-                      test R^2    noise ceiling (this split)
-    single model        0.8750              0.9122
-    best member         0.9092              0.9122
-    ENSEMBLE OF 5       0.9132              0.9122
-
-Note the ceiling is 0.9122 for this test split, not the 0.906 computed over all
-4,165 designs -- var(Cd) and mean Std Cd^2 both differ by subset, so a
-whole-dataset ceiling must not be quoted against a split R^2. At 0.9132 the
-ensemble is at the limit: the remaining error is the CFD solver's own
-run-to-run noise, and no model can go further.
+An earlier description called 0.9122 a hard noise ceiling using the dataset's
+Std Cd column. That interpretation was unsupported: solver coefficient spread
+is not the error variance of the averaged regression label. These ordinary
+held-out R2 measurements remain valid; they do not prove irreducible residuals.
 
 OOD -- the epistemic term does not save us:
 
