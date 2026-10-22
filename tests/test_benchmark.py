@@ -127,6 +127,8 @@ def test_matched_export_checks_protocol_and_aggregates_actual_calls(tmp_path):
     assert methods[0]["sum_step_s_median"] == 2.4
     assert len(result["published_runs"]) == 3
     assert len(list((tmp_path / "public").glob("*.json"))) == 3
+    for published in (tmp_path / "public").glob("*.json"):
+        assert b"\r\n" not in published.read_bytes()
     # Numeric tampering cannot become a headline by merely editing a summary.
     bad = json.loads((source / "random.json").read_text())
     bad["best_cd"] = .01
