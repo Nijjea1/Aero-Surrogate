@@ -87,8 +87,49 @@ def test_retries_are_bounded_and_then_fail(tmp_path):
 
 
 def test_transient_failure_then_success(tmp_path):
-    c = client([requests.ConnectionError("reset"), completion()], tmp_path)
+    c = client([requests.ConnectTimeout("connection not established"), completion()], tmp_path)
     assert c.chat([{"role": "user", "content": "hi"}])["message"]["content"] == "ok"
+
+
+@pytest.mark.parametrize("failure", [requests.ReadTimeout, requests.ConnectionError, requests.RequestException])
+def test_ambiguous_transport_failure_keeps_reservation_and_never_retries(tmp_path, failure):
+    messages = [{"role": "user", "content": "hi"}]
+    c = client([failure("response disappeared"), completion()], tmp_path, max_retries=2)
+    reserve = call_cost(c.model, (len(json.dumps(messages)) + len(json.dumps([]))) // 3 + 1, 64)
+    with pytest.raises(ProviderError, match="outcome unknown"):
+        c.chat(messages, max_tokens=64, budget_usd=reserve * 1.5)
+    assert len(c.session.requests) == 1
+    assert c.usage.calls == 1
+    assert c.usage.cost_usd == pytest.approx(reserve)
+    assert c.ledger.total() == pytest.approx(reserve)
+    rows = [json.loads(line) for line in c.ledger.path.read_text().splitlines()]
+    assert rows[-1]["billed_usd"] == pytest.approx(reserve)
+    assert "outcome unknown" in rows[-1]["note"]
+    # A subsequent correction/new proposal must still respect the run cap.
+    with pytest.raises(BudgetExceeded, match="run budget"):
+        c.chat(messages, max_tokens=64, budget_usd=reserve * 1.5)
+    assert len(c.session.requests) == 1
+
+
+def test_ambiguous_failure_remains_counted_for_other_clients_global_cap(tmp_path):
+    messages = [{"role": "user", "content": "hi"}]
+    reserve = call_cost("nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+                        (len(json.dumps(messages)) + len(json.dumps([]))) // 3 + 1, 64)
+    first = client([requests.ReadTimeout("accepted but response lost")], tmp_path, cap=reserve * 1.5)
+    with pytest.raises(ProviderError, match="outcome unknown"):
+        first.chat(messages, max_tokens=64)
+    second = client([completion()], tmp_path, cap=reserve * 1.5)
+    with pytest.raises(BudgetExceeded):
+        second.chat(messages, max_tokens=64)
+    assert len(second.session.requests) == 0
+
+
+def test_safe_connect_timeouts_can_exhaust_retries_without_charging(tmp_path):
+    c = client([requests.ConnectTimeout("not sent")] * 3, tmp_path, max_retries=2)
+    with pytest.raises(ProviderError, match="after 3 attempts"):
+        c.chat([{"role": "user", "content": "hi"}])
+    assert len(c.session.requests) == 3
+    assert c.usage.calls == 0 and c.ledger.total() == 0
 
 
 def test_errors_never_contain_the_key(tmp_path):

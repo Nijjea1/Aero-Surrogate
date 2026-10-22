@@ -310,9 +310,25 @@ class TokenFactoryClient:
             try:
                 response = self.session.post(f"{self.base_url}/chat/completions", json=body,
                                              headers=self._headers(), timeout=self.timeout_s)
-            except requests.RequestException as exc:
+            except requests.ConnectTimeout as exc:
+                # Requests documents ConnectTimeout as safe to retry: no
+                # connection was established and the request was not sent.
                 last_error = self._scrub(f"{type(exc).__name__}: {exc}")
                 continue
+            except requests.RequestException as exc:
+                # A read timeout or dropped connection may happen after the
+                # provider accepted and billed the request. Do not release its
+                # reservation or automatically send a duplicate paid request.
+                # Charge the estimate to client usage too, so a later call
+                # cannot evade this run's budget using an ambiguous outcome.
+                latency_s = time.perf_counter() - started
+                note = "transport outcome unknown; reserved estimate retained; no automatic retry"
+                self.usage.add(0, 0, reserve, latency_s)
+                billed["cost_usd"] = reserve
+                billed["usage"] = {"prompt_tokens": 0, "completion_tokens": 0,
+                                   "latency_s": round(latency_s, 3), "note": note}
+                raise ProviderError(self._scrub(
+                    f"{type(exc).__name__}: {exc}; {note}")) from None
             latency_s = time.perf_counter() - started
             if response.status_code in _RETRY_STATUS:
                 last_error = f"HTTP {response.status_code}"

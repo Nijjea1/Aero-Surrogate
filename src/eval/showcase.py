@@ -93,7 +93,7 @@ def build(data_path: str | None = None, splits_path: str | None = None, seed: in
                   "the model never trained or early-stopped on them."),
         "selection": (f"Per body style, the {per_style} test designs nearest evenly spaced "
                       "percentiles of CFD Cd. Chosen by drag, not by model error."),
-        "cd_cfd_std": "The CFD solver's own run-to-run spread on Cd, from the dataset.",
+        "cd_cfd_std": "Solver coefficient variability from the dataset; not a confidence interval on the averaged Cd label.",
         "designs": pick(table, split["test"], per_style),
     }
 

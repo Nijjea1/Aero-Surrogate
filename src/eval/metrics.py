@@ -183,7 +183,7 @@ def _ranks(x: np.ndarray) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-# Knowing when it does not know
+# Measured separation between specified input distributions
 # --------------------------------------------------------------------------
 
 
@@ -199,8 +199,10 @@ def auroc(score_in, score_out) -> float:
 
 
 def ood_detection(score_in, score_out, threshold: float) -> dict:
-    """Does the model flag designs it has not seen like?
-    This is the headline claim: it knows when it does not know.
+    """Measure detection and false alarms on specified in/OOD samples.
+
+    Separation on these samples is not a guarantee of detecting arbitrary
+    model errors or unfamiliar physical geometries.
 
     Works for any score where higher means stranger: the Mahalanobis distance,
     or sigma itself, which is how we show sigma alone does not do the job.
