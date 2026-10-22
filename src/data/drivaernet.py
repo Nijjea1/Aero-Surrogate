@@ -17,20 +17,12 @@ of the design id -- F_S_WWC_WM_001 is a fastback, N_ a notchback, E_ an
 estateback, ~1390 of each. Deriving it is what makes the held-out-category
 split a genuine extrapolation test on real data.
 
-NOISE FLOOR. Std Cd is the CFD solver's own run-to-run spread on that design,
-mean 0.0064. It bounds everything:
-
-    R^2_max = 1 - mean(Std Cd^2) / var(Average Cd) = 0.906
-
-No model can exceed that, because the labels themselves are that noisy. Report
-R^2 against 0.906, not against 1.0 -- the published 0.82-0.90 within-category
-results are already within a few percent of the achievable maximum, which is a
-much more interesting thing to say than "we got 0.88".
-
-It is also a free calibration reference: a model predicting sigma below ~0.0064
-near the training data is claiming more certainty than the simulation that
-produced its labels. That is a provable overconfidence check, independent of
-any reliability diagram.
+SOLVER SPREAD. Std Cd describes coefficient variability in the CFD output.
+It is not automatically the error variance of the averaged Cd target. The
+historical ratio 1 - mean(Std Cd^2) / var(Average Cd) is descriptive only:
+it is not a validated R2 ceiling, an irreducible-error proof, or a lower bound
+on the surrogate's uncertainty. Use held-out residual coverage to assess
+prediction intervals.
 
 LICENCE: CC BY-NC 4.0, non-commercial. Must be stated in the README and the
 submission. data/ is gitignored, so nothing downloaded here is committed.
@@ -102,13 +94,14 @@ def _download(url: str, dest: Path) -> Path:
 
 
 def noise_ceiling(df) -> dict:
-    """R^2 that perfect prediction of the mean Cd would still not exceed."""
+    """Historical solver-spread ratio; not an attainable-performance bound."""
     var = float(df["Average Cd"].var(ddof=0))
     noise = float((df["Std Cd"] ** 2).mean())
     return {
         "var_cd": var,
         "mean_cfd_variance": noise,
-        "r2_ceiling": 1.0 - noise / var,
+        "solver_spread_ratio_reference": 1.0 - noise / var,
+        "is_performance_bound": False,
         "mean_std_cd": float(df["Std Cd"].mean()),
     }
 
@@ -173,8 +166,8 @@ def main() -> None:
     print(f"  designs      {info['n']:,}")
     print(f"  categories   {info['categories']}")
     print(f"  official     {info['official_splits']}")
-    print(f"\n  mean Std Cd  {info['mean_std_cd']:.5f}   (CFD's own run-to-run spread)")
-    print(f"  R2 CEILING   {info['r2_ceiling']:.4f}   <- report against this, not 1.0")
+    print(f"\n  mean Std Cd  {info['mean_std_cd']:.5f}   (solver coefficient spread; not averaged-label error)")
+    print(f"  spread ratio {info['solver_spread_ratio_reference']:.4f}   (not an R2 ceiling)")
     print(f"\nnext:  python -m src.data.dataset --check --config configs/drivaernet.yaml")
 
 

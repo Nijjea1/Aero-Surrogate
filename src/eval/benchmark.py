@@ -170,6 +170,92 @@ def build(log: RunLog) -> dict:
             "comparisons": comparisons, "excluded": excluded}
 
 
+def build_matched(directory: str | Path, *, publish_to: str | Path | None = None) -> dict:
+    """Export strict ComparisonProtocol summaries, checking every scored call.
+
+    Historical summaries retain their experiment identity. This does not rerun
+    an agent or certify CFD accuracy; it verifies protocol/budget/gate accounting
+    before aggregating the measured surrogate search curves.
+    """
+    from ..agent.comparison import summarize_pair
+
+    summaries = []
+    for path in sorted(Path(directory).glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and data.get("summary_version") == 1:
+            summaries.append((path, data))
+    if len(summaries) < 2:
+        raise ValueError("matched export needs at least two comparison summaries")
+    run_ids = [data["run_id"] for _, data in summaries]
+    if len(run_ids) != len(set(run_ids)):
+        raise ValueError("matched export contains duplicate run IDs")
+    anchor = summaries[0][1]
+    for _, data in summaries[1:]:
+        summarize_pair(anchor, data)  # validates both summaries, including derived fields
+
+    runs, excluded, evidence = [], [], []
+    for path, data in summaries:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        evidence.append({"run_id": data["run_id"], "file": path.name,
+                         "source_summary_sha256": digest,
+                         "protocol_id": data["protocol_id"], "complete": data["complete"]})
+        if publish_to is not None:
+            target = Path(publish_to) / path.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(portable_paths(data), indent=1, allow_nan=False) + "\n", encoding="utf-8")
+            evidence[-1]["published_summary_sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
+        if not data["complete"]:
+            excluded.append({"run_id": data["run_id"], "reason": data["stop_reason"]})
+            continue
+        meta = data.get("metadata") or {}
+        method = data["method"]
+        if method == "random_search":
+            method = "random"
+        provider_model = meta.get("provider_model")
+        if method == "nemotron":
+            method, label = f"agent:{provider_model or 'unknown'}", "Nemotron Super" if "super" in str(provider_model).lower() else f"Nemotron ({provider_model})"
+        elif method in ("cmaes", "random"):
+            label = "CMA-ES" if method == "cmaes" else "Random search"
+        else:
+            raise ValueError(f"unsupported matched method: {method}")
+        start = data["baseline_cd"]
+        progress = [100.0 * (cd - start) / start for cd in data["best_curve"]]
+        best = data["best_cd"]
+        runs.append({"run_id": data["run_id"], "method": method, "label": label,
+                     "body_style": data["protocol"]["body_style"],
+                     "budget": data["protocol"]["evaluation_budget"],
+                     "start_cd": start, "best_cd": best,
+                     "found_at": next(i for i, cd in enumerate(data["best_curve"]) if cd == best),
+                     "progress_pct": progress, "final_pct": progress[-1],
+                     "gated": data["counts"]["rejected"],
+                     "step_s_median": (meta.get("timing") or {}).get("step_s_median"),
+                     "cost_usd": (meta.get("usage") or {}).get("cost_usd"),
+                     "sum_step_s": (meta.get("timing") or {}).get("step_s_total"),
+                     "seed": meta.get("seed")})
+    methods = []
+    for method in sorted({run["method"] for run in runs},
+                         key=lambda key: (METHOD_ORDER.index(key.split(":")[0]), key)):
+        selected = [run for run in runs if run["method"] == method]
+        result = summarise_method(selected)
+        elapsed = [run["sum_step_s"] for run in selected if run["sum_step_s"] is not None]
+        result["sum_step_s_median"] = float(np.median(elapsed)) if elapsed else None
+        costs = [run["cost_usd"] for run in selected if run["cost_usd"] is not None]
+        result["cost_usd_median"] = float(np.median(costs)) if costs else None
+        methods.append(result)
+    protocol = anchor["protocol"]
+    return {"format": FORMAT, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "metric": "change in best trusted surrogate-predicted Cd against iteration 0, percent; lower is better",
+            "claim": "Historical surrogate predictions, not CFD-validated improvements. Five repetitions and one starting design do not establish superiority.",
+            "timing_note": "Equal predictor-call budgets do not imply equal time or cost; recorded timing and cost belong to the historical local experiment.",
+            "protocol_id": anchor["protocol_id"], "protocol": protocol,
+            "published_runs": evidence, "runs": runs, "excluded": excluded,
+            "comparisons": [{"body_style": protocol["body_style"],
+                             "budget": protocol["evaluation_budget"],
+                             "surrogate": protocol["model_version"],
+                             "checkpoint_sha256": protocol["checkpoint_sha256"],
+                             "constraints": protocol["constraints"], "n_runs": len(runs), "methods": methods}]}
+
+
 def run_baseline_seeds(seeds: int, iterations: int, body_style: str, constraints: list[str],
                        log: RunLog, checkpoint: str | None = None) -> list[str]:
     """Run CMA-ES and random search for seeds 0..seeds-1 not finished in the log yet."""
@@ -214,13 +300,20 @@ def main(argv=None) -> int:
                     help="constraint for --baseline-seeds runs, matching the agent run's. Repeatable.")
     ap.add_argument("--checkpoint", help="score --baseline-seeds runs in-process with this checkpoint "
                     "(the one the service serves) instead of over HTTP")
+    ap.add_argument("--matched-summaries", help="strictly validate and export saved comparison summaries instead of legacy run logs")
+    ap.add_argument("--publish-summaries", help="copy portable validated matched summaries into this public evidence directory")
     args = ap.parse_args(argv)
-    log = RunLog(args.runs)
+    if args.publish_summaries and not args.matched_summaries:
+        ap.error("--publish-summaries requires --matched-summaries")
+    if args.matched_summaries and args.baseline_seeds:
+        ap.error("--matched-summaries cannot launch new baseline runs")
+    log = RunLog(args.runs) if not args.matched_summaries else None
     if args.baseline_seeds:
         started = run_baseline_seeds(args.baseline_seeds, args.iterations, args.body_style, args.constraint, log,
                                      args.checkpoint)
         print(f"ran {len(started)} baseline runs")
-    result = build(log)
+    result = (build_matched(args.matched_summaries, publish_to=args.publish_summaries)
+              if args.matched_summaries else build(log))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(portable_paths(result), indent=1, allow_nan=False) + "\n", encoding="utf-8")

@@ -40,12 +40,12 @@ def test_r2_known_values():
     assert np.isnan(r2_score([2.0, 2.0], [1.0, 3.0]))
 
 
-def test_regression_metrics_and_ceiling():
+def test_regression_metrics_do_not_turn_solver_spread_into_performance_bound():
     m = regression_metrics([0.0, 1.0, 2.0], [0.0, 1.0, 3.0], r2_ceiling=0.8)
     assert m["mae"] == pytest.approx(1 / 3)
     assert m["rmse"] == pytest.approx(np.sqrt(1 / 3))
     assert m["max_error"] == 1.0 and m["n"] == 3
-    assert m["share_of_ceiling"] == pytest.approx(m["r2"] / 0.8)
+    assert "share_of_ceiling" not in m and "r2_ceiling" not in m
 
 
 def test_per_category_splits_by_label():
@@ -59,7 +59,10 @@ def test_per_category_splits_by_label():
 
 def test_noise_ceiling():
     y = np.array([0.0, 2.0])  # variance 1
-    assert noise_ceiling(y, [0.5, 0.5])["r2_ceiling"] == pytest.approx(0.75)
+    ref = noise_ceiling(y, [0.5, 0.5])
+    assert ref["solver_spread_ratio_reference"] == pytest.approx(0.75)
+    assert ref["is_performance_bound"] is False
+    assert "r2_ceiling" not in ref
 
 
 def test_calibration_is_on_the_diagonal_for_a_calibrated_model():
@@ -83,7 +86,8 @@ def test_calibration_sees_overconfidence():
     cal = calibration_curve(y, np.zeros_like(y), np.full_like(y, 0.5), noise_floor=1.0)
     assert cal["coverage_1sigma"] < 0.45
     assert cal["z_std"] > 1.9
-    assert cal["share_below_noise_floor"] == 1.0
+    assert cal["share_below_label_std_reference"] == 1.0
+    assert "noise_floor" not in cal
 
 
 def test_calibration_without_sigma():
@@ -220,6 +224,31 @@ def test_splits_file_round_trip(tmp_path):
     assert s["random"]["test"] == ["c"]
 
 
+def test_full_handover_splits_load_without_manual_extraction(tmp_path):
+    params = {"seed": 7, "random": {"train": ["a"], "val": ["b"], "test": ["c"]},
+              "held_out_category": {"train": ["a"], "val": ["b"], "test": ["d"],
+                                    "_held_out_category": ["notchback"]}}
+    path = tmp_path / "handover.json"
+    path.write_text(json.dumps({"generated": "historical", "stage1": {"parameters": params}}))
+    result = D.load_splits(path)
+    assert result["random"] == params["random"] and result["seed"] == 7
+    assert result["category"]["held_out_category"] == "notchback"
+
+
+@pytest.mark.parametrize("payload,match", [
+    ({"stage1": {}}, "stage1.parameters"),
+    ({"random": {"train": ["a", "a"], "val": ["b"], "test": ["c"]}}, "duplicate"),
+    ({"random": {"train": ["a"], "val": ["b"], "test": ["a"]}}, "train/test"),
+    ({"random": {"train": "a", "val": ["b"], "test": ["c"]}}, "list of design IDs"),
+    ({"random": {"train": ["a"], "val": [], "test": ["c"]}}, "list of design IDs"),
+])
+def test_bad_handover_splits_fail_before_grading(tmp_path, payload, match):
+    path = tmp_path / "splits.json"
+    path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match=match):
+        D.load_splits(path)
+
+
 def test_matches_the_training_split_algorithm():
     """Mirror of src.data.dataset.make_splits, written out, so a change to
     either side shows up here."""
@@ -261,6 +290,8 @@ def test_harness_runs_without_a_checkpoint(tmp_path):
     curve = loaded["data_scaling"]["linear_reference"]
     assert [p["n_train"] for p in curve] == sorted(p["n_train"] for p in curve)
     assert loaded["field"]["available"] is False
+    assert "share_of_ceiling" not in loaded["headline"]
+    assert loaded["data"]["label_variability"]["is_performance_bound"] is False
 
 
 def _checkpoint(path, table, split, columns, held_out=None):

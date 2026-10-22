@@ -31,7 +31,7 @@ What it measures, and on what:
 
 The data is read here, not through the training code, and every split is
 checked for overlap. With no checkpoint the harness still runs: the references,
-the noise ceiling and the distance checks need only the data.
+the solver-spread reference and the distance checks need only the data.
 """
 
 from __future__ import annotations
@@ -86,11 +86,9 @@ def default_columns(table: D.Table) -> list[str]:
 
 
 def _grade(y, mu, sigma, cats, label_std, noise_floor=None) -> dict:
-    ceilings = {c: noise_ceiling(y[cats == c], label_std[cats == c])["r2_ceiling"]
-                for c in sorted(set(cats.tolist()))}
     return {
-        "overall": regression_metrics(y, mu, noise_ceiling(y, label_std)["r2_ceiling"]),
-        "per_category": per_category(y, mu, cats, ceilings),
+        "overall": regression_metrics(y, mu),
+        "per_category": per_category(y, mu, cats),
         "calibration": calibration_curve(y, mu, sigma, noise_floor=noise_floor) if sigma is not None else None,
     }
 
@@ -259,7 +257,7 @@ def evaluate(
     table = D.load_table(path)
     label_std_all = table.columns.get(D.LABEL_STD)
     if label_std_all is None:
-        raise KeyError(f"{path} has no {D.LABEL_STD!r} column; the noise ceiling needs it")
+        raise KeyError(f"{path} has no {D.LABEL_STD!r} column; the solver-spread reference needs it")
 
     splits = D.load_splits(splits_path) if splits_path else D.build_splits(table, seed=seed)
     if not splits_path:
@@ -290,7 +288,7 @@ def evaluate(
             "sha256": sha256(path),
             "n_designs": len(table.ids),
             "categories": {c: table.categories.count(c) for c in sorted(set(table.categories))},
-            "noise_ceiling": noise_ceiling(table.column(D.TARGET), label_std_all),
+            "label_variability": noise_ceiling(table.column(D.TARGET), label_std_all),
             "licence": "DrivAerNet, CC BY-NC 4.0 (non-commercial)",
         },
         "splits": {
@@ -466,14 +464,13 @@ def _headline(out: dict) -> dict:
     have_ood = oodd.get("model") == "checkpoint"
     return {
         "r2_in_distribution": get(ind, "overall", "r2") if have else None,
-        # The ceiling of the test set itself, which share_of_ceiling divides
-        # by; the whole-dataset figure (0.906 on DrivAerNet) is under data.
-        "r2_ceiling_test_set": get(ind, "overall", "r2_ceiling"),
-        "r2_ceiling_dataset": get(out, "data", "noise_ceiling", "r2_ceiling"),
-        "share_of_ceiling": get(ind, "overall", "share_of_ceiling") if have else None,
         "mae_in_distribution": get(ind, "overall", "mae") if have else None,
         "r2_linear_reference": get(ind, "references", "linear", "overall", "r2"),
         "coverage_1sigma": get(ind, "calibration", "coverage_1sigma") if have else None,
+        "coverage_90": next((point["observed"] for point in
+                             (get(ind, "calibration", "coverage") or [])
+                             if point["expected"] == 0.9), None) if have else None,
+        "uncertainty_note": "Empirical interval coverage; the head and domain gate do not guarantee physical correctness.",
         "held_out_category": oodd.get("held_out_category"),
         "r2_held_out_category": get(oodd, "overall", "r2") if have_ood else None,
         "ood_detection_rate": get(held, "checkpoint_detector", "detection_rate") if have_ood else None,
@@ -542,8 +539,8 @@ def summary(m: dict) -> str:
     h = m["headline"]
     f = lambda v, fmt=".4f": "n/a" if v is None else format(v, fmt)  # noqa: E731
     lines = [
-        f"data       {m['data']['n_designs']} designs, R2 ceiling {f(m['data']['noise_ceiling']['r2_ceiling'])}",
-        f"in dist    R2 {f(h['r2_in_distribution'])}  ({f(h['share_of_ceiling'], '.0%')} of ceiling)  "
+        f"data       {m['data']['n_designs']} designs; solver spread is not an R2 ceiling",
+        f"in dist    R2 {f(h['r2_in_distribution'])}  "
         f"MAE {f(h['mae_in_distribution'], '.5f')}  1-sigma coverage {f(h['coverage_1sigma'], '.2f')}",
         f"reference  straight line R2 {f(h['r2_linear_reference'])}",
         f"held out   {h['held_out_category'] or 'n/a'}: R2 {f(h['r2_held_out_category'])}  "
