@@ -1,0 +1,16 @@
+# Recorded direct dependency versions in the qualified Windows/Python 3.13.14
+# release environment. This is a reproducibility constraint, not a complete
+# cross-platform lockfile. CPU torch is installed from its official CPU index;
+# torch==2.14.1 also matches the local +cpu build.
+fastapi==0.143.0
+uvicorn==0.54.0
+pydantic==2.14.1
+requests==2.34.2
+pytest==9.1.1
+httpx==0.28.1
+torch==2.14.1
+numpy==2.5.4
+trimesh==5.1.1
+scipy==1.18.1
+PyYAML==6.0.3
+pandas==3.0.6

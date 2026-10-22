@@ -2,6 +2,7 @@
 # .dockerignore, which keeps web/ out of the API image). Everything is
 # excluded except what the web image copies.
 *
+!requirements-web.txt
 !src/__init__.py
 !src/contracts.py
 !src/geometry/

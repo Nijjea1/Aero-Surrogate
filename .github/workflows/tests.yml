@@ -1,0 +1,32 @@
+name: Offline tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install CPU development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r requirements.txt
+      - name: Check the dependency graph
+        run: python -m pip check
+      - name: Run offline tests
+        env:
+          AERO_ENV_FILE: /nonexistent/aero-env
+          NEBIUS_API_KEY: ''
+        run: python -m pytest -q -rs
+      - name: Check local web and API wiring without paid calls
+        run: python scripts/check_local.py
