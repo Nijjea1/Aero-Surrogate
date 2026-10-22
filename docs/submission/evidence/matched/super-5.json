@@ -1,0 +1,2099 @@
+{
+ "summary_version": 1,
+ "protocol": {
+  "protocol_version": 1,
+  "schema_version": "2.0.0",
+  "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+  "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+  "git_revision": "eb1df19a8c1f111564776c8f7540cd40b6490a41",
+  "body_style": "fastback",
+  "baseline_params": {
+   "B_Ramp_Angle": 0.0,
+   "B_Diffusor_Angle": 0.0,
+   "B_Trunklid_Angle": 0.0,
+   "D_Rear_Window_Inclination": 0.0,
+   "D_Winscreen_Inclination": 0.0,
+   "D_Winscreen_Length": 0.0,
+   "D_Rear_Window_Length": 0.0,
+   "E_A_B_C_Pillar_Thickness": 0.0,
+   "E_Fenders_Arch_Offset": 0.0,
+   "G_Trunklid_Curvature": 0.0,
+   "G_Trunklid_Length": 0.0,
+   "H_Front_Bumper_Curvature": 0.0,
+   "H_Front_Bumper_Length": 0.0,
+   "A_Car_Length": 0.0,
+   "A_Car_Width": 0.0,
+   "A_Car_Roof_Height": 0.0
+  },
+  "constraints": [],
+  "uncertainty_threshold": 0.013,
+  "ood_threshold": 4.934834575358646,
+  "evaluation_budget": 25,
+  "max_attempts": 2500,
+  "source_sha256": "d9aeb80412a099a9fa06bb7b2b624bedcea25d65cb594b91cb501ef2b76fe1af",
+  "budget_policy": "predictor calls including baseline, gate rejections and predictor errors",
+  "duplicate_policy": "refuse before scoring",
+  "invalid_policy": "refuse before scoring"
+ },
+ "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228",
+ "method": "nemotron",
+ "run_id": "matched-super-5",
+ "stop_reason": "evaluation budget used",
+ "attempts": 25,
+ "refusals": [],
+ "outcomes": [
+  {
+   "call": 1,
+   "params": {
+    "B_Ramp_Angle": 0.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": 0.0,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": 0.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.2245595494127173,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.2245595494127173,
+    "cl": 0.0,
+    "uncertainty": 0.0050323457844746455,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.153699995484203,
+    "ood_score": 2.699723411559878
+   }
+  },
+  {
+   "call": 2,
+   "params": {
+    "B_Ramp_Angle": 0.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": 0.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22449421175614567,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22449421175614567,
+    "cl": 0.0,
+    "uncertainty": 0.005025115770913789,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.5762000111863017,
+    "ood_score": 2.77883173712437
+   }
+  },
+  {
+   "call": 3,
+   "params": {
+    "B_Ramp_Angle": 0.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": 50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.2255356891053246,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.2255356891053246,
+    "cl": 0.0,
+    "uncertainty": 0.005119971732361663,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.6997999919112772,
+    "ood_score": 2.7585905732131115
+   }
+  },
+  {
+   "call": 4,
+   "params": {
+    "B_Ramp_Angle": 0.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -1.0,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": 0.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22462455273340173,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22462455273340173,
+    "cl": 0.0,
+    "uncertainty": 0.005030581307085664,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.1351999894250184,
+    "ood_score": 2.913242835524146
+   }
+  },
+  {
+   "call": 5,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": 0.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22215308130614675,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22215308130614675,
+    "cl": 0.0,
+    "uncertainty": 0.004796902240597631,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.9839000015053898,
+    "ood_score": 2.6931088077595797
+   }
+  },
+  {
+   "call": 6,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 5.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": 0.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.2257669573994606,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.2257669573994606,
+    "cl": 0.0,
+    "uncertainty": 0.004913742761053913,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.7988000181503594,
+    "ood_score": 2.6236577790058946
+   }
+  },
+  {
+   "call": 7,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": -7.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": 0.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22305592772760652,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22305592772760652,
+    "cl": 0.0,
+    "uncertainty": 0.004994299281908574,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.793200004613027,
+    "ood_score": 3.0681501312404715
+   }
+  },
+  {
+   "call": 8,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.5,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": 0.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": -0.2,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22234480056064876,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22234480056064876,
+    "cl": 0.0,
+    "uncertainty": 0.0048605402467190376,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.4962000132072717,
+    "ood_score": 2.8578032559786193
+   }
+  },
+  {
+   "call": 9,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.0,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22152220791494895,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22152220791494895,
+    "cl": 0.0,
+    "uncertainty": 0.004756084304131895,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.9548999844118953,
+    "ood_score": 2.9008634784916594
+   }
+  },
+  {
+   "call": 10,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22055093057181938,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22055093057181938,
+    "cl": 0.0,
+    "uncertainty": 0.004921856000521526,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.8848000036086887,
+    "ood_score": 2.8560615527963993
+   }
+  },
+  {
+   "call": 11,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 25.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22147367392741701,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22147367392741701,
+    "cl": 0.0,
+    "uncertainty": 0.004899840508862136,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.0724999776575714,
+    "ood_score": 2.9802197428168964
+   }
+  },
+  {
+   "call": 12,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": -5.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22758898794723056,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22758898794723056,
+    "cl": 0.0,
+    "uncertainty": 0.005016009395907208,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.803699997253716,
+    "ood_score": 2.732947489885315
+   }
+  },
+  {
+   "call": 13,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": -30.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.22197407734562277,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22197407734562277,
+    "cl": 0.0,
+    "uncertainty": 0.0048987331857711395,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.8226999964099377,
+    "ood_score": 3.031519942121979
+   }
+  },
+  {
+   "call": 14,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": -20.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": -30.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.2227428708717087,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.2227428708717087,
+    "cl": 0.0,
+    "uncertainty": 0.004859370071113813,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.164200006518513,
+    "ood_score": 3.3209891669886202
+   }
+  },
+  {
+   "call": 15,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 20.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 0.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": 0.0
+   },
+   "status": "accepted",
+   "cd": 0.23269715986045494,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.23269715986045494,
+    "cl": 0.0,
+    "uncertainty": 0.005981051835439419,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.9802000024355948,
+    "ood_score": 2.781485273997192
+   }
+  },
+  {
+   "call": 16,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.2194987860650423,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.2194987860650423,
+    "cl": 0.0,
+    "uncertainty": 0.004948350474228925,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.368700002785772,
+    "ood_score": 2.967473147172545
+   }
+  },
+  {
+   "call": 17,
+   "params": {
+    "B_Ramp_Angle": 10.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.22077998751048092,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22077998751048092,
+    "cl": 0.0,
+    "uncertainty": 0.004831917672438244,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.885299978312105,
+    "ood_score": 3.089763429638806
+   }
+  },
+  {
+   "call": 18,
+   "params": {
+    "B_Ramp_Angle": 0.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.22022969959836422,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22022969959836422,
+    "cl": 0.0,
+    "uncertainty": 0.005105861836523402,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.6586000274401158,
+    "ood_score": 3.0400292999309815
+   }
+  },
+  {
+   "call": 19,
+   "params": {
+    "B_Ramp_Angle": -5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": -0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.2235889565367584,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.2235889565367584,
+    "cl": 0.0,
+    "uncertainty": 0.005366148906129353,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.0334000000730157,
+    "ood_score": 3.2945837137458875
+   }
+  },
+  {
+   "call": 20,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": 0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.21928175205549003,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.21928175205549003,
+    "cl": 0.0,
+    "uncertainty": 0.004913607512973556,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.0661000162363052,
+    "ood_score": 2.897228469111086
+   }
+  },
+  {
+   "call": 21,
+   "params": {
+    "B_Ramp_Angle": 8.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": 0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.21977690876957603,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.21977690876957603,
+    "cl": 0.0,
+    "uncertainty": 0.004849242589554078,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.0266000065021217,
+    "ood_score": 2.9550867669238348
+   }
+  },
+  {
+   "call": 22,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": 0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": -0.2,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.22068595488406237,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.22068595488406237,
+    "cl": 0.0,
+    "uncertainty": 0.004926947712315579,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.520899986848235,
+    "ood_score": 3.068578439523362
+   }
+  },
+  {
+   "call": 23,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": 0.5,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -30.0
+   },
+   "status": "accepted",
+   "cd": 0.21953110871089374,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.21953110871089374,
+    "cl": 0.0,
+    "uncertainty": 0.004912360005740877,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.13649999932386,
+    "ood_score": 2.997194594640677
+   }
+  },
+  {
+   "call": 24,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": 1.0,
+    "D_Winscreen_Inclination": 0.0,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.2196552868510478,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.2196552868510478,
+    "cl": 0.0,
+    "uncertainty": 0.00489998266742835,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 2.289800002472475,
+    "ood_score": 2.947111937216486
+   }
+  },
+  {
+   "call": 25,
+   "params": {
+    "B_Ramp_Angle": 5.0,
+    "B_Diffusor_Angle": 0.0,
+    "B_Trunklid_Angle": 0.0,
+    "D_Rear_Window_Inclination": 0.5,
+    "D_Winscreen_Inclination": -0.5,
+    "D_Winscreen_Length": 0.0,
+    "D_Rear_Window_Length": -50.0,
+    "E_A_B_C_Pillar_Thickness": 0.0,
+    "E_Fenders_Arch_Offset": 0.0,
+    "G_Trunklid_Curvature": 0.0,
+    "G_Trunklid_Length": 10.0,
+    "H_Front_Bumper_Curvature": 0.5,
+    "H_Front_Bumper_Length": 0.0,
+    "A_Car_Length": 0.0,
+    "A_Car_Width": 0.0,
+    "A_Car_Roof_Height": -15.0
+   },
+   "status": "accepted",
+   "cd": 0.21956477923055814,
+   "reject_reason": null,
+   "error": null,
+   "evaluation": {
+    "cd": 0.21956477923055814,
+    "cl": 0.0,
+    "uncertainty": 0.004906396256445742,
+    "in_distribution": true,
+    "pressure_summary": {},
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "latency_ms": 1.6556000045966357,
+    "ood_score": 2.9645753660642393
+   }
+  }
+ ],
+ "wall_clock_s": 45.9855741999927,
+ "metadata": {
+  "provider_model": "nvidia/nemotron-3-super-120b-a12b",
+  "thinking": true,
+  "proposal_policy": "at most two changes from best trusted design; no repeats",
+  "provider_corrections": [],
+  "usage": {
+   "calls": 24,
+   "prompt_tokens": 72421,
+   "completion_tokens": 6543,
+   "cost_usd": 0.027614999999999994,
+   "latency_s": 44.78249459993094
+  },
+  "timing": {
+   "steps": 25,
+   "propose_s_total": 45.16379210003652,
+   "score_s_total": 0.05240129999583587,
+   "step_s_total": 45.57967880007345,
+   "propose_s_median": 1.7625020999985281,
+   "score_s_median": 0.002136199997039512,
+   "step_s_median": 1.7793360000068787,
+   "surrogate_latency_ms_median": 1.885299978312105,
+   "model_share": 0.9908756114350621,
+   "model_calls": 24,
+   "failed_proposals": 0
+  },
+  "model_provenance": {
+   "predictor": "torch",
+   "synthetic": false,
+   "schema_version": "2.0.0",
+   "git_revision": "eb1df19a8c1f111564776c8f7540cd40b6490a41",
+   "source_dirty": false,
+   "source_sha256": "d9aeb80412a099a9fa06bb7b2b624bedcea25d65cb594b91cb501ef2b76fe1af",
+   "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+   "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+   "preprocess_version": "params-v1",
+   "training_git_revision": "8fb6ed1",
+   "training_seed": 0,
+   "trained_body_styles": [
+    "estateback",
+    "fastback",
+    "notchback"
+   ],
+   "training_split_counts": {
+    "test": 625,
+    "val": 625,
+    "train": 2915
+   },
+   "output_provenance": {
+    "cd": "model",
+    "uncertainty": "model",
+    "ood_score": "model",
+    "cl": "placeholder",
+    "pressure_summary": "unavailable"
+   },
+   "uncertainty_threshold": 0.013,
+   "ood_score_threshold": 4.934834575358646,
+   "serving_policy": "all-styles-only"
+  },
+  "error": null,
+  "qualification": {
+   "qualification_version": 1,
+   "passed": true,
+   "scope": "in_process_asgi",
+   "claim": "serving and shared-agent-gate parity; no Nemotron calls or CFD accuracy claim",
+   "provenance": {
+    "predictor": "torch",
+    "synthetic": false,
+    "schema_version": "2.0.0",
+    "git_revision": "eb1df19a8c1f111564776c8f7540cd40b6490a41",
+    "source_dirty": false,
+    "source_sha256": "d9aeb80412a099a9fa06bb7b2b624bedcea25d65cb594b91cb501ef2b76fe1af",
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+    "preprocess_version": "params-v1",
+    "training_git_revision": "8fb6ed1",
+    "training_seed": 0,
+    "trained_body_styles": [
+     "estateback",
+     "fastback",
+     "notchback"
+    ],
+    "training_split_counts": {
+     "test": 625,
+     "val": 625,
+     "train": 2915
+    },
+    "output_provenance": {
+     "cd": "model",
+     "uncertainty": "model",
+     "ood_score": "model",
+     "cl": "placeholder",
+     "pressure_summary": "unavailable"
+    },
+    "uncertainty_threshold": 0.013,
+    "ood_score_threshold": 4.934834575358646,
+    "serving_policy": "all-styles-only"
+   },
+   "checkpoint_qualification": {
+    "passed": true,
+    "errors": [],
+    "provenance": {
+     "predictor": "torch",
+     "synthetic": false,
+     "schema_version": "2.0.0",
+     "git_revision": "eb1df19a8c1f111564776c8f7540cd40b6490a41",
+     "source_dirty": false,
+     "source_sha256": "d9aeb80412a099a9fa06bb7b2b624bedcea25d65cb594b91cb501ef2b76fe1af",
+     "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+     "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+     "preprocess_version": "params-v1",
+     "training_git_revision": "8fb6ed1",
+     "training_seed": 0,
+     "trained_body_styles": [
+      "estateback",
+      "fastback",
+      "notchback"
+     ],
+     "training_split_counts": {
+      "test": 625,
+      "val": 625,
+      "train": 2915
+     },
+     "output_provenance": {
+      "cd": "model",
+      "uncertainty": "model",
+      "ood_score": "model",
+      "cl": "placeholder",
+      "pressure_summary": "unavailable"
+     },
+     "uncertainty_threshold": 0.013,
+     "ood_score_threshold": 4.934834575358646,
+     "serving_policy": "all-styles-only"
+    },
+    "results": [
+     {
+      "id": "baseline-fastback",
+      "passed": true,
+      "params": {
+       "B_Ramp_Angle": 0.0,
+       "B_Diffusor_Angle": 0.0,
+       "B_Trunklid_Angle": 0.0,
+       "D_Rear_Window_Inclination": 0.0,
+       "D_Winscreen_Inclination": 0.0,
+       "D_Winscreen_Length": 0.0,
+       "D_Rear_Window_Length": 0.0,
+       "E_A_B_C_Pillar_Thickness": 0.0,
+       "E_Fenders_Arch_Offset": 0.0,
+       "G_Trunklid_Curvature": 0.0,
+       "G_Trunklid_Length": 0.0,
+       "H_Front_Bumper_Curvature": 0.0,
+       "H_Front_Bumper_Length": 0.0,
+       "A_Car_Length": 0.0,
+       "A_Car_Width": 0.0,
+       "A_Car_Roof_Height": 0.0
+      },
+      "body_style": "fastback",
+      "expected": {
+       "cd": 0.22455955,
+       "uncertainty": 0.00503235,
+       "ood_score": 2.69972341,
+       "in_distribution": true,
+       "rejection_reason": null
+      },
+      "actual": {
+       "cd": 0.2245595494127173,
+       "cl": 0.0,
+       "uncertainty": 0.0050323457844746455,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 0.6773000059183687,
+       "ood_score": 2.699723411559878,
+       "reject_reason": null,
+       "contract_rejection_reason": null
+      }
+     },
+     {
+      "id": "baseline-notchback",
+      "passed": true,
+      "params": {
+       "B_Ramp_Angle": 0.0,
+       "B_Diffusor_Angle": 0.0,
+       "B_Trunklid_Angle": 0.0,
+       "D_Rear_Window_Inclination": 0.0,
+       "D_Winscreen_Inclination": 0.0,
+       "D_Winscreen_Length": 0.0,
+       "D_Rear_Window_Length": 0.0,
+       "E_A_B_C_Pillar_Thickness": 0.0,
+       "E_Fenders_Arch_Offset": 0.0,
+       "G_Trunklid_Curvature": 0.0,
+       "G_Trunklid_Length": 0.0,
+       "H_Front_Bumper_Curvature": 0.0,
+       "H_Front_Bumper_Length": 0.0,
+       "A_Car_Length": 0.0,
+       "A_Car_Width": 0.0,
+       "A_Car_Roof_Height": 0.0
+      },
+      "body_style": "notchback",
+      "expected": {
+       "cd": 0.22137428,
+       "uncertainty": 0.00496685,
+       "ood_score": 2.68036347,
+       "in_distribution": true,
+       "rejection_reason": null
+      },
+      "actual": {
+       "cd": 0.22137428666167108,
+       "cl": 0.0,
+       "uncertainty": 0.0049668478704452705,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 0.41840001358650625,
+       "ood_score": 2.6803634715242266,
+       "reject_reason": null,
+       "contract_rejection_reason": null
+      }
+     },
+     {
+      "id": "baseline-estateback",
+      "passed": true,
+      "params": {
+       "B_Ramp_Angle": 0.0,
+       "B_Diffusor_Angle": 0.0,
+       "B_Trunklid_Angle": 0.0,
+       "D_Rear_Window_Inclination": 0.0,
+       "D_Winscreen_Inclination": 0.0,
+       "D_Winscreen_Length": 0.0,
+       "D_Rear_Window_Length": 0.0,
+       "E_A_B_C_Pillar_Thickness": 0.0,
+       "E_Fenders_Arch_Offset": 0.0,
+       "G_Trunklid_Curvature": 0.0,
+       "G_Trunklid_Length": 0.0,
+       "H_Front_Bumper_Curvature": 0.0,
+       "H_Front_Bumper_Length": 0.0,
+       "A_Car_Length": 0.0,
+       "A_Car_Width": 0.0,
+       "A_Car_Roof_Height": 0.0
+      },
+      "body_style": "estateback",
+      "expected": {
+       "cd": 0.2545313,
+       "uncertainty": 0.0090669,
+       "ood_score": 2.7011136,
+       "in_distribution": true,
+       "rejection_reason": null
+      },
+      "actual": {
+       "cd": 0.2545312978295936,
+       "cl": 0.0,
+       "uncertainty": 0.00906690165322079,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 0.47759999870322645,
+       "ood_score": 2.701113597373457,
+       "reject_reason": null,
+       "contract_rejection_reason": null
+      }
+     },
+     {
+      "id": "trusted-perturbation",
+      "passed": true,
+      "params": {
+       "B_Ramp_Angle": 0.0,
+       "B_Diffusor_Angle": 6.0,
+       "B_Trunklid_Angle": 4.0,
+       "D_Rear_Window_Inclination": 0.0,
+       "D_Winscreen_Inclination": 0.0,
+       "D_Winscreen_Length": 0.0,
+       "D_Rear_Window_Length": 0.0,
+       "E_A_B_C_Pillar_Thickness": 0.0,
+       "E_Fenders_Arch_Offset": 0.0,
+       "G_Trunklid_Curvature": 0.0,
+       "G_Trunklid_Length": 0.0,
+       "H_Front_Bumper_Curvature": 0.0,
+       "H_Front_Bumper_Length": 0.0,
+       "A_Car_Length": 0.0,
+       "A_Car_Width": 0.0,
+       "A_Car_Roof_Height": 0.0
+      },
+      "body_style": "fastback",
+      "expected": {
+       "cd": 0.22955829,
+       "uncertainty": 0.00529992,
+       "ood_score": 2.54710216,
+       "in_distribution": true,
+       "rejection_reason": null
+      },
+      "actual": {
+       "cd": 0.2295582895044663,
+       "cl": 0.0,
+       "uncertainty": 0.005299920125952845,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 0.34389999927952886,
+       "ood_score": 2.547102160341634,
+       "reject_reason": null,
+       "contract_rejection_reason": null
+      }
+     },
+     {
+      "id": "genuine-rejection",
+      "passed": true,
+      "params": {
+       "B_Ramp_Angle": 15.0,
+       "B_Diffusor_Angle": -8.0,
+       "B_Trunklid_Angle": 20.0,
+       "D_Rear_Window_Inclination": -1.8,
+       "D_Winscreen_Inclination": 2.5,
+       "D_Winscreen_Length": -50.0,
+       "D_Rear_Window_Length": 150.0,
+       "E_A_B_C_Pillar_Thickness": -15.0,
+       "E_Fenders_Arch_Offset": 55.0,
+       "G_Trunklid_Curvature": -0.4,
+       "G_Trunklid_Length": 40.0,
+       "H_Front_Bumper_Curvature": -0.4,
+       "H_Front_Bumper_Length": 60.0,
+       "A_Car_Length": -60.0,
+       "A_Car_Width": 150.0,
+       "A_Car_Roof_Height": -60.0
+      },
+      "body_style": "fastback",
+      "expected": {
+       "cd": 0.24180796,
+       "uncertainty": 0.00731001,
+       "ood_score": 7.0692492,
+       "in_distribution": false,
+       "rejection_reason": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar"
+      },
+      "actual": {
+       "cd": 0.24180795757798493,
+       "cl": 0.0,
+       "uncertainty": 0.00731001131956936,
+       "in_distribution": false,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 0.33889999031089246,
+       "ood_score": 7.069249199279294,
+       "reject_reason": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar; return toward the last trusted geometry",
+       "contract_rejection_reason": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar"
+      }
+     }
+    ],
+    "reference_format": "scalar_reference",
+    "absolute_tolerance": 0.0001,
+    "thresholds": {
+     "uncertainty": 0.013,
+     "ood_score": 4.934834575358646
+    },
+    "reference_source": "src/train/reference.py --scalar @ 8e14c76b463e18af18bd7fc2820e494997636fef"
+   },
+   "ready": {
+    "ready": true
+   },
+   "health": {
+    "ok": true,
+    "predictor": "torch",
+    "synthetic": false,
+    "schema_version": "2.0.0",
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "checkpoint_sha256": "49e5a8b14d5b",
+    "output_provenance": {
+     "cd": "model",
+     "uncertainty": "model",
+     "ood_score": "model",
+     "cl": "placeholder",
+     "pressure_summary": "unavailable"
+    },
+    "provenance": {
+     "predictor": "torch",
+     "synthetic": false,
+     "schema_version": "2.0.0",
+     "git_revision": "eb1df19a8c1f111564776c8f7540cd40b6490a41",
+     "source_dirty": false,
+     "source_sha256": "d9aeb80412a099a9fa06bb7b2b624bedcea25d65cb594b91cb501ef2b76fe1af",
+     "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+     "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+     "preprocess_version": "params-v1",
+     "training_git_revision": "8fb6ed1",
+     "training_seed": 0,
+     "trained_body_styles": [
+      "estateback",
+      "fastback",
+      "notchback"
+     ],
+     "training_split_counts": {
+      "test": 625,
+      "val": 625,
+      "train": 2915
+     },
+     "output_provenance": {
+      "cd": "model",
+      "uncertainty": "model",
+      "ood_score": "model",
+      "cl": "placeholder",
+      "pressure_summary": "unavailable"
+     },
+     "uncertainty_threshold": 0.013,
+     "ood_score_threshold": 4.934834575358646,
+     "serving_policy": "all-styles-only"
+    },
+    "fields": {
+     "available": false,
+     "reason": "no field checkpoint configured"
+    }
+   },
+   "schema": {
+    "schema_version": "2.0.0",
+    "param_bounds": {
+     "B_Ramp_Angle": [
+      -8.0,
+      15.0
+     ],
+     "B_Diffusor_Angle": [
+      -8.0,
+      15.0
+     ],
+     "B_Trunklid_Angle": [
+      -8.0,
+      20.0
+     ],
+     "D_Rear_Window_Inclination": [
+      -1.8,
+      2.5
+     ],
+     "D_Winscreen_Inclination": [
+      -1.8,
+      2.5
+     ],
+     "D_Winscreen_Length": [
+      -50.0,
+      50.0
+     ],
+     "D_Rear_Window_Length": [
+      -95.0,
+      150.0
+     ],
+     "E_A_B_C_Pillar_Thickness": [
+      -15.0,
+      5.0
+     ],
+     "E_Fenders_Arch_Offset": [
+      -25.0,
+      55.0
+     ],
+     "G_Trunklid_Curvature": [
+      -0.4,
+      0.8
+     ],
+     "G_Trunklid_Length": [
+      -40.0,
+      40.0
+     ],
+     "H_Front_Bumper_Curvature": [
+      -0.4,
+      1.0
+     ],
+     "H_Front_Bumper_Length": [
+      -25.0,
+      60.0
+     ],
+     "A_Car_Length": [
+      -60.0,
+      130.0
+     ],
+     "A_Car_Width": [
+      -60.0,
+      150.0
+     ],
+     "A_Car_Roof_Height": [
+      -60.0,
+      90.0
+     ]
+    },
+    "defaults": {
+     "B_Ramp_Angle": 0.0,
+     "B_Diffusor_Angle": 0.0,
+     "B_Trunklid_Angle": 0.0,
+     "D_Rear_Window_Inclination": 0.0,
+     "D_Winscreen_Inclination": 0.0,
+     "D_Winscreen_Length": 0.0,
+     "D_Rear_Window_Length": 0.0,
+     "E_A_B_C_Pillar_Thickness": 0.0,
+     "E_Fenders_Arch_Offset": 0.0,
+     "G_Trunklid_Curvature": 0.0,
+     "G_Trunklid_Length": 0.0,
+     "H_Front_Bumper_Curvature": 0.0,
+     "H_Front_Bumper_Length": 0.0,
+     "A_Car_Length": 0.0,
+     "A_Car_Width": 0.0,
+     "A_Car_Roof_Height": 0.0
+    },
+    "pressure_regions": [
+     "front_fascia",
+     "hood",
+     "windscreen",
+     "roof",
+     "rear_window",
+     "rear_fascia",
+     "underbody",
+     "wheel_wells"
+    ],
+    "body_styles": [
+     "fastback",
+     "notchback",
+     "estateback"
+    ],
+    "default_body_style": "fastback",
+    "param_units": "offsets from the baseline body of the chosen style: angles in degrees, lengths in mm, curvatures and inclinations dimensionless",
+    "uncertainty_threshold": 0.013,
+    "uncertainty_units": "Cd standard deviation",
+    "ood_score_threshold": 4.934834575358646
+   },
+   "evaluations": [
+    {
+     "id": "baseline-fastback",
+     "passed": true,
+     "actual": {
+      "cd": 0.2245595494127173,
+      "cl": 0.0,
+      "uncertainty": 0.0050323457844746455,
+      "in_distribution": true,
+      "pressure_summary": {},
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "latency_ms": 5.259300000034273,
+      "ood_score": 2.699723411559878
+     },
+     "errors": []
+    },
+    {
+     "id": "baseline-notchback",
+     "passed": true,
+     "actual": {
+      "cd": 0.22137428666167108,
+      "cl": 0.0,
+      "uncertainty": 0.0049668478704452705,
+      "in_distribution": true,
+      "pressure_summary": {},
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "latency_ms": 1.3793999969493598,
+      "ood_score": 2.6803634715242266
+     },
+     "errors": []
+    },
+    {
+     "id": "baseline-estateback",
+     "passed": true,
+     "actual": {
+      "cd": 0.2545312978295936,
+      "cl": 0.0,
+      "uncertainty": 0.00906690165322079,
+      "in_distribution": true,
+      "pressure_summary": {},
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "latency_ms": 1.1001999955624342,
+      "ood_score": 2.701113597373457
+     },
+     "errors": []
+    },
+    {
+     "id": "trusted-perturbation",
+     "passed": true,
+     "actual": {
+      "cd": 0.2295582895044663,
+      "cl": 0.0,
+      "uncertainty": 0.005299920125952845,
+      "in_distribution": true,
+      "pressure_summary": {},
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "latency_ms": 1.3312000082805753,
+      "ood_score": 2.547102160341634
+     },
+     "errors": []
+    },
+    {
+     "id": "genuine-rejection",
+     "passed": true,
+     "actual": {
+      "cd": 0.24180795757798493,
+      "cl": 0.0,
+      "uncertainty": 0.00731001131956936,
+      "in_distribution": false,
+      "pressure_summary": {},
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "latency_ms": 1.3074000016786158,
+      "ood_score": 7.069249199279294
+     },
+     "errors": []
+    }
+   ],
+   "comparisons": [
+    {
+     "design_a": "baseline-fastback",
+     "design_b": "baseline-notchback",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.2245595494127173,
+       "cl": 0.0,
+       "uncertainty": 0.0050323457844746455,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.3398999872151762,
+       "ood_score": 2.699723411559878
+      },
+      "design_b": {
+       "cd": 0.22137428666167108,
+       "cl": 0.0,
+       "uncertainty": 0.0049668478704452705,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.1601000151131302,
+       "ood_score": 2.6803634715242266
+      },
+      "delta": {
+       "cd": -0.0031852627510462195,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": false,
+      "trusted": true,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": null
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "baseline-fastback",
+     "design_b": "baseline-estateback",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.2245595494127173,
+       "cl": 0.0,
+       "uncertainty": 0.0050323457844746455,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.2592000130098313,
+       "ood_score": 2.699723411559878
+      },
+      "design_b": {
+       "cd": 0.2545312978295936,
+       "cl": 0.0,
+       "uncertainty": 0.00906690165322079,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.2389000039547682,
+       "ood_score": 2.701113597373457
+      },
+      "delta": {
+       "cd": 0.029971748416876304,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": false,
+      "trusted": true,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": null
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "baseline-fastback",
+     "design_b": "trusted-perturbation",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.2245595494127173,
+       "cl": 0.0,
+       "uncertainty": 0.0050323457844746455,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.197300007333979,
+       "ood_score": 2.699723411559878
+      },
+      "design_b": {
+       "cd": 0.2295582895044663,
+       "cl": 0.0,
+       "uncertainty": 0.005299920125952845,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.121999986935407,
+       "ood_score": 2.547102160341634
+      },
+      "delta": {
+       "cd": 0.004998740091748999,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": true,
+      "trusted": true,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": null
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "baseline-fastback",
+     "design_b": "genuine-rejection",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.2245595494127173,
+       "cl": 0.0,
+       "uncertainty": 0.0050323457844746455,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.2430999777279794,
+       "ood_score": 2.699723411559878
+      },
+      "design_b": {
+       "cd": 0.24180795757798493,
+       "cl": 0.0,
+       "uncertainty": 0.00731001131956936,
+       "in_distribution": false,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.04010000359267,
+       "ood_score": 7.069249199279294
+      },
+      "delta": {
+       "cd": 0.017248408165267626,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": true,
+      "trusted": false,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar; return toward the last trusted geometry"
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "baseline-notchback",
+     "design_b": "baseline-estateback",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.22137428666167108,
+       "cl": 0.0,
+       "uncertainty": 0.0049668478704452705,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.3203999842517078,
+       "ood_score": 2.6803634715242266
+      },
+      "design_b": {
+       "cd": 0.2545312978295936,
+       "cl": 0.0,
+       "uncertainty": 0.00906690165322079,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.1098000104539096,
+       "ood_score": 2.701113597373457
+      },
+      "delta": {
+       "cd": 0.03315701116792252,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": false,
+      "trusted": true,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": null
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "baseline-notchback",
+     "design_b": "trusted-perturbation",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.22137428666167108,
+       "cl": 0.0,
+       "uncertainty": 0.0049668478704452705,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.3127000129316002,
+       "ood_score": 2.6803634715242266
+      },
+      "design_b": {
+       "cd": 0.2295582895044663,
+       "cl": 0.0,
+       "uncertainty": 0.005299920125952845,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.0457999887876213,
+       "ood_score": 2.547102160341634
+      },
+      "delta": {
+       "cd": 0.008184002842795218,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": false,
+      "trusted": true,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": null
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "baseline-notchback",
+     "design_b": "genuine-rejection",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.22137428666167108,
+       "cl": 0.0,
+       "uncertainty": 0.0049668478704452705,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.1023000115528703,
+       "ood_score": 2.6803634715242266
+      },
+      "design_b": {
+       "cd": 0.24180795757798493,
+       "cl": 0.0,
+       "uncertainty": 0.00731001131956936,
+       "in_distribution": false,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 0.9363999997731298,
+       "ood_score": 7.069249199279294
+      },
+      "delta": {
+       "cd": 0.020433670916313845,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": false,
+      "trusted": false,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar; return toward the last trusted geometry"
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "baseline-estateback",
+     "design_b": "trusted-perturbation",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.2545312978295936,
+       "cl": 0.0,
+       "uncertainty": 0.00906690165322079,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.3232000055722892,
+       "ood_score": 2.701113597373457
+      },
+      "design_b": {
+       "cd": 0.2295582895044663,
+       "cl": 0.0,
+       "uncertainty": 0.005299920125952845,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.182800013339147,
+       "ood_score": 2.547102160341634
+      },
+      "delta": {
+       "cd": -0.024973008325127305,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": false,
+      "trusted": true,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": null
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "baseline-estateback",
+     "design_b": "genuine-rejection",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.2545312978295936,
+       "cl": 0.0,
+       "uncertainty": 0.00906690165322079,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.2734000047203153,
+       "ood_score": 2.701113597373457
+      },
+      "design_b": {
+       "cd": 0.24180795757798493,
+       "cl": 0.0,
+       "uncertainty": 0.00731001131956936,
+       "in_distribution": false,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.0056000028271228,
+       "ood_score": 7.069249199279294
+      },
+      "delta": {
+       "cd": -0.012723340251608678,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": false,
+      "trusted": false,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar; return toward the last trusted geometry"
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    },
+    {
+     "design_a": "trusted-perturbation",
+     "design_b": "genuine-rejection",
+     "passed": true,
+     "errors": [],
+     "actual": {
+      "design_a": {
+       "cd": 0.2295582895044663,
+       "cl": 0.0,
+       "uncertainty": 0.005299920125952845,
+       "in_distribution": true,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.22819998068735,
+       "ood_score": 2.547102160341634
+      },
+      "design_b": {
+       "cd": 0.24180795757798493,
+       "cl": 0.0,
+       "uncertainty": 0.00731001131956936,
+       "in_distribution": false,
+       "pressure_summary": {},
+       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+       "latency_ms": 1.0842999909073114,
+       "ood_score": 7.069249199279294
+      },
+      "delta": {
+       "cd": 0.012249668073518627,
+       "cl": 0.0,
+       "pressure_summary": {}
+      },
+      "delta_direction": "design_b minus design_a",
+      "same_body_style": true,
+      "trusted": false,
+      "reject_reasons": {
+       "design_a": null,
+       "design_b": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar; return toward the last trusted geometry"
+      },
+      "comparison_kind": "scalar and regional summaries; not a surface-field comparison",
+      "unavailable_pressure_regions": [
+       "front_fascia",
+       "hood",
+       "rear_fascia",
+       "rear_window",
+       "roof",
+       "underbody",
+       "wheel_wells",
+       "windscreen"
+      ]
+     }
+    }
+   ],
+   "agent_gate": [
+    {
+     "id": "baseline-fastback",
+     "accepted": true,
+     "reject_reason": null,
+     "passed": true
+    },
+    {
+     "id": "baseline-notchback",
+     "accepted": true,
+     "reject_reason": null,
+     "passed": true
+    },
+    {
+     "id": "baseline-estateback",
+     "accepted": true,
+     "reject_reason": null,
+     "passed": true
+    },
+    {
+     "id": "trusted-perturbation",
+     "accepted": true,
+     "reject_reason": null,
+     "passed": true
+    },
+    {
+     "id": "genuine-rejection",
+     "accepted": false,
+     "reject_reason": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar; return toward the last trusted geometry",
+     "passed": true
+    }
+   ],
+   "errors": []
+  }
+ },
+ "calls": 25,
+ "counts": {
+  "accepted": 25,
+  "rejected": 0,
+  "error": 0
+ },
+ "complete": true,
+ "baseline_cd": 0.2245595494127173,
+ "best_cd": 0.21928175205549003,
+ "best_curve": [
+  0.2245595494127173,
+  0.22449421175614567,
+  0.22449421175614567,
+  0.22449421175614567,
+  0.22215308130614675,
+  0.22215308130614675,
+  0.22215308130614675,
+  0.22215308130614675,
+  0.22152220791494895,
+  0.22055093057181938,
+  0.22055093057181938,
+  0.22055093057181938,
+  0.22055093057181938,
+  0.22055093057181938,
+  0.22055093057181938,
+  0.2194987860650423,
+  0.2194987860650423,
+  0.2194987860650423,
+  0.2194987860650423,
+  0.21928175205549003,
+  0.21928175205549003,
+  0.21928175205549003,
+  0.21928175205549003,
+  0.21928175205549003,
+  0.21928175205549003
+ ],
+ "delta_cd": -0.005277797357227276,
+ "improvement_fraction": 0.023502885408481243
+}
