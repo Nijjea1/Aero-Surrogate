@@ -202,7 +202,9 @@ def build_matched(directory: str | Path, *, publish_to: str | Path | None = None
         if publish_to is not None:
             target = Path(publish_to) / path.name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(json.dumps(portable_paths(data), indent=1, allow_nan=False) + "\n", encoding="utf-8")
+            # Hash the bytes that are published, independent of the host's
+            # text-mode newline translation. The evidence tree pins LF in Git.
+            target.write_bytes((json.dumps(portable_paths(data), indent=1, allow_nan=False) + "\n").encode("utf-8"))
             evidence[-1]["published_summary_sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
         if not data["complete"]:
             excluded.append({"run_id": data["run_id"], "reason": data["stop_reason"]})
