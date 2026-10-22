@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img"
-     aria-label="Aero Surrogate: smoke streamlines flowing over a fastback car, coloured by surface pressure">
+     aria-label="Aero Surrogate: smoke streamlines flowing over a fastback car, with illustrative pressure colours">
   <defs>
     <pattern id="g" width="22" height="22" patternUnits="userSpaceOnUse">
       <path d="M22 0H0V22" fill="none" stroke="rgba(120,160,210,0.07)" stroke-width="1"/>
@@ -95,11 +95,11 @@
     <rect x="64" y="70" width="6" height="22" fill="#ff5f1f"/>
     <text x="82" y="87" fill="#a3a4a9" font-size="15" letter-spacing="2.4" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace">NEBIUS × NVIDIA GLOBAL AI HACKATHON</text>
     <text x="62" y="170" fill="#ececec" font-size="76" font-weight="600" letter-spacing="-1.5">Aero Surrogate</text>
-    <text x="64" y="222" fill="#a3a4a9" font-size="24">Drag for any car shape in a quarter of a millisecond,</text>
-    <text x="64" y="254" fill="#a3a4a9" font-size="24">and an agent that knows when not to trust it.</text>
+    <text x="64" y="222" fill="#a3a4a9" font-size="24">Explore parametric vehicle designs before CFD,</text>
+    <text x="64" y="254" fill="#a3a4a9" font-size="24">with a domain gate and an inspectable agent logbook.</text>
     <g font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="15">
       <circle class="pulse" cx="70" cy="321" r="5" fill="#5fc47c"/>
-      <text x="84" y="326" fill="#727379">surrogate</text><text x="174" y="326" fill="#ececec">0.25 ms</text>
+      <text x="84" y="326" fill="#727379">surrogate</text><text x="174" y="326" fill="#ececec">Cd + sigma</text>
       <text x="262" y="326" fill="#727379">CFD</text><text x="302" y="326" fill="#ececec">hours</text>
       <text x="64" y="356" fill="#727379">trust gate on every prediction · Nemotron 3 design agent</text>
     </g>

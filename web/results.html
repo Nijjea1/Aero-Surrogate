@@ -4,9 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Aero Surrogate Results</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="vendor/fonts/fonts.css">
   <link rel="stylesheet" href="styles.css">
   <script src="config.js"></script>
   <script type="module" src="results.js"></script>
@@ -60,9 +58,9 @@
     </section>
 
     <section class="panel" aria-labelledby="accuracy-title">
-      <div class="panel-head"><h2 id="accuracy-title">Accuracy against what is achievable</h2></div>
-      <p class="lede">R² of predicted against CFD drag on designs the model never trained on. The marked line is
-        the ceiling: the CFD's own run-to-run spread caps any model below 1.0.</p>
+      <div class="panel-head"><h2 id="accuracy-title">Accuracy on held-out designs</h2></div>
+      <p class="lede">R² of predicted against CFD Cd on designs the model never trained on, alongside simple references.
+        Solver variation is not treated as a hard limit on attainable R².</p>
       <div class="chart-pair">
         <div><h3>Unseen designs</h3><div class="bars" id="acc-random"></div></div>
         <div><h3 id="acc-ood-title">Unseen body style</h3><div class="bars" id="acc-ood"></div></div>
@@ -70,7 +68,6 @@
       <div class="table-scroll">
         <table class="history" id="per-category">
           <thead><tr><th scope="col">Unseen designs by body style</th><th scope="col" class="num">R²</th>
-            <th scope="col" class="num">Ceiling</th><th scope="col" class="num">Share of ceiling</th>
             <th scope="col" class="num">MAE</th><th scope="col" class="num">Designs</th></tr></thead>
           <tbody></tbody>
         </table>
@@ -78,16 +75,16 @@
     </section>
 
     <section class="panel" aria-labelledby="cal-title">
-      <div class="panel-head"><h2 id="cal-title">Are the error bars honest?</h2></div>
+      <div class="panel-head"><h2 id="cal-title">How well do the intervals cover held-out labels?</h2></div>
       <p class="lede">For each nominal interval, the share of designs whose CFD drag actually fell inside the
-        predicted interval. On the diagonal is honest; below it, the bars are too narrow.</p>
+        predicted interval. The diagonal indicates nominal coverage; below it, intervals under-cover.</p>
       <div class="legend run-legend" id="cal-legend"></div>
       <div class="chart" id="calibration"></div>
       <p class="chart-note" id="cal-note"></p>
     </section>
 
     <section class="panel" aria-labelledby="gate-title">
-      <div class="panel-head"><h2 id="gate-title">Can the gate tell when the model is guessing?</h2></div>
+      <div class="panel-head"><h2 id="gate-title">What does the domain check detect?</h2></div>
       <p class="lede" id="gate-lede"></p>
       <div class="bars" id="gate"></div>
       <p class="chart-note" id="gate-note"></p>
@@ -105,7 +102,7 @@
 
     <section class="panel" aria-labelledby="scaling-title">
       <div class="panel-head"><h2 id="scaling-title">More data, better model?</h2></div>
-      <p class="lede">The same model retrained on growing slices of the training data, every point graded on the same 625 test designs.</p>
+      <p class="lede">Available training-size experiments and their straight-line references. Missing surrogate checkpoints are reported explicitly.</p>
       <div class="legend run-legend" id="scaling-legend"></div>
       <div class="chart" id="scaling"></div>
       <p class="chart-note" id="scaling-note"></p>

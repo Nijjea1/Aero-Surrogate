@@ -2,7 +2,7 @@
  "source": "DrivAerNet, Elrefaie et al., CFD by the dataset authors. CC BY-NC 4.0, non-commercial use only.",
  "split": "Test designs of the random split (rebuilt with seed 0): the model never trained or early-stopped on them.",
  "selection": "Per body style, the 3 test designs nearest evenly spaced percentiles of CFD Cd. Chosen by drag, not by model error.",
- "cd_cfd_std": "The CFD solver's own run-to-run spread on Cd, from the dataset.",
+ "cd_cfd_std": "Within-simulation coefficient spread reported by the dataset; not an established uncertainty of the averaged Cd target.",
  "designs": [
   {
    "design_id": "F_S_WWC_WM_252",

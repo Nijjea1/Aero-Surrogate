@@ -55,6 +55,7 @@ export function pageUrl(page, params = {}) {
 }
 
 export function fmt(value, decimals) {
+  if (value == null || !Number.isFinite(Number(value))) return "\u2013";
   return Number(value).toFixed(decimals);
 }
 
@@ -94,13 +95,13 @@ export const INFO = {
   cl: ["Lift coefficient, Cl",
     "The vertical aerodynamic force, scaled the same way as Cd. Positive lifts the car off the road; negative is downforce that presses it down."],
   sigma: ["Uncertainty, σ",
-    "The model's own standard deviation on Cd. The CFD that produced the training data scatters by about ±0.0064 run to run, so a σ near that is honest. Above the gate threshold, the prediction is rejected."],
+    "The model\'s predicted standard deviation on Cd. Its nominal 90% interval covered 86.6% of held-out labels. This is not a guarantee for an individual design. Above the gate threshold, the prediction is rejected."],
   cp: ["Pressure coefficient, Cp",
     "Local pressure compared with the oncoming air. +1 where the air stops dead against the car, 0 at free-stream pressure, negative where the air speeds up and sucks on the surface. Pressure on front-facing panels and suction on rear-facing ones both hold the car back."],
   gate: ["The trust gate",
-    "Before a prediction is allowed to steer a design, two checks: σ, the error bar, and the distance from every design the model learned from. If either is too large, the model is guessing, and the prediction is rejected with the reason."],
+    "Before a prediction is allowed to steer a design, two checks: σ, the error bar, and Mahalanobis distance from the training distribution. If either exceeds its threshold, the prediction cannot guide optimisation. Passing these checks does not establish physical correctness."],
   ood: ["Distance from the training data",
-    "How unusual this combination of dials is compared with the designs the model trained on, in standard deviations. Every dial can be within its range while the combination is new."],
+    "A Mahalanobis distance measuring how unusual this combination of dials is relative to the training distribution. Every dial can be within its range while the combination is new."],
   drag: ["Drag force",
     "Newtons of air resistance at the chosen speed: ½ × air density × speed² × Cd × frontal area. The ± carries the model's σ through."],
   power: ["Power to push the air",
@@ -110,7 +111,7 @@ export const INFO = {
   lift: ["Lift or downforce",
     "The vertical aerodynamic force at this speed. Shown only when the model predicts Cl; the current model predicts drag alone."],
   area: ["Frontal area",
-    "The car's silhouette seen from the front, in m². Drag scales with Cd × area, so a narrower, lower car pays less even at the same Cd."],
+    "The car's silhouette seen from the front, in m². Drag scales with Cd × area, this viewer estimate has not been independently verified as a CFD reference area."],
   illustrative: ["Illustrative",
     "Worked out from the angle of each surface to the oncoming air, not predicted by the model. It shows where pressure and suction usually sit on a shape like this."],
   predicted: ["Predicted surface pressure",

@@ -3,7 +3,7 @@
 Owner: Paramveer. Plain HTML, CSS and JavaScript modules, with no build step.
 
 The page lets you pick a design, see the car in 3D, see its predicted drag
-and lift, and see whether the gate trusts the prediction.
+and a domain verdict. Lift is unavailable in the current scalar model.
 
 ## Run it
 
@@ -24,8 +24,7 @@ service's CORS settings only allow `http://localhost:5173` and
 `web/serve.py` serves the page plus `POST /api/mesh`, which builds the car
 with `src/geometry`. It answers only on this machine. To show the page to
 another device on purpose, use `--host 0.0.0.0`. Plain `python -m http.server` still serves the page, but
-without the 3D view. three.js loads from jsDelivr (pinned to 0.160.0), so the
-3D view needs a network connection. The rest of the page works without one.
+without the 3D view. three.js is pinned to 0.160.0 and vendored under `web/vendor/three`, with its licence and asset manifest. The 3D view does not need a CDN connection. IBM Plex font files are served from `web/vendor/fonts` with their OFL notices; system fonts are the fallback.
 
 To point the page at a different service, add `?api=` to the URL:
 `http://localhost:5173/?api=http://my-host:8000`
@@ -188,16 +187,15 @@ row. Deltas are against the baseline design of the selected body style.
 service. It shows:
 
 - the headline numbers;
-- R² against the noise ceiling for unseen designs and for an unseen body
-  style, beside the predict-the-average and straight-line references;
+- held-out R² and MAE beside predict-the-average and straight-line references;
+  solver variation is not interpreted as a hard performance bound;
 - the reliability diagram;
 - how well each check catches the unseen body style;
 - the data-scaling curve;
 - the agent against CMA-ES and random search, as the median and middle-half
   band over seeds.
 
-A harness `--label` shows as a banner. The committed files are a provisional
-local check until the final checkpoints are graded. See
+A harness `--label` shows as a banner. The committed files identify the graded checkpoint and experiment provenance. Unavailable category and field experiments are explicit. See
 [src/eval/README.md](../src/eval/README.md) for both commands.
 
 ## Runs

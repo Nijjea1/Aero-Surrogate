@@ -431,7 +431,7 @@ function renderCfd() {
 
   $("cfd-id").textContent = `${car.design_id} · ${car.body_style}`;
   $("cfd-truth").textContent = fmt(car.cd_cfd, 4);
-  $("cfd-noise").textContent = typeof car.cd_cfd_std === "number" ? `solver spread ± ${fmt(car.cd_cfd_std, 4)}` : "";
+  $("cfd-noise").textContent = typeof car.cd_cfd_std === "number" ? `within-simulation spread ± ${fmt(car.cd_cfd_std, 4)}` : "";
   $("cfd-pred").textContent = fmt(e.cd, 4);
   $("cfd-sigma").textContent = `± ${fmt(sigma, 4)}`;
   $("cfd-error").textContent = `${signed(error, 4)} (${signed((100 * error) / car.cd_cfd, 1)}%)`;
@@ -811,7 +811,7 @@ async function initViewer() {
     const { createAnnotations } = await import("./annotations.js");
     state.pins = createAnnotations(state.viewer, $("pins"), { describe: describePin });
   } catch (error) {
-    message.innerHTML = "<div>The 3D view could not load. three.js comes from a CDN, so it needs a connection.</div>";
+    message.innerHTML = "<div>The 3D view could not load. Check that this release includes the local viewer assets, then reload.</div>";
     console.error(error);
     return;
   }
@@ -1200,7 +1200,7 @@ async function start() {
   renderService();
   buildControls();
   loadRealCars();
-  // three.js comes from a CDN; never hold the first prediction for it.
+  // Load the viewer independently; never hold the first scalar prediction for it.
   initViewer().then(() => refreshMesh({ ...state.params }));
 
   // Baseline first, so every later design can show its delta against it.

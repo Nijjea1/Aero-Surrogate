@@ -11,7 +11,7 @@ import {
 } from "./common.js";
 
 const $ = (id) => document.getElementById(id);
-const SERIES = { agent: 1, cmaes: 2, random: 3, scripted: 4 };   // colour follows the method
+const SERIES = { agent: 1, nemotron: 1, cmaes: 2, random: 3, scripted: 4 };   // colour follows the method
 
 const state = { metrics: null, bench: null, comparison: 0 };
 
@@ -75,38 +75,32 @@ function renderSource() {
 
 function renderHeadline() {
   const m = state.metrics, h = m.headline, speed = m.speed || {};
-  const noise = m.data?.noise_ceiling?.mean_label_std;
-  const pct = (v) => `${fmt(100 * v, 0)} %`;
+  const pct = (v) => `${fmt(100 * v, 1)} %`;
   const style = h.held_out_category || "body style";
-  let line = `On designs it never trained on, the surrogate predicts drag with R² <b>${fmt(h.r2_in_distribution, 3)}</b>, ` +
-    `${pct(h.share_of_ceiling)} of what the CFD's own noise allows, in <b>${fmt(h.latency_ms, 2)} ms</b> a design.`;
+  let line = `On held-out designs, the surrogate predicts Cd with R² <b>${fmt(h.r2_in_distribution, 3)}</b> ` +
+    `and mean absolute error <b>${fmt(h.mae_in_distribution, 5)}</b>.`;
   if (h.r2_held_out_category != null) {
-    line += ` On a ${escapeHtml(style)} it never saw, R² falls to ${fmt(h.r2_held_out_category, 2)}` +
-      (h.ood_detection_rate == null ? "." : `, and the gate flags ${pct(h.ood_detection_rate)} of those designs.`);
+    line += ` With ${escapeHtml(style)} held out of training, R² is ${fmt(h.r2_held_out_category, 2)}.`;
   }
   $("headline-line").innerHTML = line;
   const rows = [
-    ["R² on unseen designs", fmt(h.r2_in_distribution, 3),
-      `ceiling ${fmt(h.r2_ceiling_test_set, 3)} from the CFD noise; a straight line gets ${fmt(h.r2_linear_reference, 3)}`],
-    ["Typical error", `${fmt(h.mae_in_distribution, 4)} Cd`, noise ? `the CFD's own run-to-run spread is ${fmt(noise, 4)}` : "mean absolute error"],
-    [`R² on an unseen ${style}`, h.r2_held_out_category == null ? "–" : fmt(h.r2_held_out_category, 2),
-      h.ood_detection_rate == null ? "that style held out of training" : `gate flags ${pct(h.ood_detection_rate)} of them`],
-    ["Time per design", `${fmt(h.latency_ms, 2)} ms`,
-      speed.speedup_vs_cfd ? `${Math.round(speed.speedup_vs_cfd).toLocaleString()}× faster than one CFD run` : `${speed.device || "cpu"}, one at a time`],
+    ["R² on held-out designs", fmt(h.r2_in_distribution, 3), `straight-line reference ${fmt(h.r2_linear_reference, 3)}`],
+    ["Mean absolute error", `${fmt(h.mae_in_distribution, 5)} Cd`, `${m.in_distribution?.n_test ?? "?"} held-out designs`],
+    ["Nominal 90% interval coverage", h.coverage_90 == null ? "unavailable" : pct(h.coverage_90), "measured coverage; not a guarantee for a new design"],
+    ["Time per scalar prediction", `${fmt(h.latency_ms, 2)} ms`, `${speed.device || "cpu"}, local model inference; excludes HTTP and agent proposals`],
   ];
+  if (h.r2_held_out_category != null) rows.push([`R² on held-out ${style}`, fmt(h.r2_held_out_category, 2), "separate category-holdout checkpoint"]);
   $("headline").replaceChildren(...rows.map(([label, value, note]) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${escapeHtml(label)}</td><td class="num">${escapeHtml(value)}</td><td class="muted">${escapeHtml(note)}</td>`;
     return tr;
   }));
-  $("provenance").textContent = `${m.data?.n_designs ?? "?"} DrivAerNet designs · ${m.models?.in_distribution?.n_params?.toLocaleString() ?? "?"} parameters`;
+  $("provenance").textContent = `${m.data?.n_designs ?? "?"} DrivAerNet designs / ${m.models?.in_distribution?.n_params?.toLocaleString() ?? "?"} model parameters`;
   const warnings = m.warnings || [];
   $("caveats").hidden = !warnings.length;
-  $("caveats-summary").textContent = `${warnings.length} caveat${warnings.length === 1 ? "" : "s"} the grading raised`;
+  $("caveats-summary").textContent = `${warnings.length} limitation${warnings.length === 1 ? "" : "s"} recorded by the evaluator`;
   $("warnings").replaceChildren(...warnings.map((w) => {
-    const li = document.createElement("li");
-    li.textContent = w;
-    return li;
+    const li = document.createElement("li"); li.textContent = w; return li;
   }));
 }
 
@@ -120,13 +114,13 @@ function renderAccuracy() {
     { label: "Surrogate", value: block.overall?.r2, kind: "accent" },
   ] : [];
   barChart($("acc-random"), rows(m.in_distribution), {
-    domain: [0, 1], marker: m.in_distribution?.overall?.r2_ceiling, markerLabel: "ceiling", format: (v) => fmt(v, 3),
+    domain: [0, 1], format: (v) => fmt(v, 3),
   });
   const ood = m.out_of_distribution;
   $("acc-ood-title").textContent = ood ? `Unseen body style: ${ood.held_out_category} held out of training` : "Unseen body style";
-  if (ood) {
+  if (ood?.overall) {
     barChart($("acc-ood"), rows(ood), {
-      domain: [0, 1], marker: ood.overall?.r2_ceiling, markerLabel: "ceiling", format: (v) => fmt(v, 3),
+      domain: [0, 1], format: (v) => fmt(v, 3),
     });
   } else {
     $("acc-ood").innerHTML = `<p class="chart-empty">No held-out-style checkpoint graded.</p>`;
@@ -134,8 +128,8 @@ function renderAccuracy() {
   const per = m.in_distribution?.per_category || {};
   $("per-category").querySelector("tbody").replaceChildren(...Object.entries(per).map(([style, r]) => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${escapeHtml(style)}</td><td class="num">${fmt(r.r2, 3)}</td><td class="num">${fmt(r.r2_ceiling, 3)}</td>
-      <td class="num">${fmt(100 * r.share_of_ceiling, 0)}%</td><td class="num">${fmt(r.mae, 4)}</td><td class="num">${r.n}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(style)}</td><td class="num">${fmt(r.r2, 3)}</td>
+      <td class="num">${fmt(r.mae, 4)}</td><td class="num">${r.n}</td>`;
     return tr;
   }));
 }
@@ -178,7 +172,7 @@ function renderGate() {
       note: `AUROC ${fmt(held.sigma_alone?.auroc ?? NaN, 2)}` },
     { label: "Distance, shape dials only", value: held.harness_detector_aero_only?.detection_rate, kind: "muted",
       note: `AUROC ${fmt(held.harness_detector_aero_only?.auroc ?? NaN, 2)}` },
-    { label: "Distance with body style (the gate)", value: distance?.detection_rate, kind: "accent",
+    { label: "Distance including explicit body style", value: distance?.detection_rate, kind: "accent",
       note: `AUROC ${fmt(distance?.auroc ?? NaN, 2)}` },
   ];
   $("gate-lede").textContent = `Every ${held.held_out_category} design is something the held-out model never saw. ` +
@@ -198,7 +192,7 @@ function renderField() {
   $("field-body").hidden = !f.available;
   if (!f.available) {
     $("field-lede").textContent = "Not graded yet: " + (f.reason || "no surface-pressure checkpoint.") +
-      " Once there is one: python -m src.eval.fields --checkpoint <fields best.pt>.";
+      " Optional pressure inference is experimental; its validity on generated viewer geometry is not established.";
     $("field-note").textContent = "";
     return;
   }
@@ -207,7 +201,7 @@ function renderField() {
   $("field-lede").textContent = `On ${f.test_runs.length} DrivAerML cars it never trained on (${f.n_points.toLocaleString()} surface points), ` +
     `predicted Cp scores R² ${fmt(o.r2, 2)} with a typical error of ${fmt(o.mae, 3)}` +
     (near ? `; copying the nearest point on a training car scores ${fmt(near.r2, 2)}.` : ".") +
-    ` Its error bars hold ${pct(o.coverage_1sigma)} of the points where an honest 1σ band holds 68 %.`;
+    ` Its error bars hold ${pct(o.coverage_1sigma)} of the points where a nominal 1σ band holds 68 %.`;
   const rows = [
     { label: "Predict the average", value: ref.mean?.r2, kind: "muted" },
     ...(near ? [{ label: "Nearest training car", value: near.r2, kind: "muted" }] : []),
@@ -239,20 +233,19 @@ function renderScaling() {
   legend($("scaling-legend"), series);
   const xs = series.flatMap((d) => d.points.map((p) => p[0]));
   const ys = series.flatMap((d) => d.points.map((p) => p[1]));
-  const ceiling = state.metrics.in_distribution?.overall?.r2_ceiling;
   // Training size doubles from point to point, so the x axis is logarithmic.
   const lo = Math.min(...xs, 50), hi = Math.max(...xs, 100);
   lineChart($("scaling"), {
-    series, x: [lo * 0.85, hi * 1.15], y: [Math.min(0.5, ...ys) - 0.05, Math.max(ceiling ?? 0, ...ys) + 0.03], logX: true,
+    series, x: [lo * 0.85, hi * 1.15], y: [Math.min(0.5, ...ys) - 0.05, Math.max(0.9, ...ys) + 0.03], logX: true,
     xTicks: [50, 100, 250, 500, 1000, 2500, 5000].filter((t) => t >= lo * 0.85 && t <= hi * 1.15),
-    hline: ceiling ? { y: ceiling, label: `ceiling ${fmt(ceiling, 3)}` } : null, markers: true,
+    markers: true,
     xLabel: "training designs (log scale)", yLabel: "R²", fmtX: (v) => Math.round(v).toLocaleString(), fmtY: (v) => fmt(v, 2),
   });
-  $("scaling-note").textContent = scalingTakeaway(s, ceiling);
+  $("scaling-note").textContent = scalingTakeaway(s);
 }
 
 // What the curve says, in one or two sentences, from the points themselves.
-function scalingTakeaway(s, ceiling) {
+function scalingTakeaway(s) {
   const pts = s.model || [];
   if (pts.length < 2) {
     return "Only the straight-line reference so far: the surrogate's points arrive with checkpoints trained on subsets " +
@@ -262,7 +255,6 @@ function scalingTakeaway(s, ceiling) {
   const n = (p) => p.n_train.toLocaleString();
   let text = `From ${n(first)} to ${n(last)} training designs, R² rises from ${fmt(first.r2, 2)} to ${fmt(last.r2, 2)}. ` +
     `The last step, from ${n(prev)}, adds ${signed(last.r2 - prev.r2, 3)}`;
-  if (ceiling) text += `, with ${fmt(ceiling - last.r2, 3)} left below the ceiling`;
   text += ".";
   const linear = s.linear_reference || [];
   // Where the network overtakes a straight line fitted to the same number of designs.
@@ -323,7 +315,7 @@ function renderBenchChart() {
     xLabel: "evaluation", yLabel: "best trusted Cd vs unmodified",
     fmtX: (v) => String(Math.round(v)), fmtY: (v) => `${signed(v, 1)}%`,
   });
-  const agent = c.methods.some((m) => m.method.startsWith("agent"));
+  const agent = c.methods.some((m) => /^(agent|nemotron)/.test(m.method));
   $("bench-lede").textContent = `${c.body_style}, ${c.budget} evaluations each, same start, same gate, ` +
     `scored by ${c.surrogate}. Lower is better.`;
   $("bench-table").querySelector("tbody").replaceChildren(...c.methods.map((m) => {
@@ -337,7 +329,7 @@ function renderBenchChart() {
       <td class="num">${m.cost_usd_total == null ? "–" : `$${fmt(m.cost_usd_total, 2)}`}</td>`;
     return tr;
   }));
-  const notes = [];
+  const notes = ["These are surrogate-predicted Cd changes, not CFD-validated improvements. Five runs from one starting design do not establish superiority; similar medians indicate comparable results in this experiment. Equal evaluation count does not mean equal runtime or cost."];
   if (!agent) notes.push("No live agent run in this comparison yet. The scripted agent is the offline test loop, not Nemotron.");
   if (/stub|synthetic/i.test(c.surrogate || "")) notes.push("Scored by the synthetic stub: these numbers test the plumbing, not aerodynamics.");
   $("bench-note").textContent = notes.join(" ");
@@ -404,7 +396,7 @@ function lineChart(host, opts) {
     + `<line class="baseline" x1="${m.left}" x2="${width - m.right}" y1="${height - m.bottom}" y2="${height - m.bottom}"/></g>`);
   if (opts.diagonal) {
     parts.push(`<line class="start-line" x1="${X(x0)}" y1="${Y(y0)}" x2="${X(x1)}" y2="${Y(y1)}"/>`
-      + `<text class="start-label" x="${X(x1) - 4}" y="${Y(y1) + 14}" text-anchor="end">honest</text>`);
+      + `<text class="start-label" x="${X(x1) - 4}" y="${Y(y1) + 14}" text-anchor="end">nominal coverage</text>`);
   }
   if (opts.hline) {
     parts.push(`<line class="start-line" x1="${m.left}" x2="${width - m.right}" y1="${Y(opts.hline.y)}" y2="${Y(opts.hline.y)}"/>`
