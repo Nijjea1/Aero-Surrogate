@@ -1,0 +1,3 @@
+# Optional raw DrivAerML VTU/VTP preprocessing. Not needed to serve checkpoints.
+-r requirements.txt
+pyvista>=0.44,<1

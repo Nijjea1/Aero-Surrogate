@@ -1,7 +1,10 @@
 # Deploying the Aero Surrogate API
 
-This covers the API in `src/service` only. The web UI (`web/`) is a separate
-static site; it calls this API at the URL given in its `?api=` parameter.
+This covers the API in `src/service` only. The web UI (`web/`) runs a separate
+dynamic server for `/api/mesh`; see [web/DEPLOY.md](../../web/DEPLOY.md). Configure
+its API origin with `AERO_WEB_API`; `?api=` is only a testing override.
+
+This is an operator runbook, not evidence that a public deployment exists.
 
 All configuration is environment variables (table at the end). Nothing secret
 is baked into the image or committed: secrets go in a host file passed with
@@ -194,7 +197,7 @@ keep their own limits and could interleave writes to the same logs. The image
 therefore runs `--workers 1`; scale up the VM rather than out. (The spend
 ledger alone is safe across processes: it uses a lock file.)
 
-**Cost safety.** Only agent runs cost money (Nemotron calls through Token
+**Application budget guards.** Only agent runs cost money (Nemotron calls through Token
 Factory); `/evaluate` and `/compare` never call the provider. Layers, from
 narrowest to widest:
 - per-run budget: `AERO_PUBLIC_RUN_BUDGET_USD` / `AERO_ADMIN_RUN_BUDGET_USD`;
@@ -204,8 +207,13 @@ narrowest to widest:
 - `AERO_SPEND_CAP_USD`: a hard, lifetime cap on everything recorded in the
   ledger. Every call reserves its worst case first and is refused if the
   total would pass the cap, across restarts as long as `/data` persists.
-Set `AERO_PUBLIC_RUNS=0` to stop anonymous runs without redeploying anything
-else. The run and budget settings take effect through the agent-run (`/runs`)
+These are application-side guards based on estimated model prices, not a
+guarantee about the provider invoice: transport failures/retries may have
+ambiguous billing. Reconcile the provider account and keep enough headroom for
+judge access. Preserve the ledger volume so its running total survives restart.
+
+Set `AERO_PUBLIC_RUNS=0` and recreate the API container to stop anonymous runs.
+The run and budget settings take effect through the agent-run (`/runs`)
 endpoints; without those, the service spends nothing.
 
 **What is public and what needs the token.**

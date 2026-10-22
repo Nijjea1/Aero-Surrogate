@@ -17,7 +17,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=5173
 
 WORKDIR /app
-RUN pip install "numpy>=1.26" "trimesh>=4.4,<6" "scipy>=1.11,<2"
+COPY requirements-web.txt ./
+RUN pip install -r requirements-web.txt
 
 COPY src/__init__.py src/contracts.py ./src/
 COPY src/geometry/ ./src/geometry/
