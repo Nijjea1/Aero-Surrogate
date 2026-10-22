@@ -150,7 +150,7 @@ def hero() -> str:
 
     belt = "".join(f'<rect x="{x}" y="0" width="18" height="2" fill="rgba(255,255,255,0.08)"/>' for x in range(-40, 1500, 40))
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {Hh}" width="{W}" height="{Hh}" role="img"
-     aria-label="Aero Surrogate: smoke streamlines flowing over a fastback car, coloured by surface pressure">{defs}{style}
+     aria-label="Aero Surrogate: smoke streamlines flowing over a fastback car, with illustrative pressure colours">{defs}{style}
   <rect width="{W}" height="{Hh}" fill="{BG}"/>
   <rect width="{W}" height="{Hh}" fill="url(#g)"/>
   <rect width="{W}" height="{Hh}" fill="url(#G)"/>
@@ -177,11 +177,11 @@ def hero() -> str:
     <rect x="64" y="70" width="6" height="22" fill="{ACCENT}"/>
     <text x="82" y="87" fill="{INK2}" font-size="15" letter-spacing="2.4" font-family="{MONO}">NEBIUS × NVIDIA GLOBAL AI HACKATHON</text>
     <text x="62" y="170" fill="{INK}" font-size="76" font-weight="600" letter-spacing="-1.5">Aero Surrogate</text>
-    <text x="64" y="222" fill="{INK2}" font-size="24">Drag for any car shape in a quarter of a millisecond,</text>
-    <text x="64" y="254" fill="{INK2}" font-size="24">and an agent that knows when not to trust it.</text>
+    <text x="64" y="222" fill="{INK2}" font-size="24">Explore parametric vehicle designs before CFD,</text>
+    <text x="64" y="254" fill="{INK2}" font-size="24">with a domain gate and an inspectable agent logbook.</text>
     <g font-family="{MONO}" font-size="15">
       <circle class="pulse" cx="70" cy="321" r="5" fill="{GOOD}"/>
-      <text x="84" y="326" fill="{INK3}">surrogate</text><text x="174" y="326" fill="{INK}">0.25 ms</text>
+      <text x="84" y="326" fill="{INK3}">surrogate</text><text x="174" y="326" fill="{INK}">Cd + sigma</text>
       <text x="262" y="326" fill="{INK3}">CFD</text><text x="302" y="326" fill="{INK}">hours</text>
       <text x="64" y="356" fill="{INK3}">trust gate on every prediction · Nemotron 3 design agent</text>
     </g>
@@ -208,7 +208,7 @@ def pipeline() -> str:
     W, H = 1280, 350
     nodes = [
         (40, "1", "Design", "16 shape dials and a body style", "src/geometry"),
-        (350, "2", "Surrogate", "Cd, its σ and a distance score", "src/train · 0.25 ms"),
+        (350, "2", "Surrogate", "Cd, its σ and a distance score", "src/train · custom PyTorch"),
         (660, "3", "Trust gate", "σ and distance from training data", "src/service/gate.py"),
         (970, "4", "Design agent", "Nemotron 3 on Token Factory", "src/agent"),
     ]
@@ -288,18 +288,19 @@ def best_method(bench):
 
 def stats(metrics, bench) -> str:
     h = metrics["headline"]
-    best = best_method(bench)
+    agent = next(((m, c) for c in bench.get("comparisons", [])
+                  for m in c.get("methods", []) if m.get("method", "").split(":")[0] in {"agent", "nemotron"}), None)
+    coverage = h.get("coverage_90")
     cards = [
-        (f"{h['r2_in_distribution']:.3f}", "R² on designs it never saw",
-         f"{h['share_of_ceiling'] * 100:.0f}% of the {h['r2_ceiling_test_set']:.3f} the CFD noise allows", h["share_of_ceiling"]),
-        (f"{h['latency_ms']:.2f} ms", "per design, on a CPU", "CFD takes hours for one", None),
-        (f"{h['ood_detection_rate'] * 100:.0f}%", f"of an unseen {h['held_out_category']} flagged",
-         f"while {h['ood_false_alarm_rate'] * 100:.1f}% of ordinary designs are", h["ood_detection_rate"]),
+        (f"{h['r2_in_distribution']:.3f}", "Held-out R-squared", f"{metrics['in_distribution'].get('n_test', '?')} test designs; independent grader", None),
+        (f"{h['mae_in_distribution']:.5f}", "Mean absolute Cd error", "A prediction, not CFD verification", None),
+        (f"{coverage * 100:.1f}%" if coverage is not None else "pending", "Nominal 90% interval coverage",
+         "Intervals under-cover held-out labels", None),
     ]
-    if best:
-        pct, m, comp = best
-        cards.append((f"{pct:+.1f}%".replace("-", "−"), f"median drag change, {m['label']}",
-                      f"{comp['budget']} evaluations, {m['n_runs']} runs, same gate", None))
+    if agent:
+        m, comp = agent
+        cards.append((f"{-m['final_pct']['median']:.2f}%", "Median predicted Cd reduction",
+                      f"Nemotron: {comp['budget']} evaluations, {m['n_runs']} runs", None))
     W, H, cw = 1280, 210, 296
     out = []
     for i, (big, label, note, bar) in enumerate(cards):
@@ -339,43 +340,40 @@ def results_block(metrics, bench) -> str:
     h = metrics["headline"]
     ind, ood = metrics["in_distribution"], metrics.get("out_of_distribution") or {}
     rows = [
-        "| | Surrogate | Straight line | Ceiling |",
-        "|---|---:|---:|---:|",
-        f"| R² on unseen designs | **{h['r2_in_distribution']:.3f}** | {h['r2_linear_reference']:.3f} | {h['r2_ceiling_test_set']:.3f} |",
+        "| Metric | Surrogate | Reference |",
+        "|---|---:|---:|",
+        f"| Held-out R-squared | **{h['r2_in_distribution']:.4f}** | Linear {h['r2_linear_reference']:.4f} |",
+        f"| Mean absolute Cd error | **{h['mae_in_distribution']:.5f}** | |",
+        f"| Test designs | **{ind.get('n_test', ind.get('overall', {}).get('n', '?'))}** | |",
     ]
     if h.get("r2_held_out_category") is not None:
         lin = ood.get("references", {}).get("linear", {}).get("overall", {}).get("r2")
-        ceil = ood.get("overall", {}).get("r2_ceiling")
-        rows.append(f"| R² on an unseen {h['held_out_category']} | **{h['r2_held_out_category']:.2f}** | "
-                    f"{'' if lin is None else f'{lin:.2f}'} | {'' if ceil is None else f'{ceil:.3f}'} |")
-    rows.append(f"| Typical error (Cd) | **{h['mae_in_distribution']:.4f}** | | CFD spread {metrics['data']['noise_ceiling'].get('mean_label_std', 0):.4f} |")
+        rows.append(f"| R-squared with {h['held_out_category']} held out | **{h['r2_held_out_category']:.3f}** | "
+                    f"{'' if lin is None else f'Linear {lin:.3f}'} |")
     lines = ["\n".join(rows), ""]
     per = ind.get("per_category") or {}
     if per:
-        lines.append("By body style, unseen designs: " + ", ".join(
-            f"{k} R² {v['r2']:.3f}" for k, v in sorted(per.items()) if isinstance(v, dict) and "r2" in v) + ".")
+        lines.append("By body style, held-out R-squared: " + ", ".join(
+            f"{k} {v['r2']:.3f}" for k, v in sorted(per.items()) if isinstance(v, dict) and "r2" in v) + ".")
         lines.append("")
-    cal = h.get("coverage_1sigma")
-    lines.append(f"- **Error bars:** the 1σ band holds {cal * 100:.0f}% of designs (68% is honest), so they run a little narrow.")
-    lines.append(f"- **Trust gate:** with the {h['held_out_category']} body style held out of training, the distance "
-                 f"check flags {h['ood_detection_rate'] * 100:.0f}% of those designs and {h['ood_false_alarm_rate'] * 100:.1f}% "
-                 f"of ordinary ones. σ alone would rank them with an AUROC of only {h['sigma_alone_detection_auroc']:.2f}, "
-                 "which is why the gate checks both.")
-    sc = metrics.get("data_scaling", {}).get("model") or []
-    if len(sc) >= 2:
-        lines.append(f"- **More data:** retrained on {sc[0]['n_train']:,} to {sc[-1]['n_train']:,} designs, R² rises from "
-                     f"{sc[0]['r2']:.2f} to {sc[-1]['r2']:.2f}; a straight line levels off near "
-                     f"{metrics['data_scaling']['linear_reference'][-1]['r2']:.2f}.")
+    coverage = h.get("coverage_90")
+    if coverage is not None:
+        lines.append(f"- **Intervals:** nominal 90% coverage is {coverage * 100:.2f}% on held-out labels; error bars under-cover.")
+    false_alarm = h.get("ood_false_alarm_rate")
+    corners = metrics.get("ood_detection", {}).get("checkpoint_detector", {}).get("corners_flagged")
+    if false_alarm is not None:
+        lines.append(f"- **Domain screening:** distance false alarms {false_alarm * 100:.2f}% on ordinary test designs" +
+                     (f"; {corners * 100:.0f}% of sampled jointly extreme corners flagged." if corners is not None else "."))
+    if h.get("r2_held_out_category") is None:
+        lines.append("- **Category generalisation:** no independently graded release category checkpoint is included.")
     f = metrics.get("field") or {}
     if f.get("available"):
-        o = f["overall"]
-        lines.append(f"- **Surface pressure:** Cp R² {o['r2']:.2f} on {len(f['test_runs'])} held-out DrivAerML cars.")
+        lines.append(f"- **Surface pressure:** Cp R-squared {f['overall']['r2']:.3f} on {len(f['test_runs'])} held-out DrivAerML cars; generated viewer geometry remains unvalidated.")
     else:
-        lines.append("- **Surface pressure:** graded by `src/eval/fields.py`; the numbers appear here once the stage-2 checkpoint is graded.")
+        lines.append("- **Surface pressure:** optional experimental inference is available with its checkpoint; full release test-set grading is unavailable locally.")
     label = metrics.get("label")
     if label:
-        lines.append("")
-        lines.append(f"> {label}. Graded by `src/eval/harness.py` into `web/results/metrics.json`.")
+        lines.extend(["", f"> {label}. Generated by `src/eval/harness.py`; artifact identities are recorded in the metric file."])
     return "\n".join(lines)
 
 
@@ -384,20 +382,21 @@ def bench_block(bench) -> str:
     if not comps:
         return "_No benchmark yet: `python -m src.eval.benchmark`._"
     comp = comps[0]
-    rows = ["| Method | Runs | Median drag change | Best run | Best found at (median) | Gated (median) |",
+    rows = ["| Method | Runs | Median predicted Cd change | Best run | Best found at (median) | Gated (median) |",
             "|---|---:|---:|---:|---:|---:|"]
     pct = lambda v: f"{v:+.2f}%".replace("-", "−")  # noqa: E731
     live_agent = False
     for m in comp["methods"]:
         if m["method"] == "scripted":
             continue
-        live_agent |= m["method"] == "agent"
+        live_agent |= m["method"].split(":")[0] in {"agent", "nemotron"}
         fp = m["final_pct"]
         found, gated = m.get("found_at_median"), m.get("gated_median")
         rows.append(f"| {m['label']} | {m['n_runs']} | {pct(fp['median'])} | {pct(fp['best'])} | "
                     f"{'' if found is None else f'evaluation {found:.0f}'} | {'' if gated is None else f'{gated:.0f}'} |")
     note = (f"{comp['body_style'].capitalize()}, {comp['budget']} evaluations each, the same start, the same surrogate "
-            "and the same gate. Lower is better.")
+            "and the same gate. Lower is better. These historical experiments measure predicted Cd, not CFD-validated improvements. "
+            "Nemotron and CMA-ES medians are comparable in this small experiment; equal calls do not mean equal time or cost.")
     if not live_agent:
         note += " The live Nemotron runs join this table once they are recorded."
     return "\n".join(rows) + "\n\n" + note
@@ -412,9 +411,9 @@ def fill(readme: str, name: str, body: str) -> str:
 
 def main() -> int:
     metrics, bench = load_results()
-    (OUT / "hero.svg").write_text(hero(), encoding="utf-8")
-    (OUT / "pipeline.svg").write_text(pipeline(), encoding="utf-8")
-    (OUT / "stats.svg").write_text(stats(metrics, bench), encoding="utf-8")
+    (OUT / "hero.svg").write_text("\n".join(line.rstrip() for line in hero().splitlines()) + "\n", encoding="utf-8")
+    (OUT / "pipeline.svg").write_text("\n".join(line.rstrip() for line in pipeline().splitlines()) + "\n", encoding="utf-8")
+    (OUT / "stats.svg").write_text("\n".join(line.rstrip() for line in stats(metrics, bench).splitlines()) + "\n", encoding="utf-8")
     readme_path = ROOT / "README.md"
     readme = readme_path.read_text(encoding="utf-8")
     if "<!-- results:start -->" in readme:

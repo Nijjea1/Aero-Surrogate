@@ -20,7 +20,7 @@
   <g font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif">
     <text x="40" y="44" fill="#ececec" font-size="18" font-weight="600">One design, one loop</text>
     <text x="40" y="68" fill="#727379" font-size="15">thousands of times faster than a CFD run, and refused when the model would be guessing</text>
-    
+
     <g transform="translate(40 128)">
       <rect width="270" height="118" rx="4" fill="#16171a" stroke="#2a2c30"/>
       <rect width="4" height="118" fill="#2a2c30"/>
@@ -35,7 +35,7 @@
       <text x="22" y="34" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="13">2</text>
       <text x="44" y="34" fill="#ececec" font-size="21" font-weight="600">Surrogate</text>
       <text x="22" y="66" fill="#a3a4a9" font-size="15">Cd, its σ and a distance score</text>
-      <text x="22" y="96" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="12.5">src/train · 0.25 ms</text>
+      <text x="22" y="96" fill="#727379" font-family="'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace" font-size="12.5">src/train · custom PyTorch</text>
     </g>
     <g transform="translate(660 128)">
       <rect width="270" height="118" rx="4" fill="#16171a" stroke="#2a2c30"/>

@@ -1,255 +1,154 @@
-<p align="center">
-  <img src="docs/readme/hero.svg" alt="Aero Surrogate: air streaming over a fastback, coloured by surface pressure" width="100%">
-</p>
+<p align="center"><img src="docs/readme/hero.svg" alt="Aero Surrogate: a parametric vehicle design assistant" width="100%"></p>
 
 <p align="center">
-  <a href="https://nebiusglobalaihackathon.devpost.com/"><img alt="Nebius x NVIDIA Global AI Hackathon" src="https://img.shields.io/badge/Nebius_%C3%97_NVIDIA-Global_AI_Hackathon-ff5f1f?style=flat-square&labelColor=16171a"></a>
-  <img alt="Best Apps and Agents" src="https://img.shields.io/badge/track-Best_Apps_%26_Agents-ececec?style=flat-square&labelColor=16171a">
-  <img alt="Nemotron 3 on Token Factory" src="https://img.shields.io/badge/agent-Nemotron_3_on_Token_Factory-76b900?style=flat-square&labelColor=16171a">
-  <img alt="PyTorch" src="https://img.shields.io/badge/surrogate-PyTorch-5b8fe0?style=flat-square&labelColor=16171a">
-  <img alt="three.js" src="https://img.shields.io/badge/3D-three.js-a3a4a9?style=flat-square&labelColor=16171a">
-  <img alt="MIT licence" src="https://img.shields.io/badge/code-MIT-a3a4a9?style=flat-square&labelColor=16171a">
+  <a href="LICENSE"><img alt="MIT code licence" src="https://img.shields.io/badge/code-MIT-a3a4a9?style=flat-square"></a>
+  <img alt="Nemotron on Nebius Token Factory" src="https://img.shields.io/badge/agent-Nemotron_on_Token_Factory-76b900?style=flat-square">
+  <img alt="Best Apps and Agents" src="https://img.shields.io/badge/track-Best_Apps_%26_Agents-ff5f1f?style=flat-square">
 </p>
 
-<p align="center">
-  <a href="#what-it-does">What it does</a> ·
-  <a href="#see-it">See it</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#the-trust-gate">The trust gate</a> ·
-  <a href="#results">Results</a> ·
-  <a href="#run-it">Run it</a> ·
-  <a href="#nvidia-and-nebius">NVIDIA and Nebius</a> ·
-  <a href="#team">Team</a>
-</p>
+**Aero Surrogate helps explore vehicle design parameters before the next CFD verification.** A neural drag model scores candidates, NVIDIA Nemotron proposes changes through Nebius Token Factory, and a domain gate rejects unsupported parameter combinations. Each hypothesis is checked against the observed surrogate result in an inspectable logbook.
 
----
+Public deployment and the final YouTube upload are **pending**. This repository contains the locally runnable application and submission materials; no hosted URL is implied. See [release instructions](docs/submission/README.md) and the [submission description](docs/submission/submission.md).
 
-## What it does
+## What works
 
-A CFD run tells you the drag of one car shape, and it takes hours. That is
-why a person tries a handful of designs, and why automated search in this
-space mostly stays in papers.
+- **Designer:** sixteen DrivAerNet morph deltas across fastback, notchback and estateback bodies. Predict Cd, its sigma and a domain-screening verdict.
+- **Agent:** Nemotron Super or Nano proposes one or two changes, calls the surrogate, receives gate feedback and updates its search. Numeric constraints are enforced in code. It currently receives scalar Cd feedback, not the separate pressure endpoint.
+- **Logbook and comparison:** inspect hypotheses, observed changes, rejections and best-trusted curves. Compare historical matched Nemotron, CMA-ES and random-search runs.
+- **Experimental pressure view:** a separate custom DoMINO-inspired PyTorch model predicts surface Cp on the approximate viewer mesh. Calibration and orientation on generated geometry are not independently established. It does not provide operational lift or wall shear.
 
-**Aero Surrogate replaces the CFD call with a neural surrogate that answers
-in a quarter of a millisecond, then lets a Nemotron 3 agent design with it.**
-The part that makes this safe to automate is the **trust gate**. Every
-prediction carries its own uncertainty and a distance from the designs the
-model learned from. When either is too large, the prediction is refused with
-the reason before the agent can optimise into a region where the model is
-only guessing.
+<p align="center"><img src="docs/readme/designer.jpg" alt="Designer with parameter controls, 3D car and predicted drag" width="100%"></p>
 
-- **Designer.** Sixteen shape dials on the DrivAer fastback, notchback or
-  estateback body, with Cd, its σ and the trust verdict on every move. The
-  car is rendered in 3D with smoke that follows the prediction.
-- **Design agent.** Nemotron 3 proposes one change at a time, states what it
-  expects, and is told what actually happened. Every step lands in a logbook
-  that is checked against the measured result, not the model's own claim.
-- **Honest grading.** An independent evaluation harness grades every
-  checkpoint against the ceiling set by the CFD's own noise. It checks
-  whether the error bars are calibrated, tests a body style held out of
-  training, and runs the agent against CMA-ES and random search on the
-  same budget and the same gate.
-
-<p align="center">
-  <img src="docs/readme/stats.svg" alt="Headline numbers" width="100%">
-</p>
-
-## See it
-
-<p align="center">
-  <img src="docs/readme/designer.jpg" alt="The designer: dials, the car on the road with smoke and pressure pins, and the gauge cluster" width="100%">
-</p>
-
-The designer. Every pin on the car is a region's mean pressure coefficient.
-The stage tag gives Cd with its verdict and the drag in newtons at the chosen
-speed. Below it, a needle gauge brackets the original car, and ruled scales
-place σ and the distance score against the gate's red lines.
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/readme/tunnel.jpg" alt="Wind tunnel: smoke streamlines over the car painted by pressure"></td>
-    <td width="50%"><img src="docs/readme/gauges.jpg" alt="The instrument cluster: Cd gauge and ruled scales for sigma, distance, drag, power and energy"></td>
-  </tr>
-  <tr>
-    <td><b>Wind tunnel.</b> A test section with a measuring grid and a rolling road. The smoke speeds up where the model predicts suction and slows at the stagnation point.</td>
-    <td><b>Instrument cluster.</b> The two numbers the gate reads, each against its limit, then drag, power and energy against the original car.</td>
-  </tr>
-</table>
-
-### The race
-
-<p align="center">
-  <img src="docs/readme/race.gif" alt="Broadcast-style race: red, yellow, green start lights, the orange design against the silver original, photo finish" width="100%">
-</p>
-
-Your design against the original body, with the same engine, mass, tyres
-and grip. Only the predicted drag (Cd × frontal area) differs. Three modes
-are integrated from the same equation of motion:
-
-- **Distance**, from 0.4 to 100 km, with a slow-motion photo finish at the line.
-- **Top speed**, where engine power meets drag plus rolling resistance.
-- **Coast-down**, with the engine off from a chosen speed.
-
-A few percent of drag is invisible in a 1 km sprint (about 0.02 s), so the
-race lets you go long enough to see it. Long races compress time
-automatically, and the assumptions are printed under every result.
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/readme/runs.jpg" alt="Runs page: the best trusted drag so far for each run"></td>
-    <td width="50%"><img src="docs/readme/results.jpg" alt="Results page: the one-sentence answer and the accuracy charts"></td>
-  </tr>
-  <tr>
-    <td><b>Runs.</b> Start or cancel an agent run, compare it with the optimisers on one chart, and read the logbook step by step.</td>
-    <td><b>Results.</b> Every graded number, each against what is achievable, with the caveats the grading raised.</td>
-  </tr>
-</table>
+The displayed vehicle is an approximate visualisation of the parameter choices, not an ANSA morph or the original CFD mesh. Smoke is illustrative, not a learned velocity field. Race and energy comparisons are explanatory simulations using predicted Cd and viewer-estimated frontal area; they are not vehicle-performance validation.
 
 ## How it works
 
-<p align="center">
-  <img src="docs/readme/pipeline.svg" alt="Design to surrogate to trust gate to agent, and the agent's loop back to the dials" width="100%">
-</p>
+<p align="center"><img src="docs/readme/pipeline.svg" alt="Parameters to surrogate to gate to Nemotron and back" width="100%"></p>
 
-| Part | What it is | Where |
-|---|---|---|
-| **Geometry** | Sixteen morph parameters of the DrivAerNet body (deltas from the baseline car) plus the body style, turned into a watertight mesh and its frontal area. The same mesh feeds the 3D view and the surface-pressure model. | `src/geometry` |
-| **Surrogate, stage 1** | A heteroscedastic MLP (about 237k parameters) trained on 4,165 DrivAerNet designs with CFD drag. It predicts Cd and its own σ. A Mahalanobis detector fitted on the training designs scores how unusual a shape is. | `src/train`, `configs/drivaernet.yaml` |
-| **Surrogate, stage 2** | A surface-pressure model after NVIDIA's DoMINO, scaled to a laptop GPU. A global point-cloud encoder and multi-scale local neighbourhoods (k = 8, 32, 128) feed a Fourier-lifted decoder. It is trained on DrivAerML LES surfaces with an integral-drag consistency term. | `src/train/field_model.py`, `configs/fields.yaml` |
-| **Service** | FastAPI: `/evaluate`, `/fields` (per-face Cp on the exact mesh the viewer draws, bound by its hash), agent runs with start, poll and cancel, rate limits, spend reservation, and a Docker image. | `src/service` |
-| **Trust gate** | Refuses a prediction whose σ is above 0.013 or whose distance score is above the checkpoint's calibrated threshold, and returns the reason to the caller. | `src/service/gate.py` |
-| **Design agent** | Nemotron 3 Super or Nano on Nebius Token Factory, with typed tool calls. It makes one hypothesis per step, has a budget and a spend cap, and every claim is judged against the observed score. | `src/agent` |
-| **Baselines** | Random search and CMA-ES on the same budget, start, gate and comparison protocol as the agent. | `src/optim` |
-| **Evaluation** | An independent grader: noise ceiling, references, calibration, a held-out body style, OOD detection, data scaling, surface pressure and the agent-against-optimiser benchmark. | `src/eval` |
-| **Web UI** | Plain ES modules and three.js, with no build step. The designer, wind tunnel, road, race, Runs and Results pages. | `web/` |
+| Component | Implementation |
+|---|---|
+| Scalar surrogate | Custom heteroscedastic PyTorch MLP, 237,186 parameters; sixteen morph deltas plus three body-style indicators; trained on 4,165 CFD-labelled DrivAerNet designs |
+| Domain gate | Predicted Cd sigma and Mahalanobis distance; checkpoint distance threshold calibrated on held-out validation inputs; passing is not proof of physical accuracy |
+| Design agent | NVIDIA Nemotron Super/Nano on Nebius Token Factory, typed tools, measured-effect memory, numeric constraints and application budget guards |
+| API | FastAPI scalar/field endpoints, start/poll/cancel runs, persistent logbook, checkpoint identity and output provenance |
+| Evaluation | Independent held-out scalar grading, simple references, interval coverage, domain probes and matched search protocol |
+| UI | ES modules and three.js; designer, illustrative wind tunnel/race, Runs and Results pages; dynamic Python mesh endpoint |
 
-## The trust gate
-
-An optimiser will walk straight into whatever corner of design space the
-model happens to be most wrong about, because that is where its predictions
-look best. A surrogate is only useful to an agent if it can tell when it is
-guessing.
-
-The gate checks two things, and both are needed:
-
-- **σ, the model's own error bar,** catches noisy predictions near the data.
-  On its own it barely notices a shape the model has never seen. When the
-  notchback body is held out of training, σ alone separates those designs
-  from ordinary ones with an AUROC of only about 0.56.
-- **The distance from the training designs** (Mahalanobis, calibrated on the
-  training set) is what catches those. It flags every held-out notchback
-  while flagging well under 1% of ordinary test designs.
-
-A gated design is shown greyed out on the stage. In a race it runs under an
-"untrusted prediction" banner. For the agent, the reason comes back as the
-tool result and the design never counts toward its best.
+Both surrogates are custom PyTorch implementations. NVIDIA DoMINO research informed the field architecture; this release does not claim a PhysicsNeMo runtime, pretrained DoMINO fine-tuning, H100 training or executed Serverless Jobs.
 
 ## Results
 
+<p align="center"><img src="docs/readme/stats.svg" alt="Measured held-out accuracy and matched search results" width="100%"></p>
+
 <!-- results:start -->
-| | Surrogate | Straight line | Ceiling |
-|---|---:|---:|---:|
-| R² on unseen designs | **0.868** | 0.835 | 0.912 |
-| R² on an unseen notchback | **0.37** | 0.28 | 0.873 |
-| Typical error (Cd) | **0.0062** | | CFD spread 0.0064 |
+| Metric | Surrogate | Reference |
+|---|---:|---:|
+| Held-out R-squared | **0.8750** | Linear 0.8352 |
+| Mean absolute Cd error | **0.00616** | |
+| Test designs | **625** | |
 
-By body style, unseen designs: estateback R² 0.795, fastback R² 0.778, notchback R² 0.864.
+By body style, held-out R-squared: estateback 0.805, fastback 0.796, notchback 0.866.
 
-- **Error bars:** the 1σ band holds 64% of designs (68% is honest), so they run a little narrow.
-- **Trust gate:** with the notchback body style held out of training, the distance check flags 100% of those designs and 0.3% of ordinary ones. σ alone would rank them with an AUROC of only 0.56, which is why the gate checks both.
-- **More data:** retrained on 146 to 2,915 designs, R² rises from 0.78 to 0.88; a straight line levels off near 0.84.
-- **Surface pressure:** graded by `src/eval/fields.py`; the numbers appear here once the stage-2 checkpoint is graded.
+- **Intervals:** nominal 90% coverage is 86.56% on held-out labels; error bars under-cover.
+- **Domain screening:** distance false alarms 0.32% on ordinary test designs; 100% of sampled jointly extreme corners flagged.
+- **Category generalisation:** no independently graded release category checkpoint is included.
+- **Surface pressure:** optional experimental inference is available with its checkpoint; full release test-set grading is unavailable locally.
 
-> Provisional: a local CPU training run, not the submission checkpoints. Graded by `src/eval/harness.py` into `web/results/metrics.json`.
+> Release scalar: independently graded checkpoint 49e5a8b14d5b; category and full-field evaluations unavailable locally. Generated by `src/eval/harness.py`; artifact identities are recorded in the metric file.
 <!-- results:end -->
+
+The sigma head under-covers held-out labels and barely ranks individual errors. The distance check screens unfamiliar parameter combinations; explicit body-style indicators explain much of held-out-style detection. Neither mechanism guarantees aerodynamic correctness. Solver coefficient variation is not treated as a hard ceiling on attainable R-squared.
 
 ### The agent against the optimisers
 
 <!-- bench:start -->
-| Method | Runs | Median drag change | Best run | Best found at (median) | Gated (median) |
+| Method | Runs | Median predicted Cd change | Best run | Best found at (median) | Gated (median) |
 |---|---:|---:|---:|---:|---:|
-| CMA-ES | 5 | −4.88% | −5.37% | evaluation 16 | 0 |
-| Random search | 5 | −4.00% | −4.77% | evaluation 12 | 1 |
+| Nemotron Super | 5 | −3.88% | −4.49% | evaluation 21 | 0 |
+| CMA-ES | 5 | −3.84% | −4.53% | evaluation 17 | 0 |
+| Random search | 5 | −2.79% | −4.13% | evaluation 10 | 1 |
 
-Fastback, 25 evaluations each, the same start, the same surrogate and the same gate. Lower is better. The live Nemotron runs join this table once they are recorded.
+Fastback, 25 evaluations each, the same start, the same surrogate and the same gate. Lower is better. These historical experiments measure predicted Cd, not CFD-validated improvements. Nemotron and CMA-ES medians are comparable in this small experiment; equal calls do not mean equal time or cost.
 <!-- bench:end -->
 
-Everything here is regenerated from the graded files by
-`python docs/readme/build.py`. Grading is `python -m src.eval.harness`,
-`python -m src.eval.scaling`, `python -m src.eval.fields` and
-`python -m src.eval.benchmark`; see [`src/eval/README.md`](src/eval/README.md).
+These are **surrogate-predicted Cd changes**, not new CFD-validated improvements. Five runs from one starting point do not establish broad search superiority. Equal evaluation count does not mean equal elapsed time or cost, and an individual candidate's sigma is not an error bar on its improvement.
 
-## Run it
+Published files: [scalar metrics](web/results/metrics.json), [matched benchmark](web/results/benchmark.json). The generator `python docs/readme/build.py` keeps these tables and graphics aligned with those files. See [evaluation instructions](src/eval/README.md).
 
-```bash
+## Run it locally
+
+Python 3.13 is the container target. The release constraints record versions from the qualified local environment; a new isolated install still needs to be verified on a network-enabled machine.
+
+```powershell
 python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python -m src.data.drivaernet --fetch   # the public DrivAerNet parameter table (small)
-
-uvicorn src.service.app:app --port 8000   # the synthetic stub until you give it a checkpoint
-python web/serve.py                       # http://localhost:5173
+.\.venv\Scripts\Activate.ps1
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirements.txt -c constraints-release.txt
 ```
 
-<details>
-<summary><b>Train and serve a real surrogate</b></summary>
+A fresh clone has no model weights. Obtain and checksum the trusted release artifact bundle using [release instructions](docs/submission/README.md). The team can create `runs/release/aero-surrogate-models.zip` locally with `python scripts/package_release.py --include-fields`. An immutable public download is pending; install a received bundle with `python scripts/install_artifacts.py --archive PATH_OR_HTTPS --sha256 TRUSTED_ARCHIVE_HASH --destination .`. Alternatively train the scalar locally:
 
-```bash
-python -m src.train.train --config configs/drivaernet.yaml                    # stage 1, minutes on a CPU
-python -m src.train.train --config configs/drivaernet.yaml --split category   # one body style held out
-AERO_CHECKPOINT=runs/drivaernet-random/best.pt uvicorn src.service.app:app --port 8000
+```powershell
+python -m src.data.drivaernet --fetch
+python -m src.train.train --config configs/drivaernet.yaml
+$env:AERO_CHECKPOINT="runs/drivaernet-random/best.pt"
+python -m uvicorn src.service.app:app --port 8000
 ```
 
-Stage 2 needs the DrivAerML surfaces; see [`data/README.md`](data/README.md)
-and [`configs/fields.yaml`](configs/fields.yaml).
-</details>
+In another shell:
 
-<details>
-<summary><b>Run the agent and the optimisers</b></summary>
-
-```bash
-python -m src.agent.provider --smoke                         # one cheap Nano call, needs NEBIUS_API_KEY
-python -m src.agent.designer --model super --iterations 25   # a live Nemotron run
-python -m src.optim.baseline --method cmaes --iterations 25
-python -m src.optim.baseline --method random --iterations 25
-python -m src.eval.benchmark --baseline-seeds 5 --iterations 25 --body-style fastback
+```powershell
+.\.venv\Scripts\Activate.ps1
+python web/serve.py
 ```
 
-Runs appear on the Runs page as they go. The agent's spend is reserved and
-capped per run and per day. See [`src/service/README.md`](src/service/README.md).
-</details>
+Open `http://localhost:5173`. Check `/health` at `http://localhost:8000/health`: `synthetic` must be false and the checkpoint hash must match the intended artifact. Without `AERO_CHECKPOINT`, the service deliberately starts the labelled synthetic test fixture; those numbers are not aerodynamic evidence. Configuring an invalid checkpoint fails startup rather than falling back.
 
-<details>
-<summary><b>Deploy</b></summary>
+For optional pressure inference, configure `AERO_FIELD_CHECKPOINT` to the verified fields-v1 artifact before starting the API. No field data or weights are fetched by the UI. [API integration](src/service/INTEGRATION.md) documents its separate provenance and limitations.
 
-Two containers on one Nebius AI Cloud CPU VM behind Caddy: the API
-([`src/service/DEPLOY.md`](src/service/DEPLOY.md)) and the web UI with its
-mesh endpoint ([`web/DEPLOY.md`](web/DEPLOY.md)). No GPU is needed to serve.
-</details>
+### Run a real agent
 
-```bash
-pytest -q        # about 930 tests, no network, no GPU
+Copy `.env.example` to a local `.env` and provide `NEBIUS_API_KEY`. Never commit credentials. A live run spends Token Factory credit; check the configured per-run and lifetime application limits first.
+
+```powershell
+python -m src.agent.designer --model super --iterations 25
 ```
+
+The Runs page can start public runs, display progress and cancel a run using its cancellation token. Constraints are explicit rules such as `A_Car_Roof_Height >= 0`; arbitrary natural-language requirements are not automatically parsed. The scalar model's `pressure_summary` is empty, so current agent runs are Cd-guided.
+
+### Test and reproduce
+
+```powershell
+python -m pytest tests -q
+python -m src.service.qualify --checkpoint runs/drivaernet-random/best.pt --references runs/handover/scalar_reference.json --out runs/service-qualification.json
+```
+
+The full local audit ran 956 passing tests with three data-dependent skips before these release fixes. Current verification is recorded in the release material; tests that use synthetic fixtures do not establish physical model accuracy. [The audit](docs/REPO_AUDIT_2026-10-27.md) separates numerical parity, independent grading and browser checks.
+
+## Deployment boundary
+
+Deployment is intentionally left to the team. The [API guide](src/service/DEPLOY.md) and [web guide](web/DEPLOY.md) describe two CPU containers behind HTTPS. A static host alone is insufficient because the viewer needs `/api/mesh`. Keep one API worker, persist logs and spend accounting, and verify real model identity on the deployed host.
+
+Token Factory is the demonstrated Nebius service. AI Cloud is an available hosting option; no AI Cloud deployment is claimed here. Public hosting, final external-browser rehearsal, video upload and Devpost submission remain external release steps.
 
 ## NVIDIA and Nebius
 
-| | How it is used |
+| Technology | Demonstrated use |
 |---|---|
-| **NVIDIA Nemotron 3** | The design agent: Nemotron 3 Super (120B-A12B) for runs, Nano (30B-A3B) for cheap checks and smoke tests. It uses typed tool calls, one hypothesis per step, and every claim is judged against the measured result. |
-| **Nebius Token Factory** | Serves Nemotron to the agent, with a spend ledger that reserves cost before each call and caps every run. |
-| **Nebius AI Cloud** | Hosting: the API and the web UI as two small CPU containers on one VM behind Caddy ([API](src/service/DEPLOY.md), [web](web/DEPLOY.md)). |
-| **NVIDIA research** | The surface-pressure model follows DoMINO's design (a global geometry encoding plus multi-scale local neighbourhoods), and the DrivAerML preparation follows PhysicsNeMo's external-aerodynamics examples. |
+| NVIDIA Nemotron 3 Super and Nano | Real typed tool calls and multi-step design runs, with observed-result logbooks |
+| Nebius Token Factory | Runtime model inference for those runs; saved token usage, latency and application spend accounting |
+| NVIDIA DoMINO research | Architectural inspiration for the separate experimental surface-pressure model |
 
-Both surrogates are deliberately small. Stage 1 trains in minutes on a CPU, and
-stage 2 is sized for a single laptop-class GPU, so serving needs no GPU at all.
+## Data, attribution and licences
 
-## Data and licence
+Our code is [MIT licensed](LICENSE). Third-party data retains its own terms; MIT does not relicense it.
 
-- **DrivAerNet** (stage 1): 4,165 parametric designs with CFD drag.
-  CC BY-NC 4.0, **non-commercial**.
-- **DrivAerML** (stage 2): high-fidelity LES surface fields; see
-  [`data/README.md`](data/README.md).
-- **Code:** MIT. See [LICENSE](LICENSE).
-st.
+- **DrivAerNet**, Mohamed Elrefaie and collaborators: [dataset/code source](https://github.com/Mohamedelrefaie/DrivAerNet), **CC BY-NC 4.0**, non-commercial. This release's scalar work uses 4,165 tabular designs, not the full DrivAerNet++ mesh corpus.
+- **DrivAerML**, Neil Ashton and collaborators: [author dataset card](https://huggingface.co/datasets/neashton/drivaerml), **CC BY-SA 4.0**. The experimental field model's training manifest records twenty training, five validation and five test cars. Redistributed samples and derivatives need their own attribution/terms.
+- Model hashes, provenance and distribution notes travel with the release bundle. Dataset licences and any applicable artifact terms remain distinct from the source-code licence.
 
-<p align="center"><img src="https://img.shields.io/badge/-Aero_Surrogate-ff5f1f?style=flat-square" alt=""></p>
+## Team
+
+Avneet Nijjer / Pranoy / Paramveer
+
+Built for the Nebius x NVIDIA Global AI Hackathon, **Best Apps and Agents**. [Submission materials](docs/submission/submission.md) include the final description, limitations, technology mapping and remaining external steps.

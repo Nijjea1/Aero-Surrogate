@@ -224,19 +224,17 @@ Real DrivAerNet, 4,165 designs, 19 inputs:
 Per category on the random split: fastback 0.773, notchback 0.862,
 estateback 0.827.
 
-**Report R² against the noise ceiling, not 1.0.** The dataset's `Std Cd` column
-is the solver's own run-to-run spread (mean 0.0064), which caps any model at
+**Report ordinary held-out R-squared, MAE and interval coverage.** `Std Cd`
+describes coefficient variation in solver output. It is not established as the
+error variance of the averaged `Average Cd` label. The historical solver-spread
+ratio is not a validated upper bound on attainable R-squared. Earlier
+"96% of achievable" and irreducible-noise interpretations were withdrawn.
 
-    R²_max = 1 - mean(Std Cd²) / var(Average Cd)
-
-That is **0.906 over all 4,165 designs** and **0.9122 on the test split**. Use
-the split one against a split R², never the dataset-wide one — they are not the
-same number and quoting the looser one flatters the result.
-
-So 0.875 is **96% of achievable** on its own split, and our predicted sigma (0.0072) sits on the
-solver's own noise — the model has correctly concluded most of its residual is
-label noise, not model error. A model predicting sigma well below 0.0064 would
-be overconfident by construction.
+The served scalar's independently graded nominal 90% interval covers 86.56%
+of held-out labels. Its sigma/error rank correlation is about 0.066, so sigma
+alone barely ranks individual errors. Present the distance gate as parameter-domain
+screening, not a guarantee of correctness. The category numbers above are
+historical training-side metrics until the category artifact is independently graded.
 
 ---
 
@@ -271,7 +269,7 @@ python -m src.train.train_fields --config configs/fields.yaml
 ```
 
 Trains in about a minute on an M-series GPU. No Nebius instance — see the
-compute policy in `CLAUDE.md`.
+local training setup. No Nebius training execution is claimed.
 
 ## Loading one
 
