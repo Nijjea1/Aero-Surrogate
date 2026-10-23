@@ -61,6 +61,7 @@ inference; neither establishes generated-geometry accuracy/calibration or lift.
 | Final main-environment full suite | **1,019 passed, 4 skipped, 3 warnings**, 106.37 seconds; default pytest collection now works |
 | Expected skips | Missing scalar data at the standard training-data path, full field arrays, geometry checkpoint/detector, and Windows symlink-creation privilege |
 | Last editorial UI checks | 21 presentation/module tests passed, plus one complete Chromium browser flow after the final wording change |
+| Post-suite artifact regression | 42 release packaging/installer/presentation tests passed, one expected Windows symlink skip; packaging rejects stale published-summary checksums |
 | Current-source scalar qualification | Passed through real FastAPI lifespan/routes/shared gate against native references |
 | Field fixed-query parity | Passed with authenticated source NPZ; no generated-geometry accuracy claim |
 | Isolated local HTTP | Six checks passed: identity/readiness, baseline, joint corner rejection, mesh/API configuration, real field inference and scripted HTTP agent/history |
@@ -77,7 +78,8 @@ and [matched benchmark](../../web/results/benchmark.json).
 The main suite's three warnings are the existing Starlette/httpx deprecation and
 two deliberate warnings about ignored old geometry parameter names. They are
 recorded rather than hidden. New source changes after the broad runs were
-comment/documentation corrections and the editorial UI wording check above.
+comment/documentation corrections, the editorial UI wording check, and a targeted
+published-summary integrity check covered by the artifact regressions above.
 
 Proof images from the real local application:
 [designer](proof/designer.png), [joint-extreme rejection](proof/rejected-corner.png),
