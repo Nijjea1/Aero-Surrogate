@@ -155,6 +155,11 @@ def live_indices(attempts: int, live_runs: int) -> set[int]:
     return {index * attempts // live_runs for index in range(live_runs)} if live_runs else set()
 
 
+def engine_for_attempt(index: int, attempts: int, engines: list[str]) -> str:
+    """Group attempts by engine so software WebGL browsers never overlap."""
+    return engines[min(len(engines) - 1, index * len(engines) // attempts)]
+
+
 def cancellation_check(api: str) -> dict:
     """One public run, immediately cancelled. Tokens remain only in local variables."""
     status, started = request_json(api + "/runs", {"model": "super", "iterations": 25, "body_style": "fastback"})
@@ -195,10 +200,7 @@ def exercise_attempt(browser, services: LocalServices, output: Path, number: int
     context_options = {"viewport": {"width": 1600, "height": 1000}, "reduced_motion": "reduce"}
     if record:
         context_options.update(record_video_dir=str(output / "recordings"), record_video_size={"width": 1600, "height": 1000})
-    context = browser.new_context(**context_options)
-    page = context.new_page()
-    page.set_default_timeout(30_000)
-    page.on("pageerror", lambda error: row["page_errors"].append(str(error)))
+    context = page = None
     origins = {services.api, services.web}
 
     def failed(request):
@@ -207,11 +209,6 @@ def exercise_attempt(browser, services: LocalServices, output: Path, number: int
                                            "failure": request.failure,
                                            "navigation_abort": "ABORT" in str(request.failure).upper()})
 
-    page.on("requestfailed", failed)
-    page.on("response", lambda response: row["http_errors"].append(
-        {"path": urlsplit(response.url).path, "status": response.status})
-        if _origin(response.url) in origins and response.status >= 400
-        and urlsplit(response.url).path != "/favicon.ico" else None)
 
     def check(name, detail=None):
         row["checks"].append({"check": name, "passed": True, **({"detail": detail} if detail is not None else {})})
@@ -222,6 +219,15 @@ def exercise_attempt(browser, services: LocalServices, output: Path, number: int
         row["screenshots"].append(path.name)
 
     try:
+        context = browser.new_context(**context_options)
+        page = context.new_page()
+        page.set_default_timeout(30_000)
+        page.on("pageerror", lambda error: row["page_errors"].append(str(error)))
+        page.on("requestfailed", failed)
+        page.on("response", lambda response: row["http_errors"].append(
+            {"path": urlsplit(response.url).path, "status": response.status})
+            if _origin(response.url) in origins and response.status >= 400
+            and urlsplit(response.url).path != "/favicon.ico" else None)
         page.goto(services.web + "/index.html", wait_until="networkidle")
         expect(page.locator("#viewer canvas")).to_be_visible(timeout=60_000)
         expect(page.locator("#viewer-message")).to_be_hidden(timeout=60_000)
@@ -303,9 +309,18 @@ def exercise_attempt(browser, services: LocalServices, output: Path, number: int
         except Exception:
             pass
     finally:
-        context.close()
-        if record and page.video:
-            row["recording"] = str(Path(page.video.path()).relative_to(output))
+        if context is not None:
+            try:
+                context.close()
+            except Exception as error:
+                row["cleanup_error"] = f"{type(error).__name__}: {error}"
+                row["passed"] = False
+        if record and page is not None and page.video:
+            try:
+                row["recording"] = str(Path(page.video.path()).relative_to(output))
+            except Exception as error:
+                row["recording_error"] = f"{type(error).__name__}: {error}"
+                row["passed"] = False
         row["wall_s"] = round(time.monotonic() - started, 3)
     return row
 
@@ -360,18 +375,23 @@ def main(argv=None) -> int:
             report["service"]["checkpoint_sha256_full"] = expected_hash
             selected = live_indices(args.attempts, args.live_runs)
             with sync_playwright() as playwright:
-                browsers = {}
+                browser, active_engine = None, None
+                report["engine_strategy"] = "grouped sequential engines, one browser process at a time"
                 try:
-                    for engine in args.engines:
-                        options = {"headless": True}
-                        if engine == "chromium":
-                            options["args"] = ["--enable-webgl", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
-                        else:
-                            options["firefox_user_prefs"] = {"webgl.force-enabled": True, "webgl.disabled": False}
-                        browsers[engine] = getattr(playwright, engine).launch(**options)
                     for index in range(args.attempts):
-                        engine = args.engines[index % len(args.engines)]
-                        row = exercise_attempt(browsers[engine], services, output, index + 1, engine,
+                        engine = engine_for_attempt(index, args.attempts, args.engines)
+                        if engine != active_engine:
+                            if browser is not None:
+                                browser.close()
+                                browser = None
+                            options = {"headless": True}
+                            if engine == "chromium":
+                                options["args"] = ["--enable-webgl", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+                            else:
+                                options["firefox_user_prefs"] = {"webgl.force-enabled": True, "webgl.disabled": False}
+                            browser = getattr(playwright, engine).launch(**options)
+                            active_engine = engine
+                        row = exercise_attempt(browser, services, output, index + 1, engine,
                                                index in selected, args.record)
                         report["attempts"].append(row)
                         write_reports(output, report)
@@ -381,8 +401,9 @@ def main(argv=None) -> int:
                     if args.live_runs and len(report["attempts"]) == args.attempts and all(row["passed"] for row in report["attempts"]):
                         report["cancel_check"] = cancellation_check(services.api)
                 finally:
-                    for browser in browsers.values():
+                    if browser is not None:
                         browser.close()
+
         report["passed"] = len(report["attempts"]) == args.attempts and all(row["passed"] for row in report["attempts"])
         ledger = output / "spend.jsonl"
         report["spent_usd"] = sum(json.loads(line).get("cost_usd", 0) for line in ledger.read_text().splitlines()) if ledger.exists() else 0
