@@ -294,8 +294,7 @@ def _run_phase(
     If state_path is given, the full training state is written there after
     EVERY epoch, and `resume` (a state dict loaded from it) restarts this
     phase mid-flight. Kaggle sessions are killed without warning, so a run
-    that cannot resume is a run that is lost -- see the compute policy in
-    CLAUDE.md.
+    that cannot resume can lose its uncheckpointed training progress.
     """
     optimiser = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

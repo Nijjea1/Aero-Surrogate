@@ -6,7 +6,7 @@ import zipfile
 
 import pytest
 
-from scripts.package_release import Artifact, build_bundle, validate_evidence_binding
+from scripts.package_release import Artifact, build_bundle, validate_evidence_binding, validate_published_summaries
 
 
 def test_bundle_snapshots_hashes_and_builds_identically(tmp_path):
@@ -60,3 +60,21 @@ def test_release_refuses_stale_benchmark_binding():
 def test_metadata_cannot_replace_payload_declarations(tmp_path):
     with pytest.raises(ValueError, match="cannot override"):
         build_bundle([], tmp_path / "bad.zip", models={}, source={}, created_at="fixed", metadata={"files": []})
+
+
+def test_packaging_refuses_checkout_newline_changes_to_published_evidence(tmp_path):
+    source = tmp_path / "docs/submission/evidence/matched/super-1.json"
+    source.parent.mkdir(parents=True)
+    canonical = b'{"run_id":"matched-super-1"}\n'
+    record = {"file": source.name, "published_summary_sha256": hashlib.sha256(canonical).hexdigest()}
+    source.write_bytes(canonical.replace(b"\n", b"\r\n"))
+    with pytest.raises(ValueError, match="checksum differs"):
+        validate_published_summaries(tmp_path, {"published_runs": [record]})
+    source.write_bytes(canonical)
+    validate_published_summaries(tmp_path, {"published_runs": [record]})
+
+
+def test_packaging_refuses_unsafe_or_duplicate_summary_references(tmp_path):
+    for records in [[{"file": "../outside.json"}], [{"file": "model\\a.json"}]]:
+        with pytest.raises(ValueError, match="summary name"):
+            validate_published_summaries(tmp_path, {"published_runs": records})

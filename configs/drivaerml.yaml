@@ -13,7 +13,7 @@
 # number that counts is the DrivAerNet parametric one (configs/drivaernet.yaml,
 # R² 0.875 on 4,165 designs). Scale this up only by downloading more runs.
 #
-# Sized for Kaggle T4 / CPU per the compute policy in CLAUDE.md.
+# Optional small geometry-pipeline configuration for Kaggle T4 / CPU.
 
 run_name: drivaerml
 seed: 0

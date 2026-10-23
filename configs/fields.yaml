@@ -5,8 +5,8 @@
 #   python -m src.data.fields --extract
 #   python -m src.train.train_fields --config configs/fields.yaml
 #
-# Sized for the M-series GPU (MPS) / a Kaggle T4 per the compute policy in
-# CLAUDE.md. No Nebius instance is involved.
+# Sized for an M-series GPU (MPS) or Kaggle T4. The release does not claim
+# Nebius GPU training; actual checkpoint provenance is recorded separately.
 
 run_name: fields
 seed: 0

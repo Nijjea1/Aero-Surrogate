@@ -4,16 +4,15 @@ PointNet-style regressor: point cloud in, Cd out, with a heteroscedastic head
 that also predicts log-variance. That second output is what the uncertainty
 gate downstream depends on -- keep it.
 
-Deliberately small and unclever. Its job is to prove the pipeline and produce a
-number to beat. The real surrogate is PhysicsNeMo's DoMINO or Transolver in
-stage 2 -- do not grow this file into that.
+The point-cloud path proves the geometry pipeline. ParamMLPRegressor is the
+release scalar surrogate; a separate custom DoMINO-inspired PyTorch network
+provides experimental surface-pressure inference.
 
 Reference: the DrivAerNet RegDGCNN baseline is ~3M params and reports R^2 above
 0.84 within a single car category.
 
 ParamMLPRegressor is the second, smaller head of the same stage: design
-parameters straight to Cd, no geometry. It exists as insurance on the Oct 15
-gate (it trains in seconds and needs no meshes) and because it takes exactly
+parameters straight to Cd, no geometry. It needs no mesh download and takes exactly
 the input the agent proposes. Same checkpoint format, same uncertainty head.
 
 Both models share one shape: trunk -> (mean_head, logvar_head). The two heads

@@ -108,6 +108,23 @@ def validate_evidence_binding(checkpoint_sha256: str, metrics: dict, benchmark: 
         raise ValueError("matched benchmark uses a different scalar checkpoint")
 
 
+def validate_published_summaries(root: Path, benchmark: dict) -> None:
+    """Refuse stale published evidence, including checkout newline conversions."""
+    records = benchmark.get("published_runs")
+    if not isinstance(records, list) or not records:
+        raise ValueError("matched benchmark must declare its published summary files")
+    seen = set()
+    for record in records:
+        name = record.get("file") if isinstance(record, dict) else None
+        if (not isinstance(name, str) or not name.endswith(".json") or "/" in name
+                or "\\" in name or ":" in name or name.casefold() in seen):
+            raise ValueError("invalid or duplicate published matched summary name")
+        path = root / "docs/submission/evidence/matched" / name
+        if path.is_symlink() or not path.is_file() or sha256(path.read_bytes()) != record.get("published_summary_sha256"):
+            raise ValueError(f"published matched summary checksum differs: {name}; restore canonical LF evidence before packaging")
+        seen.add(name.casefold())
+
+
 def collect_release(root: Path, *, include_fields: bool) -> tuple[list[Artifact], dict, dict, dict]:
     """Select explicit trusted local files, and verify the scalar metric binding."""
     from src.service.predictor import TorchPredictor
@@ -118,6 +135,7 @@ def collect_release(root: Path, *, include_fields: bool) -> tuple[list[Artifact]
     metrics = json.loads((root / "web/results/metrics.json").read_text(encoding="utf-8"))
     benchmark = json.loads((root / "web/results/benchmark.json").read_text(encoding="utf-8"))
     validate_evidence_binding(identity["checkpoint_sha256"], metrics, benchmark)
+    validate_published_summaries(root, benchmark)
     models = {"scalar": {"path": "runs/drivaernet-random/best.pt", "sha256": identity["checkpoint_sha256"],
                           "version": identity["model_version"], "schema_version": identity["schema_version"],
                           "preprocess": identity["preprocess_version"], "trained_body_styles": identity["trained_body_styles"],

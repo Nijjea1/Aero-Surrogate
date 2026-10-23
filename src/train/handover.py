@@ -483,9 +483,8 @@ def cmd_verify(repo: Path, out_dir: Path) -> int:
 def cmd_benchmark(repo: Path, out_dir: Path, reps: int = 50) -> int:
     """Measure inference latency honestly, including preprocessing.
 
-    The project's thesis is a number -- "fifty milliseconds against eight hours"
-    -- and CLAUDE.md asks for the speedup measured honestly, INCLUDING
-    preprocessing. That matters because the three model kinds are not
+    Include preprocessing when reporting end-to-end model latency, and keep
+    comparisons against assumed CFD hours separate. The three model kinds are not
     comparable on a forward pass alone:
 
       params-v1      no geometry step at all. The agent proposes 19 numbers

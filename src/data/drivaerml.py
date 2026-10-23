@@ -28,9 +28,8 @@ per-run sizes on the mirror:
     surface only   0.75 GB per run  ->  375 GB for all 500
     with volume   51   GB per run  ->   25 TB for all 500
 
-25 TB is the runaway our own CLAUDE.md warns about, arriving by a different
-road than DrivAerNet++. Remembering to edit two lines under deadline pressure
-is not a safeguard.
+Downloading all volumes would exceed the bounded surface-only workflow.
+Remembering to edit an upstream bulk-download script is not a reliable limit.
 
 So this module makes the safe thing the default and the dangerous thing
 impossible to do by accident:

@@ -1,8 +1,7 @@
 # Kaggle free GPU (T4 / P100, 16 GB) — the DEFAULT development target.
 #
-# Same code path as configs/baseline.yaml, smaller numbers. See the compute
-# policy in CLAUDE.md: Kaggle is where iteration happens, Nebius H100 is used
-# once at the end for the final reproducible run.
+# Same code path as configs/baseline.yaml with smaller sizes for limited GPU
+# memory. This optional configuration is not evidence of a hosted training run.
 #
 #   python -m src.train.train --config configs/kaggle.yaml
 #   python -m src.train.train --config configs/kaggle.yaml --resume   # after a kill
