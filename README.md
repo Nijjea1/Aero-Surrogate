@@ -77,7 +77,7 @@ Published files: [scalar metrics](web/results/metrics.json), [matched benchmark]
 
 ## Run it locally
 
-Python 3.13 is the container target. The release constraints record versions from the qualified local environment; a new isolated install still needs to be verified on a network-enabled machine.
+Python 3.13 is the container target. A fresh Windows/Python 3.13 CPU installation passed dependency checks, tests and real-model HTTP wiring; [the environment evidence](docs/submission/evidence/clean-environment.json) records the verified official-wheel installation. Linux container execution remains unverified in this environment.
 
 ```powershell
 python -m venv .venv

@@ -1,11 +1,11 @@
 {
   "format": "aero-surrogate-metrics/1",
-  "created_at": "2026-10-27T21:12:33+00:00",
-  "git_commit": "73cf3339e34b818a7e37d3685a47ef693609260b",
-  "command": "src/eval/harness.py --checkpoint best.pt --data submission-parametric-20261027.csv --splits splits.json --out web/results/metrics.json --label Release scalar: independently graded checkpoint 49e5a8b14d5b; category and full-field evaluations unavailable locally",
+  "created_at": "2026-10-27T21:23:15+00:00",
+  "git_commit": "46bd7d14f8a30514efe54ad1c60e7cc3a2d74639",
+  "command": "src/eval/harness.py --checkpoint runs/drivaernet-random/best.pt --data .audit-track-b/submission-parametric-20261027.csv --splits runs/handover/splits.json --out web/results/metrics.json --label Release scalar: independently graded checkpoint 49e5a8b14d5b; category and full-field evaluations unavailable locally",
   "python": "3.13.14",
   "data": {
-    "path": "submission-parametric-20261027.csv",
+    "path": ".audit-track-b/submission-parametric-20261027.csv",
     "sha256": "9570826656321b9a7f468c8ef38e71709392b830917353aed97839170f26a7bd",
     "n_designs": 4165,
     "categories": {
@@ -24,7 +24,7 @@
     "licence": "DrivAerNet, CC BY-NC 4.0 (non-commercial)"
   },
   "splits": {
-    "source": "splits.json",
+    "source": "runs/handover/splits.json",
     "seed": 0,
     "random": {
       "train": 2915,
@@ -66,7 +66,7 @@
   },
   "models": {
     "in_distribution": {
-      "path": "best.pt",
+      "path": "runs/drivaernet-random/best.pt",
       "sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
       "version": "drivaernet-random-2026-10-15-8fb6ed1",
       "schema_version": "2.0.0",
@@ -110,10 +110,10 @@
   },
   "speed": {
     "device": "cpu",
-    "single_design_ms_median": 0.3665999975055456,
-    "single_design_ms_p95": 0.6390550290234385,
+    "single_design_ms_median": 0.6388000037986785,
+    "single_design_ms_p95": 1.143194970791228,
     "batch_size": 625,
-    "batch_designs_per_s": 359154.12446873216
+    "batch_designs_per_s": 340580.8941211817
   },
   "in_distribution": {
     "split": "random",
@@ -971,7 +971,7 @@
     "ood_detection_rate": null,
     "ood_false_alarm_rate": 0.0032,
     "sigma_alone_detection_auroc": null,
-    "latency_ms": 0.3665999975055456
+    "latency_ms": 0.6388000037986785
   },
   "warnings": [
     "at the contract's fallback OOD threshold (3.0) the gate passes 0.0% of ordinary test designs vs 99.7% at the checkpoint's calibrated 4.93: the service must pass the checkpoint's threshold",

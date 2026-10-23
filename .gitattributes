@@ -1,0 +1,2 @@
+# Stable checksum for the published environment lock across checkout settings.
+requirements-release-win-py313.lock text eol=lf

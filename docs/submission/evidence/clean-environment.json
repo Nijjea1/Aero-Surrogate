@@ -95,10 +95,12 @@
   },
   "hash_lock": {
     "path": "requirements-release-win-py313.lock",
-    "sha256": "0ab397aca6a1c4bdde81a32766fa933b67535eacac051411d16b7e649e9f1b87",
+    "sha256": "ce4dd4dab5752883fc9805b4e67c3a30897368d8774225ce35c198643d0cdf9c",
     "packages": 64,
     "require_hashes_offline_resolver_check_passed": true,
-    "platform_scope": "Windows x64 CPython3.13 only; not a Linux/portable lockfile"
+    "platform_scope": "Windows x64 CPython3.13 only; not a Linux/portable lockfile",
+    "verified_installation_input_sha256": "0ab397aca6a1c4bdde81a32766fa933b67535eacac051411d16b7e649e9f1b87",
+    "canonicalisation": "Published lock uses LF newlines; recorded installation input used CRLF. Requirements and per-wheel hashes are unchanged."
   },
   "tests": {
     "full_suite": {

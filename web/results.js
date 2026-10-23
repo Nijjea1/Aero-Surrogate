@@ -175,14 +175,15 @@ function renderGate() {
     { label: "Distance including explicit body style", value: distance?.detection_rate, kind: "accent",
       note: `AUROC ${fmt(distance?.auroc ?? NaN, 2)}` },
   ];
-  $("gate-lede").textContent = `Every ${held.held_out_category} design is something the held-out model never saw. ` +
-    "The share each check flags, at the threshold that wrongly flags about 1% of designs it did see:";
+  $("gate-lede").textContent = `These parameter-space detectors were fitted without ${held.held_out_category} designs. ` +
+    "The bars show the share flagged at a threshold calibrated on held-out familiar inputs; they do not measure physical prediction accuracy.";
   barChart($("gate"), rows, { domain: [0, 1], format: (v) => `${fmt(100 * v, 0)}%` });
   const ordinary = state.metrics.in_distribution?.gate?.calibrated;
-  $("gate-note").textContent = ordinary
-    ? `On ordinary unseen designs, the gate passes ${fmt(100 * ordinary.pass_rate, 1)}%. σ alone cannot do this job: ` +
-      "a new body style widens σ by about a fifth while the error doubles."
-    : "";
+  $("gate-note").textContent = (ordinary
+    ? `On ordinary unseen designs, the release gate passes ${fmt(100 * ordinary.pass_rate, 1)}%. ` : "") +
+    "Detection of a held-out style is dominated by its explicit body-style indicators; the shape-only detector catches much less. " +
+    (held.sigma_alone ? `The measured sigma-only category AUROC is ${fmt(held.sigma_alone.auroc, 2)}.`
+      : "A sigma-only category comparison was not graded for this release.");
 }
 
 // ---------------------------------------------------------------- surface pressure

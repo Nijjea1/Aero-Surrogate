@@ -1,0 +1,145 @@
+{
+  "format": "aero-surrogate-release-qualification/1",
+  "scalar": {
+    "passed": true,
+    "scope": "in_process_asgi",
+    "claim": "serving and shared-agent-gate parity; no Nemotron calls or CFD accuracy claim",
+    "provenance": {
+      "predictor": "torch",
+      "synthetic": false,
+      "schema_version": "2.0.0",
+      "git_revision": "7152d1568ed601cc26f932d41f396ebdfae476f9",
+      "source_dirty": true,
+      "source_sha256": "4569dca4f01950aebf7512ecc77e18c9b629cd8f1bee0e73f23345264e0ec78f",
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+      "preprocess_version": "params-v1",
+      "training_git_revision": "8fb6ed1",
+      "training_seed": 0,
+      "trained_body_styles": [
+        "estateback",
+        "fastback",
+        "notchback"
+      ],
+      "training_split_counts": {
+        "test": 625,
+        "val": 625,
+        "train": 2915
+      },
+      "output_provenance": {
+        "cd": "model",
+        "uncertainty": "model",
+        "ood_score": "model",
+        "cl": "placeholder",
+        "pressure_summary": "unavailable"
+      },
+      "uncertainty_threshold": 0.013,
+      "ood_score_threshold": 4.934834575358646,
+      "serving_policy": "all-styles-only"
+    },
+    "errors": []
+  },
+  "field_reference": {
+    "passed": true,
+    "errors": [],
+    "qualification_scope": "fixed_query_checkpoint_parity",
+    "endpoint_qualified": false,
+    "geometry_preprocessing_qualified": false,
+    "region_classifier_qualified": false,
+    "uncertainty_calibration_qualified": false,
+    "source_authenticated_by_reference_hash": true,
+    "limitations": [
+      "The reference pack omits its cloud and rounds sample coordinates.",
+      "The supplied source NPZ matches the SHA-256 the reference pack declares.",
+      "Parity is not CFD accuracy, viewer orientation validation, field trust or calibration."
+    ],
+    "provenance": {
+      "available": true,
+      "synthetic": false,
+      "model_version": "fields-2026-10-15-8fb6ed1",
+      "checkpoint_sha256": "6a210c09b09205459f59d17b5ff913648587c9af086fc972e9090e3d69aa688c",
+      "preprocess_version": "fields-v1",
+      "geometry_source": "src.geometry.viewer.mesh_payload",
+      "geometry_fidelity": "approximate parametric viewer mesh; not CFD geometry",
+      "field_trust_status": "unknown_for_generated_geometry",
+      "uncertainty": {
+        "quantity": "Cp standard deviation",
+        "units": "dimensionless",
+        "calibration": "not established for generated viewer geometry",
+        "used_by_cd_gate": false
+      },
+      "coordinate_system": {
+        "x": "nose to tail",
+        "y": "lateral",
+        "z": "up",
+        "units": "metres"
+      },
+      "orientation_validation": "training-to-viewer orientation not independently validated",
+      "limits": {
+        "max_faces": 50000,
+        "chunk_size": 256,
+        "max_concurrent_inferences": 1,
+        "production_benchmark": "pending"
+      }
+    },
+    "software": {
+      "numpy": "2.5.4",
+      "torch": "2.14.1+cpu"
+    },
+    "numerical_errors": {
+      "cp": {
+        "passed": true,
+        "max_absolute_error": 3.5762786865234375e-07
+      },
+      "sigma": {
+        "passed": true,
+        "max_absolute_error": 1.7881393432617188e-07
+      }
+    }
+  },
+  "local_http": {
+    "format": "aero-surrogate-local-check/1",
+    "scope": "local HTTP wiring; no browser or paid provider calls",
+    "passed": true,
+    "checks": [
+      "API ready and expected model identity",
+      "trusted baseline evaluation",
+      "joint-extreme corner rejected",
+      "web designer, API config and dynamic mesh",
+      "real field inference (functional only; calibration not established)",
+      "five-step scripted agent over HTTP with persisted history and gate rejection"
+    ],
+    "errors": [],
+    "service": {
+      "predictor": "torch",
+      "synthetic": false,
+      "schema_version": "2.0.0",
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "checkpoint_sha256": "49e5a8b14d5b",
+      "checkpoint_sha256_full": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a"
+    },
+    "baseline": {
+      "cd": 0.2245595494127173,
+      "cl": 0.0,
+      "uncertainty": 0.0050323457844746455,
+      "in_distribution": true,
+      "pressure_summary": {},
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "latency_ms": 9.937800001353025,
+      "ood_score": 2.699723411559878
+    }
+  },
+  "limited_secret_scan": {
+    "scope": "tracked text and reachable history patches; high-confidence patterns plus exact local credential matching; not exhaustive",
+    "tracked_files": 273,
+    "pattern_findings": [],
+    "history_pattern_counts": {
+      "private_key": 0,
+      "provider_token": 0
+    },
+    "local_credentials_checked": 1,
+    "local_credential_matches_in_tracked": 0,
+    "local_credential_matches_in_history": 0,
+    "git_revision": "731efbecd6cab432f5c7bf72c6376f7f6c4bf202"
+  }
+}

@@ -1,0 +1,746 @@
+{
+  "format": "aero-surrogate-browser-verification/1",
+  "scope": "real local services, fresh logged-out contexts; not public hosted testing",
+  "passed": true,
+  "requested_attempts": 20,
+  "completed_attempts": 20,
+  "engines": {
+    "chromium": 10,
+    "firefox": 10
+  },
+  "live_provider_calls_requested": 0,
+  "application_estimate_usd": 0,
+  "service": {
+    "predictor": "torch",
+    "synthetic": false,
+    "schema_version": "2.0.0",
+    "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+    "checkpoint_sha256": "49e5a8b14d5b",
+    "checkpoint_sha256_full": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a"
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:24:46.886717+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 17.763
+    },
+    {
+      "attempt": 2,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:25:04.652160+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 16.172
+    },
+    {
+      "attempt": 3,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:25:20.825875+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 16.257
+    },
+    {
+      "attempt": 4,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:25:37.084359+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 15.908
+    },
+    {
+      "attempt": 5,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:25:52.993554+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 15.177
+    },
+    {
+      "attempt": 6,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:26:08.174083+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 16.291
+    },
+    {
+      "attempt": 7,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:26:24.467577+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 15.383
+    },
+    {
+      "attempt": 8,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:26:39.852215+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 15.166
+    },
+    {
+      "attempt": 9,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:26:55.019695+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 15.946
+    },
+    {
+      "attempt": 10,
+      "engine": "chromium",
+      "started_at": "2026-10-27T21:27:10.967094+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 14.722
+    },
+    {
+      "attempt": 11,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:27:26.477477+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 6.897
+    },
+    {
+      "attempt": 12,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:27:33.376514+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 4.758
+    },
+    {
+      "attempt": 13,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:27:38.136451+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 4.899
+    },
+    {
+      "attempt": 14,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:27:43.037542+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 4.929
+    },
+    {
+      "attempt": 15,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:27:47.967643+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 4.742
+    },
+    {
+      "attempt": 16,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:27:52.711099+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 4.985
+    },
+    {
+      "attempt": 17,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:27:57.697715+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 4.994
+    },
+    {
+      "attempt": 18,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:28:02.694191+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 5.042
+    },
+    {
+      "attempt": 19,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:28:07.738181+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 5.146
+    },
+    {
+      "attempt": 20,
+      "engine": "firefox",
+      "started_at": "2026-10-27T21:28:12.885687+00:00",
+      "live_requested": false,
+      "passed": true,
+      "checks": [
+        {
+          "check": "real baseline and WebGL viewer",
+          "passed": true,
+          "detail": {
+            "cd_display": "0.2246"
+          }
+        },
+        {
+          "check": "parameter change updates real prediction",
+          "passed": true
+        },
+        {
+          "check": "legal joint-extreme corner rejected",
+          "passed": true,
+          "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+        },
+        {
+          "check": "historical matched runs and logbook visible",
+          "passed": true
+        },
+        {
+          "check": "release scalar and all three benchmark methods visible",
+          "passed": true
+        }
+      ],
+      "page_errors": [],
+      "wall_s": 5.772
+    }
+  ],
+  "retained_expected_http_statuses": "Optional field work may return503 while busy; requests abandoned by navigation are retained in raw report as expected aborts. Other same-origin failures/page errors fail the check.",
+  "proof_images": [
+    "../proof/designer.png",
+    "../proof/runs.png",
+    "../proof/results.png",
+    "../proof/rejected-corner.png"
+  ],
+  "raw_reports": "Ignored .audit-track-b/browser-final-twenty-20261027/report.json and judge-checks.csv",
+  "live_attempt": {
+    "passed": false,
+    "completed_attempts": 1,
+    "error": "AssertionError: live run incomplete: failed, scored=1, reason=provider error: ConnectionError: HTTPSConnectionPool(host='api.tokenfactory.nebius.com', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by NewConnectionError(\"HTTPSConnection(host='api.tokenfactory.nebius.com', port=443): Failed to establish a new connection: [WinError 10013] An attempt was made to access a socket in a way forbidden by its access permissions\")); transport outcome unknown; reserved estimate retained; no automatic retry",
+    "retained_application_estimate_usd": 0.0024582,
+    "estimate_is_confirmed_provider_billing": false,
+    "limitation": "Outbound Token Factory socket denied WinError10013. Historical successful matched runs are separate evidence; live completion and provider cancellation require a network-enabled environment."
+  },
+  "final_editorial_check": {
+    "passed": true,
+    "engine": "chromium",
+    "attempts": 1,
+    "change": "Removed an unsupported historical sigma/category error sentence; detector-only category scope now explicit.",
+    "raw_report": ".audit-track-b/browser-final-copy-check-20261027/report.json"
+  }
+}
