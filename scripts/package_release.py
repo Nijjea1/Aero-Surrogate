@@ -145,6 +145,10 @@ def collect_release(root: Path, *, include_fields: bool) -> tuple[list[Artifact]
     evidence = root / "docs/submission/evidence"
     if evidence.is_dir():
         for path in sorted(evidence.rglob("*")):
+            # This post-install report identifies the ZIP itself. Keep it
+            # outside future bundles instead of archiving a stale ZIP digest.
+            if path.name == "artifact-installation.json":
+                continue
             if path.is_file() and path.suffix in (".json", ".jsonl", ".csv", ".md"):
                 relative = path.relative_to(evidence).as_posix()
                 destination = "runs/" + relative if relative.startswith("logs/") else "runs/release/evidence/" + relative
