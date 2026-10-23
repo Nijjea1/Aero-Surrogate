@@ -522,7 +522,8 @@ export function createFlow(viewer) {
     sweepClock += dt;
     const phase = (2 * Math.PI * sweepClock) / SWEEP_PERIOD;
     const angle = Math.PI / 2 + 0.95 * Math.sin(phase);   // about 36 to 144 degrees round the car
-    const radius = 7.8;
+    // A tall (phone) stage sees less of the car's length, so it stands further back.
+    const radius = 7.8 * clamp(1.1 / viewer.camera.aspect, 1, 1.3);
     viewer.camera.position.set(-radius * Math.cos(angle), 2.05 + 0.3 * Math.sin(phase * 1.5), radius * Math.sin(angle));
     viewer.controls.target.set(0.35, 0.62, 0);
     viewer.controls.update();

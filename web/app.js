@@ -816,6 +816,12 @@ async function initViewer() {
     return;
   }
   buildSwatches();
+  // On a phone the eight labels would cover the car: they start hidden, one tap away.
+  if ($("stage").clientWidth < 600) {
+    state.labels = false;
+    $("labels-toggle").setAttribute("aria-pressed", "false");
+    state.pins.setVisible(false);
+  }
   for (const button of $("viewer-modes").querySelectorAll("button")) {
     button.addEventListener("click", () => setViewerMode(button.dataset.mode));
   }
