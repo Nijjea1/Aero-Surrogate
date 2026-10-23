@@ -17,9 +17,9 @@ Three reasons it is worth the ~100 lines:
      A point cloud should beat raw parameters. If it does not, the geometry
      encoder is not earning its place and we should know that early.
 
-It is NOT a replacement for the real surrogate. It cannot predict a pressure
-field, it cannot see a shape it has no parameter for, and it only works inside
-the parameterisation. Stage 2 is still PhysicsNeMo.
+This is the release scalar surrogate. It cannot predict a pressure field or
+see a shape outside its parameterisation. A separate custom PyTorch model
+inspired by DoMINO research provides experimental pressure visualisation.
 
     python -m src.data.dataset --check --config configs/tabular.yaml
 """

@@ -1,0 +1,566 @@
+{
+  "audit_date": "2026-10-27",
+  "audited_git_revision": "be76dd0ab1cc549d8c59576e049e9bfb5fa58010",
+  "scope": "local repository and artifacts; fresh offline qualification and independent scalar grade; historical paid-provider evidence; no current public application/browser validation",
+  "tests": {
+    "command": ".venv/Scripts/python.exe -X utf8 -m pytest tests -q -p no:cacheprovider --basetemp=.audit-track-b/submission-audit-20261027 --tb=short",
+    "passed": 956,
+    "skipped": 3,
+    "warnings": 3,
+    "seconds": 106.41,
+    "root_pytest_collection": "failed on inaccessible old runs directories"
+  },
+  "scalar_qualification": {
+    "passed": true,
+    "scope": "in_process_asgi",
+    "provenance": {
+      "predictor": "torch",
+      "synthetic": false,
+      "schema_version": "2.0.0",
+      "git_revision": "be76dd0ab1cc549d8c59576e049e9bfb5fa58010",
+      "source_dirty": false,
+      "source_sha256": "766cc04c67b884eca93a8fc6512135dd8e1f1becfd7805cc5158bcafb889c011",
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+      "preprocess_version": "params-v1",
+      "training_git_revision": "8fb6ed1",
+      "training_seed": 0,
+      "trained_body_styles": [
+        "estateback",
+        "fastback",
+        "notchback"
+      ],
+      "training_split_counts": {
+        "test": 625,
+        "val": 625,
+        "train": 2915
+      },
+      "output_provenance": {
+        "cd": "model",
+        "uncertainty": "model",
+        "ood_score": "model",
+        "cl": "placeholder",
+        "pressure_summary": "unavailable"
+      },
+      "uncertainty_threshold": 0.013,
+      "ood_score_threshold": 4.934834575358646,
+      "serving_policy": "all-styles-only"
+    }
+  },
+  "field_parity": {
+    "passed": true,
+    "qualification_scope": "fixed_query_checkpoint_parity",
+    "endpoint_qualified": false,
+    "geometry_preprocessing_qualified": false,
+    "region_classifier_qualified": false,
+    "uncertainty_calibration_qualified": false,
+    "source_authenticated_by_reference_hash": true,
+    "source_npz_sha256": "9aaa20193c74ca42ec21bf02049c330c8eaa67bd79c24ebf757b99a63c22531f",
+    "limitations": [
+      "The reference pack omits its cloud and rounds sample coordinates.",
+      "The supplied source NPZ matches the SHA-256 the reference pack declares.",
+      "Parity is not CFD accuracy, viewer orientation validation, field trust or calibration."
+    ]
+  },
+  "field_generated_mesh_smoke": {
+    "body_style": "fastback",
+    "parameters": "all zero",
+    "passed": true,
+    "wall_seconds": 1.084,
+    "inference_ms": 1009.3213,
+    "claim": "functional inference; no CFD accuracy or HTTP latency qualification"
+  },
+  "independent_scalar_grade": {
+    "data_rows": 4165,
+    "source_csv_sha256": "9570826656321b9a7f468c8ef38e71709392b830917353aed97839170f26a7bd",
+    "split_note": "unwrapped stage1.parameters from runs/handover/splits.json",
+    "model": {
+      "path": "runs/drivaernet-random/best.pt",
+      "sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+      "version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "schema_version": "2.0.0",
+      "preprocess": "params-v1",
+      "param_columns": [
+        "B_Ramp_Angle",
+        "B_Diffusor_Angle",
+        "B_Trunklid_Angle",
+        "D_Rear_Window_Inclination",
+        "D_Winscreen_Inclination",
+        "D_Winscreen_Length",
+        "D_Rear_Window_Length",
+        "E_A_B_C_Pillar_Thickness",
+        "E_Fenders_Arch_Offset",
+        "G_Trunklid_Curvature",
+        "G_Trunklid_Length",
+        "H_Front_Bumper_Curvature",
+        "H_Front_Bumper_Length",
+        "A_Car_Length",
+        "A_Car_Width",
+        "A_Car_Roof_Height",
+        "cat_fastback",
+        "cat_notchback",
+        "cat_estateback"
+      ],
+      "held_out_category": null,
+      "n_params": 237186,
+      "n_train": 2915,
+      "ood_threshold": 4.934834575358646,
+      "self_reported_test_metrics": {
+        "loss": -0.4955073661804199,
+        "r2": 0.8749716864110977,
+        "mae": 0.006160587538033724,
+        "rmse": 0.00792139582335949,
+        "n": 625,
+        "mean_sigma": 0.007151768542826176,
+        "coverage_1sigma": 0.6448,
+        "coverage_2sigma": 0.9296
+      }
+    },
+    "overall": {
+      "n": 625,
+      "r2": 0.8749716741173402,
+      "mae": 0.006160587536873854,
+      "rmse": 0.007921396750390055,
+      "max_error": 0.03305859429764532,
+      "mean_true": 0.25311475208868944,
+      "r2_ceiling": 0.9121754025974265,
+      "share_of_ceiling": 0.9592142822815126
+    },
+    "per_category": {
+      "estateback": {
+        "n": 198,
+        "r2": 0.8045010178644743,
+        "mae": 0.0064810335790494705,
+        "rmse": 0.008230345871835007,
+        "max_error": 0.029853653783181833,
+        "mean_true": 0.27095835110514954,
+        "r2_ceiling": 0.878081640798854,
+        "share_of_ceiling": 0.9162029821424826
+      },
+      "fastback": {
+        "n": 216,
+        "r2": 0.7955456946045166,
+        "mae": 0.0063329794450591335,
+        "rmse": 0.00850279857875162,
+        "max_error": 0.03305859429764532,
+        "mean_true": 0.24423733431607603,
+        "r2_ceiling": 0.8640826563269294,
+        "share_of_ceiling": 0.9206824009016084
+      },
+      "notchback": {
+        "n": 211,
+        "r2": 0.8663738498025917,
+        "mae": 0.00568340759128716,
+        "rmse": 0.006949141420463477,
+        "max_error": 0.017898075151579512,
+        "mean_true": 0.24545830485468653,
+        "r2_ceiling": 0.88456170950344,
+        "share_of_ceiling": 0.9794385631828239
+      }
+    },
+    "calibration": {
+      "available": true,
+      "n": 625,
+      "mean_sigma": 0.007151769073752814,
+      "rmse": 0.007921396750390055,
+      "coverage_1sigma": 0.6448,
+      "coverage_2sigma": 0.9296,
+      "miscalibration": 0.02811666666666667,
+      "z_std": 1.1420175948933988,
+      "nll": -3.3894904503275574,
+      "sigma_error_spearman": 0.06568860074272566,
+      "coverage": [
+        {
+          "expected": 0.1,
+          "observed": 0.0912
+        },
+        {
+          "expected": 0.2,
+          "observed": 0.184
+        },
+        {
+          "expected": 0.3,
+          "observed": 0.2688
+        },
+        {
+          "expected": 0.4,
+          "observed": 0.368
+        },
+        {
+          "expected": 0.5,
+          "observed": 0.4576
+        },
+        {
+          "expected": 0.6,
+          "observed": 0.5632
+        },
+        {
+          "expected": 0.683,
+          "observed": 0.6448
+        },
+        {
+          "expected": 0.7,
+          "observed": 0.6656
+        },
+        {
+          "expected": 0.8,
+          "observed": 0.7776
+        },
+        {
+          "expected": 0.9,
+          "observed": 0.8656
+        },
+        {
+          "expected": 0.95,
+          "observed": 0.9232
+        },
+        {
+          "expected": 0.99,
+          "observed": 0.976
+        }
+      ],
+      "sigma_bins": [
+        {
+          "n": 63,
+          "mean_sigma": 0.004736592006885864,
+          "rmse": 0.006550733466738311
+        },
+        {
+          "n": 63,
+          "mean_sigma": 0.005336852118104761,
+          "rmse": 0.007398010636819071
+        },
+        {
+          "n": 63,
+          "mean_sigma": 0.0060556838813324,
+          "rmse": 0.00654813259258662
+        },
+        {
+          "n": 63,
+          "mean_sigma": 0.006559565869927159,
+          "rmse": 0.009297735946836314
+        },
+        {
+          "n": 63,
+          "mean_sigma": 0.006938577343052377,
+          "rmse": 0.006800893305557159
+        },
+        {
+          "n": 62,
+          "mean_sigma": 0.0074888702023510655,
+          "rmse": 0.00733535522916065
+        },
+        {
+          "n": 62,
+          "mean_sigma": 0.007923036847145508,
+          "rmse": 0.008801991437510868
+        },
+        {
+          "n": 62,
+          "mean_sigma": 0.008302921253996766,
+          "rmse": 0.00852909334822494
+        },
+        {
+          "n": 62,
+          "mean_sigma": 0.00873886819280681,
+          "rmse": 0.008083169806180474
+        },
+        {
+          "n": 62,
+          "mean_sigma": 0.009535619379174805,
+          "rmse": 0.009249461179567675
+        }
+      ],
+      "noise_floor": 0.006368160997469784,
+      "share_below_noise_floor": 0.3104
+    },
+    "speed": {
+      "device": "cpu",
+      "single_design_ms_median": 0.4197999951429665,
+      "single_design_ms_p95": 0.7424699957482511,
+      "batch_size": 625,
+      "batch_designs_per_s": 365411.60276347544
+    },
+    "ood_detection": {
+      "harness_detector": {
+        "fitted_on": "random train split, standardised; threshold = 99% quantile of val",
+        "threshold": 4.9348345893735415,
+        "false_alarm_on_unseen_test": 0.0032,
+        "corners_flagged": 1.0,
+        "uniform_in_box_flagged": 0.0635
+      },
+      "checkpoint_detector": {
+        "threshold": 4.934834575358646,
+        "false_alarm_on_unseen_test": 0.0032,
+        "corners_flagged": 1.0,
+        "uniform_in_box_flagged": 0.0635
+      },
+      "held_out_style": {
+        "held_out_category": "notchback",
+        "note": "in-distribution side is the category split's val set, which set the threshold, so its false-alarm rate is ~1% by construction",
+        "harness_detector_all_inputs": {
+          "threshold": 4.716300971679624,
+          "n_in": 414,
+          "n_out": 1403,
+          "detection_rate": 1.0,
+          "false_alarm_rate": 0.012077294685990338,
+          "auroc": 1.0,
+          "mean_in": 4.124610978314293,
+          "mean_out": 56.410710007119775
+        },
+        "harness_detector_aero_only": {
+          "threshold": 4.618489404074446,
+          "n_in": 414,
+          "n_out": 1403,
+          "detection_rate": 0.026372059871703494,
+          "false_alarm_rate": 0.012077294685990338,
+          "auroc": 0.535655995950706,
+          "mean_in": 3.9999235581883785,
+          "mean_out": 4.04474486595757
+        }
+      }
+    },
+    "warnings": [
+      "at the contract's fallback OOD threshold (3.0) the gate passes 0.0% of ordinary test designs vs 99.7% at the checkpoint's calibrated 4.93: the service must pass the checkpoint's threshold",
+      "sigma barely ranks designs by risk (rank correlation with the error 0.07): it says how wide the bars are on average, not which designs to distrust",
+      "no --ood-checkpoint: the held-out-style numbers are reference models only",
+      "no --scaling checkpoints: the data-scaling curve has the linear reference only"
+    ],
+    "interpretation_note": "Computed noise-ceiling/share fields are unsupported as hard statistical ceilings; retain only as historical raw calculation, not a validated performance bound."
+  },
+  "matched_experiment": {
+    "source": "runs/matched-20261016",
+    "claim": "surrogate-predicted Cd reductions; not CFD validation; five runs per method, one starting design; no superiority claim",
+    "methods": {
+      "super": {
+        "n": 5,
+        "median_predicted_cd_reduction_percent": 3.8750181424820127,
+        "runs": [
+          {
+            "run_id": "matched-super-1",
+            "predicted_cd_reduction_percent": 4.4927040636424,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": 0.026612700000000003,
+            "median_step_s": 1.61584229998698,
+            "sum_step_s": 39.357185999979265
+          },
+          {
+            "run_id": "matched-super-2",
+            "predicted_cd_reduction_percent": 1.1583184867055398,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": 0.027261300000000002,
+            "median_step_s": 1.5679276500013657,
+            "sum_step_s": 46.84573639993323
+          },
+          {
+            "run_id": "matched-super-3",
+            "predicted_cd_reduction_percent": 4.334752128890126,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": 0.027104400000000004,
+            "median_step_s": 1.5926261999848066,
+            "sum_step_s": 43.59027309992234
+          },
+          {
+            "run_id": "matched-super-4",
+            "predicted_cd_reduction_percent": 3.8750181424820127,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": 0.0251343,
+            "median_step_s": 1.4672325499996077,
+            "sum_step_s": 39.04881279997062
+          },
+          {
+            "run_id": "matched-super-5",
+            "predicted_cd_reduction_percent": 2.3502885408481244,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": 0.027614999999999994,
+            "median_step_s": 1.7793360000068787,
+            "sum_step_s": 45.57967880007345
+          }
+        ]
+      },
+      "cmaes": {
+        "n": 5,
+        "median_predicted_cd_reduction_percent": 3.8406889716316672,
+        "runs": [
+          {
+            "run_id": "matched-cmaes-0",
+            "predicted_cd_reduction_percent": 3.8406889716316672,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.0120662999979686,
+            "sum_step_s": 0.306280099961441
+          },
+          {
+            "run_id": "matched-cmaes-1",
+            "predicted_cd_reduction_percent": 3.7837269089178873,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.011109499988378957,
+            "sum_step_s": 0.2667091000475921
+          },
+          {
+            "run_id": "matched-cmaes-2",
+            "predicted_cd_reduction_percent": 1.707915815748032,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.011399100010748953,
+            "sum_step_s": 0.2673826999089215
+          },
+          {
+            "run_id": "matched-cmaes-3",
+            "predicted_cd_reduction_percent": 4.317615093084704,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.013314399984665215,
+            "sum_step_s": 0.3237997000978794
+          },
+          {
+            "run_id": "matched-cmaes-4",
+            "predicted_cd_reduction_percent": 4.534021459313935,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.012597199995070696,
+            "sum_step_s": 0.30213390005519614
+          }
+        ]
+      },
+      "random": {
+        "n": 5,
+        "median_predicted_cd_reduction_percent": 2.7928456324265047,
+        "runs": [
+          {
+            "run_id": "matched-random-0",
+            "predicted_cd_reduction_percent": 3.421404860954199,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.01194460000260733,
+            "sum_step_s": 0.29209329988225363
+          },
+          {
+            "run_id": "matched-random-1",
+            "predicted_cd_reduction_percent": 2.7928456324265047,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.01239370001712814,
+            "sum_step_s": 0.30340539998724125
+          },
+          {
+            "run_id": "matched-random-2",
+            "predicted_cd_reduction_percent": 0.0,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.012347399984719232,
+            "sum_step_s": 0.29242009998415597
+          },
+          {
+            "run_id": "matched-random-3",
+            "predicted_cd_reduction_percent": 4.130608274257887,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.011386500002117828,
+            "sum_step_s": 0.27811869999277405
+          },
+          {
+            "run_id": "matched-random-4",
+            "predicted_cd_reduction_percent": 0.640100760714349,
+            "scored_calls": 25,
+            "complete": true,
+            "cost_usd": null,
+            "median_step_s": 0.012607099983142689,
+            "sum_step_s": 0.2915809998230543
+          }
+        ]
+      }
+    },
+    "pair_validations": [
+      {
+        "agent_run": "matched-super-1",
+        "baseline_method": "cmaes",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-1",
+        "baseline_method": "random",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-2",
+        "baseline_method": "cmaes",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-2",
+        "baseline_method": "random",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-3",
+        "baseline_method": "cmaes",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-3",
+        "baseline_method": "random",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-4",
+        "baseline_method": "cmaes",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-4",
+        "baseline_method": "random",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-5",
+        "baseline_method": "cmaes",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      },
+      {
+        "agent_run": "matched-super-5",
+        "baseline_method": "random",
+        "complete": true,
+        "protocol_id": "32205711080535d9f0eee5e08a6994a9cc128ca3f038135fa71b4066bac44228"
+      }
+    ]
+  },
+  "limited_secret_scan": {
+    "tracked_files_scanned": 165,
+    "current_high_confidence_pattern_matches": 0,
+    "reachable_history_patch_pattern_matches": 0,
+    "local_credential_exact_matches_in_history": 0,
+    "credentials_checked": 1,
+    "limitation": "pattern and exact-local-value scan only; not exhaustive"
+  },
+  "external_sources": {
+    "rules": "https://nebiusglobalaihackathon.devpost.com/rules",
+    "faq": "https://nebiusglobalaihackathon.devpost.com/details/faqs",
+    "label_semantics": "https://openreview.net/pdf/e461dee13f81957e41856f4bbf57fc0b0b7ccd1f.pdf",
+    "drivaerml_license": "https://huggingface.co/datasets/neashton/drivaerml/blob/main/README.md"
+  }
+}

@@ -54,6 +54,12 @@ where recorded. They do not contain provider credentials. Scalar model outputs
 have no pressure summary and use labelled placeholder lift; this experiment is
 Cd-guided rather than pressure-guided agent search.
 
+The original [scored logbooks and lifecycle events](logs/) are also published,
+preserving recorded hypotheses, outcomes and original experiment timestamps.
+They are checked JSONL records with no provider credentials. The local artifact
+bundle installs copies under `runs/logs/` so a new checkout can inspect historical
+comparisons immediately; no run is replayed as a new model call.
+
 ## Reproduce
 
 After obtaining the trusted model artifact, public table and original handover:

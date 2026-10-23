@@ -82,7 +82,10 @@ def isolated_environment(root: Path, output: Path, api_port: int, web_port: int,
 
 def seed_historical_logs(root: Path, output: Path) -> int:
     """Copy read-only historical evidence into isolated service storage."""
-    source = root / "runs/matched-20261016/logs"
+    # Published traces are available in a fresh clone. The original ignored
+    # experiment directory is only a compatibility fallback for old checkouts.
+    published = root / "docs/submission/evidence/logs"
+    source = published if published.is_dir() else root / "runs/matched-20261016/logs"
     destination = output / "logs"
     (destination / "events").mkdir(parents=True)
     count = 0

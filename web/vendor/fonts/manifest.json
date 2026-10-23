@@ -1,0 +1,60 @@
+{
+  "source_css": "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap",
+  "licence": "SIL Open Font License 1.1",
+  "files": [
+    {
+      "path": "font-a7fdc993f9f0.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n5ig.ttf",
+      "sha256": "a7fdc993f9f0387caedba4e42521136fa97e4c0837ae6239bf0413ccf8af00c2",
+      "bytes": 128812
+    },
+    {
+      "path": "font-4fc14a73ca53.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJ8lc.ttf",
+      "sha256": "4fc14a73ca53ba9d32fd759ae1ca1a3133326035d0dd337862b3ee1633cc156e",
+      "bytes": 129916
+    },
+    {
+      "path": "font-754dfc9d50cf.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAO8lc.ttf",
+      "sha256": "754dfc9d50cf7aabfb6b108d2c2f7d20a3f1f2cc6f6c01640c6728091272cec0",
+      "bytes": 133444
+    },
+    {
+      "path": "font-6dbe082463cf.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSD6llzAA.ttf",
+      "sha256": "6dbe082463cf749cfa057d45c3048c90f4df031496498e5b5bdfd0b6babb9d16",
+      "bytes": 205252
+    },
+    {
+      "path": "font-6f7a8c4219e0.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSD2FlzAA.ttf",
+      "sha256": "6f7a8c4219e021ff7c9131bc5f1f7af97bcd1436a59578d444a8cb92e9791742",
+      "bytes": 205292
+    },
+    {
+      "path": "font-5311c66fd6d0.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDNF5zAA.ttf",
+      "sha256": "5311c66fd6d04ae45671236f7eae667b671c06c1dc7e88d52c206e5fadd0fb21",
+      "bytes": 205284
+    },
+    {
+      "path": "font-812c900e302d.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8gN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHY5a64vr.ttf",
+      "sha256": "812c900e302d1d751dd0d8a4a3183fc8a87ae547d3a136cd8e359ed5e9ed818e",
+      "bytes": 102100
+    },
+    {
+      "path": "font-c6ee08345b19.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8gN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHY527Ivr.ttf",
+      "sha256": "c6ee08345b19b2d183a4863aadc62c451181fe28327bb910132cb2a108d47ada",
+      "bytes": 102424
+    },
+    {
+      "path": "font-49d5fc23172b.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8gN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHY4S7Yvr.ttf",
+      "sha256": "49d5fc23172be07357a4d8c8a898298f78de9176f69d0f6492beb137f8740c6d",
+      "bytes": 103324
+    }
+  ]
+}

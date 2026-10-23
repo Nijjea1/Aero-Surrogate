@@ -248,10 +248,9 @@ class IterationRecord:
 # Thresholds everyone shares. Tune once, here.
 # --------------------------------------------------------------------------
 
-# Reject a proposal whose cd std dev exceeds this. Calibrated against measured
-# in-distribution sigma, which runs about 0.0067 on the stage-1 model, against
-# a CFD run-to-run spread of 0.0064 in the labels themselves. A model claiming
-# much less than the simulation's own noise is overconfident by construction.
+# Operational cutoff for predicted Cd standard deviation. This is a screening
+# policy, not a guarantee of interval coverage or an irreducible noise floor.
+# Validate empirical coverage on held-out labels separately from this cutoff.
 UNCERTAINTY_THRESHOLD: float = 0.013
 
 # Reject a proposal whose distance from the training set exceeds this.

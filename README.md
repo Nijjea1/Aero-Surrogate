@@ -83,7 +83,7 @@ Python 3.13 is the container target. The release constraints record versions fro
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-python -m pip install -r requirements.txt -c constraints-release.txt
+python -m pip install -r requirements.txt
 ```
 
 A fresh clone has no model weights. Obtain and checksum the trusted release artifact bundle using [release instructions](docs/submission/README.md). The team can create `runs/release/aero-surrogate-models.zip` locally with `python scripts/package_release.py --include-fields`. An immutable public download is pending; install a received bundle with `python scripts/install_artifacts.py --archive PATH_OR_HTTPS --sha256 TRUSTED_ARCHIVE_HASH --destination .`. Alternatively train the scalar locally:

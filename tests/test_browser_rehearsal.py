@@ -69,3 +69,16 @@ def test_historical_seed_copies_without_changing_originals(tmp_path):
     assert module().seed_historical_logs(tmp_path, output) == 15
     assert (source / "matched-0.jsonl").read_text() == original
     assert (output / "logs/matched-0.jsonl").read_text() == original
+
+
+def test_historical_seed_works_from_fresh_clone_public_traces(tmp_path):
+    source = tmp_path / "docs/submission/evidence/logs"
+    (source / "events").mkdir(parents=True)
+    for index in range(15):
+        (source / f"matched-{index}.jsonl").write_text('{"iteration":0,"cd":0.2246}\n')
+        (source / "events" / f"matched-{index}.jsonl").write_text('{"type":"run_finished"}\n')
+    output = tmp_path / "isolated"
+    output.mkdir()
+    assert module().seed_historical_logs(tmp_path, output) == 15
+    assert not (tmp_path / "runs/matched-20261016").exists()
+    assert (output / "logs/events/matched-0.jsonl").is_file()
