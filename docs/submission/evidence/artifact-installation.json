@@ -1,0 +1,32 @@
+{
+  "format": "aero-surrogate-artifact-installation/1",
+  "passed": true,
+  "archive": "runs/release/aero-surrogate-models.zip",
+  "archive_sha256": "0bc5f028bef466cabffc6c0fb2fb52a81eb0a2e81c540d15643ef89dcfbe4963",
+  "archive_bytes": 10087759,
+  "payload_files": 59,
+  "all_installed_file_hashes_match": true,
+  "all_15_benchmark_published_summary_hashes_match_archived_bytes": true,
+  "zip_crc_check_passed": true,
+  "manifest_source": {
+    "git_revision": "c2e21caed754b6bb21ad7c59d2c7c91438a25b56",
+    "source_dirty": false,
+    "source_sha256": "5acca7b9435ceaaf261e7b4661e9da049ae8fd9869a322e78c274f6923fb0c60",
+    "source_sha256_scope": "serving Python sources under src/ and requirements-service.txt/requirements-model.txt; not the full repository"
+  },
+  "scalar_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+  "historical_runs": 15,
+  "history_rows_per_run": 25,
+  "real_scalar_baseline_and_domain_gate_passed": true,
+  "real_scalar_field_http_checks_passed": true,
+  "payload_identical_to_real_scalar_field_http_checked_candidate": true,
+  "http_checks": [
+    "API ready and expected model identity",
+    "trusted baseline evaluation",
+    "joint-extreme corner rejected",
+    "web designer, API config and dynamic mesh",
+    "real field inference (functional only; calibration not established)",
+    "five-step scripted agent over HTTP with persisted history and gate rejection"
+  ],
+  "scope": "final ZIP independently installed into separate directory; all59 files,15 published summary hashes, models and historical runs checked locally; no deployment/provider calls"
+}

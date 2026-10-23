@@ -9,7 +9,7 @@
     "licensing": "MIT code does not relicense third-party datasets or model weights",
     "optimisation": "surrogate-predicted Cd changes, not CFD-validated improvements"
   },
-  "created_at": "2026-10-27T21:36:26.974625+00:00",
+  "created_at": "2026-10-27T21:37:15.205278+00:00",
   "dataset_notices": [
     {
       "licence": "CC BY-NC 4.0",
@@ -412,8 +412,8 @@
     }
   },
   "source": {
-    "git_revision": "3e7157730ec8265338947f70ce7a3321b38f7ac3",
-    "source_dirty": true,
+    "git_revision": "c2e21caed754b6bb21ad7c59d2c7c91438a25b56",
+    "source_dirty": false,
     "source_sha256": "5acca7b9435ceaaf261e7b4661e9da049ae8fd9869a322e78c274f6923fb0c60",
     "source_sha256_scope": "serving Python sources under src/ and requirements-service.txt/requirements-model.txt; not the full repository"
   }
