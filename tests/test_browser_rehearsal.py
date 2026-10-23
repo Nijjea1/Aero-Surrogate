@@ -57,6 +57,54 @@ def test_live_runs_are_distributed_and_no_default_live_calls():
     assert module().live_indices(20, 0) == set()
 
 
+def test_browser_engines_are_grouped_to_avoid_concurrent_software_webgl():
+    rehearsal = module()
+    schedule = [rehearsal.engine_for_attempt(index, 20, ["chromium", "firefox"])
+                for index in range(20)]
+    assert schedule == ["chromium"] * 10 + ["firefox"] * 10
+    assert rehearsal.engine_for_attempt(0, 1, ["firefox"]) == "firefox"
+
+
+def test_context_page_crash_is_an_attempt_failure_and_context_is_closed(tmp_path):
+    pytest.importorskip("playwright.sync_api")
+    from types import SimpleNamespace
+
+    class Context:
+        closed = False
+
+        def new_page(self):
+            raise RuntimeError("Target crashed before navigation")
+
+        def close(self):
+            self.closed = True
+
+    context = Context()
+    browser = SimpleNamespace(new_context=lambda **options: context)
+    services = SimpleNamespace(api="http://127.0.0.1:8000", web="http://127.0.0.1:5173")
+    result = module().exercise_attempt(browser, services, tmp_path, 11, "firefox", False, False)
+    assert result["attempt"] == 11
+    assert result["engine"] == "firefox"
+    assert result["passed"] is False
+    assert "Target crashed before navigation" in result["error"]
+    assert context.closed
+    assert result["checks"] == []
+
+
+def test_context_creation_crash_is_retained_without_a_cleanup_crash(tmp_path):
+    pytest.importorskip("playwright.sync_api")
+    from types import SimpleNamespace
+
+    def fail(**options):
+        raise RuntimeError("context unavailable")
+
+    services = SimpleNamespace(api="http://127.0.0.1:8000", web="http://127.0.0.1:5173")
+    result = module().exercise_attempt(SimpleNamespace(new_context=fail), services,
+                                       tmp_path, 1, "chromium", False, False)
+    assert result["passed"] is False
+    assert "context unavailable" in result["error"]
+    assert "cleanup_error" not in result
+
+
 def test_historical_seed_copies_without_changing_originals(tmp_path):
     source = tmp_path / "runs/matched-20261016/logs"
     (source / "events").mkdir(parents=True)
