@@ -9,7 +9,7 @@
     "licensing": "MIT code does not relicense third-party datasets or model weights",
     "optimisation": "surrogate-predicted Cd changes, not CFD-validated improvements"
   },
-  "created_at": "2026-10-27T21:33:13.489170+00:00",
+  "created_at": "2026-10-27T21:36:26.974625+00:00",
   "dataset_notices": [
     {
       "licence": "CC BY-NC 4.0",
@@ -284,97 +284,97 @@
       "bytes": 5171,
       "path": "runs/release/evidence/local-qualification.json",
       "role": "public evaluation evidence",
-      "sha256": "ae59e5bf0944c2c42482223361c5ab4cf4264fd6fe417554693b8125184dc96e"
+      "sha256": "2d44a41713799b11bbc93a35c1c5ffafa92721979ddb660d9c4de07318594e11"
     },
     {
-      "bytes": 29101,
+      "bytes": 28117,
       "path": "runs/release/evidence/matched/cmaes-0.json",
       "role": "public evaluation evidence",
-      "sha256": "57c4444da42d3b44fb5b6705548650ab55541903c58a6a2896fc8f2a98ac1562"
+      "sha256": "20c29a58e36e68034bf166e316c4e2fb94226799749c4fa84866a40a1093b22a"
     },
     {
-      "bytes": 29117,
+      "bytes": 28133,
       "path": "runs/release/evidence/matched/cmaes-1.json",
       "role": "public evaluation evidence",
-      "sha256": "8e59a6d31090caf9c7d42c4075d4d782372a5d5db6875e42375dde99f36b1b5e"
+      "sha256": "205fa9da5f8e4121c7a4ee0983046bcc648c52b60bbf668675bd5ebafb4264e6"
     },
     {
-      "bytes": 29149,
+      "bytes": 28165,
       "path": "runs/release/evidence/matched/cmaes-2.json",
       "role": "public evaluation evidence",
-      "sha256": "669d7f3426de21514a41a94883585ab0e31886a0fc1f358b5bfe2defa02bccff"
+      "sha256": "2071a238e137f813529760d81530a622d57344155d4f0b36f23333c4a197fab1"
     },
     {
-      "bytes": 29113,
+      "bytes": 28129,
       "path": "runs/release/evidence/matched/cmaes-3.json",
       "role": "public evaluation evidence",
-      "sha256": "ba35674cd0be5fa8fe8b48957cb687018955b6ec21e1eafa333ca2277a43cc74"
+      "sha256": "ee7bd88003bf8560bf48a575b692f936e399aaf1a6a190e02bb28d732f552aa7"
     },
     {
-      "bytes": 29112,
+      "bytes": 28128,
       "path": "runs/release/evidence/matched/cmaes-4.json",
       "role": "public evaluation evidence",
-      "sha256": "5fdc3a8f70b475112d13edfa9f521f1c70b87539496b1c174e9a6c108ababb5c"
+      "sha256": "d2d8109c04d173c29bf1e305fdcf5b98e4b5ee59ddabb4b342933ae9f49f5e4c"
     },
     {
-      "bytes": 29298,
+      "bytes": 28317,
       "path": "runs/release/evidence/matched/random-0.json",
       "role": "public evaluation evidence",
-      "sha256": "f0e2a29cdb6f85814fe139c7b82eddf4b1e2b0d131f2482e1b4c56ff85e851cb"
+      "sha256": "9f3b64314f450c92ac6d61cf682096d5582b4300ec972e919a7f5448cb28b829"
     },
     {
-      "bytes": 29493,
+      "bytes": 28512,
       "path": "runs/release/evidence/matched/random-1.json",
       "role": "public evaluation evidence",
-      "sha256": "25a2956abbfb8413d80a0cb13032e453724f855a9259e554830a934ae7a43217"
+      "sha256": "e17de1b8c2eea89f06605994fdc5b4011c3bb1bd0704772e41bcaeae38b70dd1"
     },
     {
-      "bytes": 29267,
+      "bytes": 28286,
       "path": "runs/release/evidence/matched/random-2.json",
       "role": "public evaluation evidence",
-      "sha256": "e195957ff92a8acaab8ea8a298b7134f594d53dfa0b1e0a1224d5fab2302c2d7"
+      "sha256": "ef580f67d518a42538e9a56b7a54d0c3a206b8c387efb1c700562c002f166842"
     },
     {
-      "bytes": 29291,
+      "bytes": 28310,
       "path": "runs/release/evidence/matched/random-3.json",
       "role": "public evaluation evidence",
-      "sha256": "d426f672df66cf5ce283f7dc2eb69a5742652f5217b4c4a59651a5b2932fa541"
+      "sha256": "cd27bc540cb7742b6974197ee921d1e090bdd7a37ff1b951e9a3b9972af90b0f"
     },
     {
-      "bytes": 29306,
+      "bytes": 28325,
       "path": "runs/release/evidence/matched/random-4.json",
       "role": "public evaluation evidence",
-      "sha256": "0bc36845d3c476811531e7c3080629b7bd8041c60aa7777555be17af546159d1"
+      "sha256": "e8f6a8e10930a86fc6fdc049f4a85a209414bbdc13c6ec90fcd8b3b78d677b3e"
     },
     {
-      "bytes": 61146,
+      "bytes": 59047,
       "path": "runs/release/evidence/matched/super-1.json",
       "role": "public evaluation evidence",
-      "sha256": "ff4af7a503888d9f94c05d6d8875f592bebe53f604a42540806a30d8c85824a3"
+      "sha256": "87103c03daedfe72258e0f07bdc24d35e67aca20ef787e2615e08a1d40045ef6"
     },
     {
-      "bytes": 61498,
+      "bytes": 59388,
       "path": "runs/release/evidence/matched/super-2.json",
       "role": "public evaluation evidence",
-      "sha256": "448db9d89cea5af6261777c7bc56e7603b3a21807bf43c0671ec789ebdf7a189"
+      "sha256": "702acd34677103d8a47f0a208acf51f1cf209707ca4fb3743e19f2a6a91165ad"
     },
     {
-      "bytes": 61141,
+      "bytes": 59042,
       "path": "runs/release/evidence/matched/super-3.json",
       "role": "public evaluation evidence",
-      "sha256": "93a0e7f136325ab5f08036ee5589690e6b8ba661647f1cf3bb59076e1bda4b15"
+      "sha256": "5a42b3208adf8087b2f85be9987d9944e6afd83bdbcc6b45e088a8c1d3a8068f"
     },
     {
-      "bytes": 61125,
+      "bytes": 59026,
       "path": "runs/release/evidence/matched/super-4.json",
       "role": "public evaluation evidence",
-      "sha256": "e39211beee62d87ed57eecbc43ec1a4f5d4a9338ae1c50557adba05d9bf8bfb1"
+      "sha256": "9284f07d0af8fdca1a48f725c7a2a3d6cd0a528fa869b05036591e5fbed587b8"
     },
     {
-      "bytes": 61181,
+      "bytes": 59082,
       "path": "runs/release/evidence/matched/super-5.json",
       "role": "public evaluation evidence",
-      "sha256": "85d9dae5cf4f57bbba2969946312230938b08b996d52ef332ee2c577dbec0817"
+      "sha256": "91fe5fd57048b62086b450338f9bddd33b51062cf3603f49bba4bfca064b31ee"
     },
     {
       "bytes": 29169,
@@ -412,9 +412,9 @@
     }
   },
   "source": {
-    "git_revision": "540505f0b8d4ed6b3bb280b905e7248666b22a30",
-    "source_dirty": false,
-    "source_sha256": "4569dca4f01950aebf7512ecc77e18c9b629cd8f1bee0e73f23345264e0ec78f",
+    "git_revision": "3e7157730ec8265338947f70ce7a3321b38f7ac3",
+    "source_dirty": true,
+    "source_sha256": "5acca7b9435ceaaf261e7b4661e9da049ae8fd9869a322e78c274f6923fb0c60",
     "source_sha256_scope": "serving Python sources under src/ and requirements-service.txt/requirements-model.txt; not the full repository"
   }
 }
