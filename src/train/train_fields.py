@@ -16,21 +16,17 @@ WHAT IS REPORTED, and why each one
   Cp R2 and MAE, per point       does the field match at all
   coverage                       is the per-point sigma honest
   per-region Cp MAE              where on the car it is wrong. Directly the
-                                 pressure_summary the contract wants, and the
-                                 thing the agent needs to reason about shape
-  integrated Cd, pred vs true    the free consistency check: a model cannot
-                                 fake drag by cancelling errors across the
-                                 surface, so agreement here is evidence the
-                                 field is right for the right reasons
-  corr(sigma, pprime2)           THE EXTERNAL CHECK. pPrime2MeanTrim is the
+                                 separate experimental field endpoint's regions;
+                                 current agent runs do not consume this model
+  integrated Cd, pred vs true    pressure-only integral consistency; spatial
+                                 errors may cancel, so report per-car integral
+                                 errors and pointwise errors separately
+  corr(sigma, pprime2)           a descriptive diagnostic. pPrime2MeanTrim is the
                                  LES's own pressure-fluctuation variance, so it
                                  marks where the flow is physically unsteady.
-                                 If predicted sigma correlates with it, the
-                                 model has found real physics rather than
-                                 asserting confidence. Stage 1 showed sigma,
-                                 deep ensembles and feature distance all fail
-                                 as SELF-reported signals; this one is
-                                 measured against the data instead.
+                                 Correlation does not establish calibration
+                                 of errors in a time-averaged pressure target
+                                 or accuracy on generated viewer geometry.
 """
 
 from __future__ import annotations

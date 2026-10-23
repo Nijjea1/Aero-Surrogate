@@ -1,10 +1,10 @@
 """Stage 2: surface field prediction.  OWNER: Avneet.
 
-Geometry in, pressure coefficient at every surface point out. Integrate those
-and you get drag and lift, which is the whole reason the plan wants fields
-rather than a scalar: integration is a free consistency check, a model cannot
-fake drag by cancelling errors across the surface, and the agent needs to see
-WHERE the drag is to reason about shape.
+Geometry in, pressure coefficient at every query point out. Integrating the
+field gives pressure-only force estimates, which must be assessed separately
+from pointwise error: spatial errors can cancel in a surface integral. The
+release uses this model for experimental visualisation; the current agent is
+guided by a separate scalar Cd model, not by these fields or lift estimates.
 
 ARCHITECTURE, and why this shape
 
@@ -39,15 +39,14 @@ nearly deterministic; the separated wake behind the rear fascia is not. A
 single sigma for the whole car would be meaningless. And we can check the
 result against something external rather than taking the model's word for it:
 pPrime2MeanTrim in the data is the LES's own pressure-fluctuation variance, so
-a model whose predicted sigma correlates with it has learned where the physics
-is genuinely unsteady. That is a calibration check no amount of self-reported
-confidence can provide -- which matters, because in stage 1 sigma, deep
-ensembles and feature-space distance all failed as self-reported signals.
+its correlation with predicted sigma is a descriptive diagnostic. It is not
+interval calibration or proof of learned unsteady physics: the pressure field
+is time-averaged and its prediction error differs from flow fluctuations.
+Empirical interval coverage needs held-out target errors, and calibration on
+generated viewer geometry is not established.
 
-WHAT THIS IS NOT. Not DoMINO. Not a replacement for the upstream recipe, which
-we are told not to reimplement and are not: this is a deliberately small model
-sized for the compute policy in CLAUDE.md, and if a real H100 run ever happens
-the upstream recipe is what should run on it.
+This is a custom small PyTorch model inspired by NVIDIA research, not the
+upstream DoMINO implementation or a PhysicsNeMo-trained release checkpoint.
 """
 
 from __future__ import annotations
@@ -321,17 +320,17 @@ def integral_consistency_loss(
 
     Fourier features buy ~0.16 of Cp R^2 and cost ~0.05 of Cd error, in both
     pairings. The reason is structural: the integral is a SIGNED area-weighted
-    sum, so errors that cancel pointwise do not cancel in it, and a loss that
-    only sees per-point error has no reason to care. Pointwise accuracy and
-    integral accuracy are genuinely different objectives.
+    sum, so the effect of a local error depends on normal direction and area.
+    Spatial errors can cancel in that sum. Pointwise and integral accuracy
+    therefore need separate evaluation; agreement on one does not prove the other.
 
     Rather than choose, put the integral in the loss. It is differentiable, it
-    costs one extra reduction, and it optimises the quantity the agent actually
-    uses -- drag -- instead of hoping a pointwise fit implies it.
+    costs one extra reduction, and it encourages pressure-integral consistency.
+    The current agent still uses the separate scalar Cd model.
 
     This is a deliberately narrow version of the plan's physics-informed loss
-    (cut-list item 1): not a PDE residual, just the one conservation statement
-    that connects our output to our objective. If it ever has to be cut, set
+    (cut-list item 1): not a PDE residual or a validated conservation guarantee.
+    If it ever has to be cut, set
     train.integral_weight to 0 and nothing else changes.
     """
     n = model.n_targets

@@ -199,9 +199,9 @@ class Evaluation:
 # Region keys used in Evaluation.pressure_summary. Fixed so the viewer and the
 # agent prompt can rely on them. Values are mean pressure coefficient.
 #
-# Stage 1 CANNOT fill these -- it predicts one scalar. They arrive with surface
-# fields in stage 2. Until then the service returns the stub's values and the
-# demo must not imply otherwise.
+# The real scalar predictor leaves this summary empty. Experimental surface
+# fields supply separate region means through /fields; the scalar endpoint and
+# current agent loop do not silently substitute synthetic regional values.
 PRESSURE_REGIONS: list[str] = [
     "front_fascia",
     "hood",
