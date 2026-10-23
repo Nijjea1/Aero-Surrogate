@@ -26,11 +26,35 @@ dataset. No dataset or model weights are installed through pip.
 Windows/Python 3.13.14 environment. It is an environment snapshot, **not** a
 complete platform-independent lock. Passing `-c constraints-release.txt` requests
 those versions when available from your indexes; it is optional and is not used
-to claim portability. The isolated pip installation attempted during release
-work was blocked by network socket permissions to PyPI; the existing qualified
-environment passed `pip check`. CI performs a clean CPU installation and tests
-when run by GitHub Actions; adding the workflow does not establish that it has
-already passed remotely.
+to claim portability.
+
+A genuine fresh Windows/Python 3.13.14 CPU environment was installed and checked
+during release work. Direct pip index attempts in this runner first hit network
+permissions and later enumerated no FastAPI distributions, including without
+version constraints. Official PyPI JSON APIs did expose compatible published
+wheels. Those wheels and the official PyTorch CPU wheel were downloaded, each
+verified against its upstream SHA-256, then installed into the isolated venv
+using pip's normal `--no-index --find-links` workflow. `pip check`, the test suite
+and real scalar/field HTTP wiring passed. This establishes a clean local Windows
+environment, not cross-platform portability or a successful remote CI run.
+
+`requirements-release-win-py313.lock` records the complete 64-package resolved
+environment, including optional Playwright, with wheel hashes. On Windows x64
+and Python 3.13 it can be installed with:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-release-win-py313.lock
+```
+
+Its hashes are specific to that platform; Linux Docker and CI use the bounded
+requirements instead. Browser binaries are separate from Python packages; for
+the optional browser rehearsal install `requirements-browser.txt` and run
+`python -m playwright install chromium firefox`. Installing Playwright does not
+by itself establish actual browser execution. The portable verification summary
+is [clean-environment.json](../docs/submission/evidence/clean-environment.json).
+
+CI performs a clean CPU installation and tests when run by GitHub Actions;
+adding the workflow does not establish that it has already passed remotely.
 
 Pytest is configured to collect only `tests/`, so old ignored runs, model data
 and worktree directories cannot break ordinary `pytest -q` collection. Tests
