@@ -1,0 +1,254 @@
+{
+  "format": "aero-surrogate-branch-integration/1",
+  "scope": "all locally available tips; remote fetch failed so server freshness unknown",
+  "branch": "main",
+  "integration_revision": "27868280be03f1fddd3387f84d07579d1e9bc627",
+  "refs": [
+    {
+      "ref": "backup/pre-merge-20261027-5aa669f",
+      "tip": "5aa669f29ceecfe274a533c4744263d512b77ebe",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "finish/submission-evidence",
+      "tip": "438212b646974a4fccd67ec6dc39f15e10bd9468",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "finish/submission-local",
+      "tip": "27868280be03f1fddd3387f84d07579d1e9bc627",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "finish/submission-product",
+      "tip": "36c07a4fe166a21909643aa9f7cfb42bcf045727",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "finish/submission-repro",
+      "tip": "1dfa36124242dc5c8f54f7d53662d6a969640ffa",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "main",
+      "tip": "27868280be03f1fddd3387f84d07579d1e9bc627",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/avneet/stage1-data-training",
+      "tip": "669d4d9f8f81806d2a791f2343d22f597a6f206f",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/main",
+      "tip": "be76dd0ab1cc549d8c59576e049e9bfb5fa58010",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/airflow",
+      "tip": "129a5fe8bd577b81d89485b46f6f449f47a01b18",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/baseline",
+      "tip": "e8771677aacb0f976c957a38ee2887ccc34b826d",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/deploy-web",
+      "tip": "516c924f307ac5f6048a433a63bf42ef763e7d01",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/eval",
+      "tip": "c79ee3f29f189201db3c8c7d94e982db12a8a7f7",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/geometry",
+      "tip": "fec0e97a3a956c9b289d2a677b340b81411eeb28",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/instrument-ui",
+      "tip": "962ffa148650e5fa5fb40392541be313e0543e3b",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/pages-scaling",
+      "tip": "7657207b3b980648ef3593a8351acf8114751778",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/polish",
+      "tip": "1da197c9729ba7b99bdcfefb79be7f8e43b07e15",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/readme",
+      "tip": "c0f5f8a75a441f01919da09e168b839f526e6eff",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/real-cars",
+      "tip": "131d72197fbde3e6fa4ae84298deb8f894b2cfc5",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/results",
+      "tip": "f120cee48a983261dae8ad75fd49da8dc3d49a73",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/run-control",
+      "tip": "4e1d8d23c7d8e18d63fafb78e8dc1ba0e790d75f",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/runs",
+      "tip": "ec7c576b3ce2f3788d3cd3ee44c4a43073b348de",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/showcase",
+      "tip": "17cdfc4a7e648b60773616aed245c423cb186599",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/viewer",
+      "tip": "0bb5201c9bc7ad3b857df920aace733e79ef471f",
+      "ancestor_of_local_main": true
+    },
+    {
+      "ref": "origin/paramveer/web",
+      "tip": "e92b6af854d73e672caa0c2a837eb8824f3f69e1",
+      "ancestor_of_local_main": true
+    }
+  ],
+  "remote_fetch": {
+    "passed": false,
+    "reason": "Could not connect to github.com port443"
+  },
+  "remote_pull": {
+    "passed": false,
+    "reason": "Could not connect to github.com port443"
+  },
+  "remote_push": {
+    "passed": false,
+    "reason": "Could not connect to github.com port443"
+  },
+  "history_policy": "Existing task-separated commits/authors/dates preserved; patch-equivalent agent history recorded; no backdating or force push.",
+  "tests": {
+    "passed": 1021,
+    "skipped": 4,
+    "warnings": 3,
+    "seconds": 99.61
+  },
+  "responsive_checks": {
+    "scope": "post-merge real local Chromium responsive checks; no provider calls",
+    "passed": true,
+    "checks": [
+      {
+        "width": 412,
+        "page": "index.html",
+        "passed": true,
+        "sizes": {
+          "viewport": 412,
+          "content": 412
+        }
+      },
+      {
+        "width": 412,
+        "page": "runs.html",
+        "passed": true,
+        "sizes": {
+          "viewport": 412,
+          "content": 412
+        }
+      },
+      {
+        "width": 412,
+        "page": "results.html",
+        "passed": true,
+        "sizes": {
+          "viewport": 412,
+          "content": 412
+        }
+      },
+      {
+        "width": 390,
+        "page": "index.html",
+        "passed": true,
+        "sizes": {
+          "viewport": 390,
+          "content": 390
+        }
+      },
+      {
+        "width": 390,
+        "page": "runs.html",
+        "passed": true,
+        "sizes": {
+          "viewport": 390,
+          "content": 390
+        }
+      },
+      {
+        "width": 390,
+        "page": "results.html",
+        "passed": true,
+        "sizes": {
+          "viewport": 390,
+          "content": 390
+        }
+      }
+    ]
+  },
+  "desktop_browser": {
+    "passed": false,
+    "attempts": [
+      {
+        "engine": "chromium",
+        "passed": true,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          }
+        ],
+        "error": null
+      },
+      {
+        "engine": "firefox",
+        "passed": false,
+        "checks": [],
+        "error": "Error: BrowserContext.new_page: Target crashed "
+      }
+    ]
+  },
+  "isolated_firefox_retry": {
+    "passed": false,
+    "error": "Error: BrowserContext.new_page: Target crashed "
+  },
+  "deployment_performed": false
+}

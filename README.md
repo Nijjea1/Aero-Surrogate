@@ -10,6 +10,8 @@
 
 Public deployment and the final YouTube upload are **pending**. This repository contains the locally runnable application and submission materials; no hosted URL is implied. See [release instructions](docs/submission/README.md) and the [submission description](docs/submission/submission.md).
 
+Branch consolidation is complete on local `main`; GitHub synchronization remains blocked by this runner's network access. See the [updated remaining plan](docs/submission/NEXT_STEPS.md) for integration checks and the deployment/submission order.
+
 ## What works
 
 - **Designer:** sixteen DrivAerNet morph deltas across fastback, notchback and estateback bodies. Predict Cd, its sigma and a domain-screening verdict.
