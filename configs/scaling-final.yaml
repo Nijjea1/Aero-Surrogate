@@ -1,0 +1,56 @@
+# Final independent scaling: unchanged full training schedule; nested subsets use seed 1000.
+# DrivAerNet is CC BY-NC 4.0. Solver spread is not a hard accuracy ceiling.
+run_name: scaling-final
+seed: 0
+data:
+  kind: table
+  labels_csv: data/drivaernet/parametric.csv
+  id_column: Experiment
+  target_column: Average Cd
+  category_column: Category
+  param_columns:
+  - B_Ramp_Angle
+  - B_Diffusor_Angle
+  - B_Trunklid_Angle
+  - D_Rear_Window_Inclination
+  - D_Winscreen_Inclination
+  - D_Winscreen_Length
+  - D_Rear_Window_Length
+  - E_A_B_C_Pillar_Thickness
+  - E_Fenders_Arch_Offset
+  - G_Trunklid_Curvature
+  - G_Trunklid_Length
+  - H_Front_Bumper_Curvature
+  - H_Front_Bumper_Length
+  - A_Car_Length
+  - A_Car_Width
+  - A_Car_Roof_Height
+  - cat_fastback
+  - cat_notchback
+  - cat_estateback
+  val_fraction: 0.15
+  test_fraction: 0.15
+model:
+  kind: param_mlp
+  in_dim: 19
+  hidden_dim: 256
+  n_layers: 3
+  dropout: 0.1
+  heteroscedastic: true
+  quadratic_features: false
+train:
+  epochs: 400
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.001
+  grad_clip: 1.0
+  num_workers: 0
+  amp: false
+  two_stage: true
+  variance_epochs: 300
+  variance_patience: 30
+  variance_lr: 0.001
+  nll_beta: 0.5
+  ood_quantile: 0.99
+  patience: 40
+  out_dir: runs
