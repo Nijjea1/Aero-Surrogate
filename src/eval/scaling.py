@@ -79,7 +79,7 @@ def update_metrics(metrics_path: str, splits_path: str, checkpoints: list[str], 
                    device: str = "cpu") -> dict:
     """Score the checkpoints on the metrics' own test set and write data_scaling.model back."""
     from . import data as D
-    from .harness import portable_paths, score_scaling, write
+    from .harness import portable_command, portable_paths, score_scaling, write
 
     path = Path(metrics_path)
     metrics = json.loads(path.read_text(encoding="utf-8"))
@@ -93,7 +93,7 @@ def update_metrics(metrics_path: str, splits_path: str, checkpoints: list[str], 
     points = score_scaling(table, rs, checkpoints, device, warnings)
     block = metrics.setdefault("data_scaling", {})
     block["model"] = points
-    block["command"] = " ".join(["python -m src.eval.scaling", *sys.argv[1:]]) if sys.argv[1:] else None
+    block["command"] = portable_command(["python", "-m", "src.eval.scaling", *sys.argv[1:]]) if sys.argv[1:] else None
     block["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     block["subsets"] = (f"nested random subsets of the training split (seed {SUBSET_SEED}), validation and test fixed; "
                         "each point is its own training run, so the full-data point can differ a little from the headline model")

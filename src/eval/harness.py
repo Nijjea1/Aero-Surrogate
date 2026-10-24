@@ -39,12 +39,15 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import ntpath
 import platform
+import posixpath
 import re
+import shlex
 import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import numpy as np
 
@@ -281,7 +284,7 @@ def evaluate(
         "format": METRICS_FORMAT,
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git_commit": _git_commit(),
-        "command": " ".join(sys.argv) if sys.argv and sys.argv[0] else None,
+        "command": portable_command(sys.argv) if sys.argv and sys.argv[0] else None,
         "python": platform.python_version(),
         "data": {
             "path": str(path).replace("\\", "/"),
@@ -504,28 +507,73 @@ def _clean(obj):
     return obj
 
 
-# A drive path (C:\ or C:/) or a rooted POSIX path, starting a word.
-_ABSOLUTE = re.compile(r"(?:(?<![\w.])[A-Za-z]:[\\/]|(?<![\w.:/])/(?=[^/\s]))[^\s\"']*")
+# Protect complete URLs, then recognise quoted paths (including spaces) and
+# ordinary embedded path tokens. Path interpretation must not depend on the
+# host OS: on Linux, Path('C:/Users/...') is relative and resolve() would put it
+# under the checkout, accidentally publishing the entire foreign local path.
+_ABSOLUTE_START = r"(?:[A-Za-z]:[\\/]|\\\\(?=[^\\\s])|/(?!/))"
+_PATH_TOKEN = re.compile(
+    r"(?P<url>[A-Za-z][A-Za-z0-9+.-]*://[^\s\"']+)"
+    r"|(?P<quote>[\"'])(?P<quoted>" + _ABSOLUTE_START + r"[^\r\n]*?)(?P=quote)"
+    r"|(?P<bare>(?:(?<![\w.])[A-Za-z]:[\\/]|(?<![\w.])\\\\(?=[^\\\s])"
+    r"|(?<![\w.:/])/(?=[^/\s]))[^\s\"']*)"
+)
 
 
-def portable_paths(obj, root: Path | None = None):
+def _absolute_path(text: str):
+    """Interpret foreign path syntax lexically; never resolve it on local disk."""
+    if re.match(r"^[A-Za-z]:[\\/]", text) or text.startswith("\\\\"):
+        return PureWindowsPath(ntpath.normpath(text))
+    if text.startswith("/"):
+        return PurePosixPath(posixpath.normpath(text))
+    return None
+
+
+def portable_paths(obj, root: Path | str | None = None):
     """Absolute paths made repo-relative, or cut to the file name when they
     are outside the repo, so a published metrics file names no one's disk."""
-    root = (root or Path.cwd()).resolve()
+    root_text = str(root if root is not None else Path.cwd().resolve())
+    repository = _absolute_path(root_text) or _absolute_path(str(Path(root_text).resolve()))
+
+    def shorten(text):
+        path = _absolute_path(text)
+        if path is None:
+            return text
+        if type(path) is type(repository):
+            try:
+                return path.relative_to(repository).as_posix()
+            except ValueError:
+                pass
+        return path.name
 
     def fix(match):
-        text = match.group(0)
-        try:
-            return Path(text).resolve().relative_to(root).as_posix()
-        except (ValueError, OSError):
-            return Path(text.replace("\\", "/")).name
+        if match.group("url"):
+            return match.group(0)
+        if match.group("quoted"):
+            quote = match.group("quote")
+            return quote + shorten(match.group("quoted")) + quote
+        return shorten(match.group("bare"))
     if isinstance(obj, dict):
-        return {k: portable_paths(v, root) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [portable_paths(v, root) for v in obj]
+        return {k: portable_paths(v, root_text) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [portable_paths(v, root_text) for v in obj]
     if isinstance(obj, str) and ("/" in obj or "\\" in obj):
-        return _ABSOLUTE.sub(fix, obj)
+        # A standalone path may contain unquoted spaces. Commands are handled
+        # token-wise; new command metadata is sanitized before joining argv.
+        if (_absolute_path(obj) is not None and not re.search(r"\s--?[A-Za-z]", obj)
+                and not any(c in obj for c in ("\n", "\r", '"', "'"))):
+            return shorten(obj)
+        return _PATH_TOKEN.sub(fix, obj)
     return obj
+
+
+def portable_command(argv, root: Path | str | None = None) -> str:
+    """Sanitize individual arguments before formatting a display-only command.
+
+    Joining raw argv first discards the boundaries of filenames containing
+    spaces, so a later regex cannot reliably reconstruct or redact them.
+    """
+    return shlex.join([portable_paths(str(argument), root) for argument in argv])
 
 
 def write(metrics: dict, path) -> Path:
