@@ -14,9 +14,14 @@ the error variance of `Average Cd`, so the historical ratio under
 R² is not divided by that ratio. Error bars and domain screening do not establish
 physical correctness, and sigma alone barely ranks held-out errors.
 
-The category checkpoint and full DrivAerML arrays were unavailable for this
-release evaluation. Their independent model metrics are absent, not copied from
-training-side reports. Parameter-space detector experiments remain available:
+The verified incoming category checkpoint and all thirty DrivAerML arrays now
+support fresh independent release grading. Category results are R² 0.4792 /
+MAE 0.01016 on 1,403 held-out notchbacks. Fields score Cp R² 0.5080 /
+MAE 0.14554 across 500,000 stored query cells; the pooled nearest-training-point
+reference is stronger (R² 0.6905 / MAE 0.10251). Pressure-only per-car drag MAE
+is 0.0218415, not the earlier 4,096-point/car estimate of 0.0326. Use the fresh
+current report for final provenance and timing; old evidence snapshots retain
+their original dates and are not silently relabelled. Parameter-space detector experiments remain available:
 100% detection of sampled joint-extreme corners and 0.32% false alarms on the
 random-split test set. The held-out-style detector comparison shows that the
 all-input result depends on body-style indicators; the aero-only detector catches

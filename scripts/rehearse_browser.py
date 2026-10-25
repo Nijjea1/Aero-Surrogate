@@ -190,7 +190,7 @@ def _origin(url: str) -> str:
 
 
 def exercise_attempt(browser, services: LocalServices, output: Path, number: int,
-                     engine: str, live: bool, record: bool) -> dict:
+                     engine: str, live: bool, record: bool, responsive: bool = False) -> dict:
     from playwright.sync_api import expect
 
     started_at, started = datetime.now(timezone.utc).isoformat(), time.monotonic()
@@ -293,7 +293,33 @@ def exercise_attempt(browser, services: LocalServices, output: Path, number: int
             expect(page.locator("#bench-table")).to_contain_text(method)
         expect(page.locator("#headline")).to_contain_text("86.6")
         check("release scalar and all three benchmark methods visible")
+        expect(page.locator("#acc-ood")).to_contain_text("0.479")
+        expect(page.locator("#field-body")).to_be_visible()
+        expect(page.locator("#field-acc")).to_contain_text("0.508")
+        expect(page.locator("#field-acc")).to_contain_text("0.691")
+        expect(page.locator("#field-acc")).to_contain_text("Pooled nearest training points")
+        expect(page.locator("#field-lede")).to_contain_text("outperforms the network")
+        expect(page.locator("#field-note")).to_contain_text("0.02184")
+        expect(page.locator("#scaling .step-dot[style*='series-1']")).to_have_count(5)
+        check("category, full stored-cell field grade, stronger reference and five-point scaling visible")
         screenshot("results")
+        if responsive:
+            for width in (390, 412):
+                page.set_viewport_size({"width": width, "height": 844})
+                for route, ready in (("index.html", "#cd-value"), ("runs.html", "#logbook tr"),
+                                     ("results.html", "#field-acc")):
+                    page.goto(services.web + "/" + route, wait_until="networkidle")
+                    expect(page.locator(ready).first).to_be_visible()
+                    if route == "index.html":
+                        expect(page.locator("#viewer canvas")).to_be_visible(timeout=60_000)
+                        expect(page.locator("#viewer-message")).to_be_hidden(timeout=60_000)
+                        expect(page.locator("#cd-value")).to_have_text("0.2246")
+                    dimensions = page.evaluate("""() => ({viewport:innerWidth,
+                        document:document.documentElement.scrollWidth})""")
+                    if dimensions["document"] > dimensions["viewport"] + 1:
+                        raise AssertionError(f"horizontal overflow at {width}px on {route}: {dimensions}")
+                    check(f"responsive {width}px {route}", dimensions)
+                screenshot(f"results-mobile-{width}")
         if row["page_errors"]:
             raise AssertionError("browser page errors were recorded")
         failures = [item for item in row["failed_requests"] if not item["navigation_abort"]]
@@ -343,6 +369,7 @@ def main(argv=None) -> int:
     parser.add_argument("--max-spend", type=float, default=1.0, help="Isolated application ledger cap, USD")
     parser.add_argument("--engines", nargs="+", choices=("chromium", "firefox"), default=["chromium", "firefox"])
     parser.add_argument("--record", action="store_true", help="Record raw browser WebM; no composition or publishing")
+    parser.add_argument("--responsive", action="store_true", help="Also check Designer, Runs and Results at 390px and 412px in each context")
     args = parser.parse_args(argv)
     if not 1 <= args.attempts <= 100 or not 0 <= args.live_runs <= args.attempts:
         parser.error("attempts must be 1-100; live-runs must be between zero and attempts")
@@ -392,7 +419,7 @@ def main(argv=None) -> int:
                             browser = getattr(playwright, engine).launch(**options)
                             active_engine = engine
                         row = exercise_attempt(browser, services, output, index + 1, engine,
-                                               index in selected, args.record)
+                                               index in selected, args.record, args.responsive)
                         report["attempts"].append(row)
                         write_reports(output, report)
                         print(f"Attempt {index + 1}/{args.attempts} {engine}: {'passed' if row['passed'] else 'FAILED'}", flush=True)

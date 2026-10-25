@@ -26,5 +26,8 @@ the current release. Send the local path of the completed bundle to the team.
 5. Package the artifacts outside Git with an inventory, checksums and dataset
    attribution/licence notices. Keep failed or unavailable results explicit.
 
-The current release proceeds with the scalar model; category and full-test
-field accuracy remain unavailable until these inputs are independently checked.
+Receipt update, 27 October: the requested bundle is now received and verified
+(43/43 payload checksums). The category checkpoint and all thirty field arrays
+support fresh independent grading. This document preserves the original request;
+current release status and results are in `COMPLETION.md` and
+`web/results/metrics.json`, not the immutable incoming reports.
