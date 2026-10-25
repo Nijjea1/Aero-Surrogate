@@ -65,6 +65,20 @@ training or executed Serverless Jobs in this release.
   median **predicted Cd reduction** was **3.875% for Nemotron Super**, **3.841% for
   CMA-ES**, and **2.793% for random search**. Those similar medians support comparable
   search performance in this small experiment, not a claim that the agent beats CMA-ES.
+- The separate category-holdout checkpoint achieved **R² 0.4792**, **MAE 0.01016**
+  on **1,403 unseen notchbacks**, with 1-sigma coverage only **48.75%**. It is an
+  evaluation checkpoint, not the production model. Explicit style indicators explain
+  the apparently perfect style detector; shape dials alone gave AUROC about **0.536**.
+- Experimental surface pressure achieved **Cp R² 0.5080**, **MAE 0.14554** over
+  **500,000 stored query cells** from five test cars. A pooled nearest-training-point
+  reference did better: **R² 0.6905**, **MAE 0.10251**. Both numbers must travel together.
+  The network's 1-sigma coverage was **79.94%**, over-covering those stored labels.
+  Pressure-only integrated drag per-car MAE was **0.0218415**, mean absolute relative
+  error **8.57%**; this excludes viscous drag and complete native-surface quadrature.
+
+The machine-readable release report is authoritative for identities, the fresh local
+timing and any completed scaling curve. Do not substitute a historical scaling curve
+or the earlier 4,096-point/car Cd estimate of 0.0326 for these stored-cell results.
 
 ## Challenges and limitations
 
@@ -77,6 +91,8 @@ individually legal parameters that is jointly far from the training data.
 Optimisation results are surrogate predictions; no new CFD solve validates the selected
 designs. Equal evaluation counts do not imply equal runtime or cost. An individual Cd
 sigma is not an uncertainty estimate on the difference between two designs.
+The search objective remains Cd. Any Cd × approximate viewer frontal-area analysis
+is post-hoc and is not an optimisation result for a different objective.
 
 The viewer mesh approximates the original morph, smoke is illustrative, and race/energy
 comparisons use stated simplifying assumptions. Lift and wall shear are unavailable.

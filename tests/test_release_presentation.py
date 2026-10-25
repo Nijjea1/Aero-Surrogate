@@ -56,6 +56,62 @@ def test_agent_model_id_is_recognised_in_benchmark_copy():
     assert "join this table once" not in block
 
 
+def test_completed_field_results_keep_stronger_reference_and_sampling_scope():
+    metrics = {
+        "headline": {"r2_in_distribution": .875, "r2_linear_reference": .835,
+                     "mae_in_distribution": .00616, "r2_held_out_category": .4792,
+                     "held_out_category": "notchback"},
+        "in_distribution": {"n_test": 625},
+        "field": {"available": True, "test_runs": [3, 11, 12, 22, 27], "n_points": 500000,
+                  "overall": {"r2": .50803, "mae": .145535, "coverage_1sigma": .799376},
+                  "references": {"nearest_training_car": {"r2": .690518, "mae": .10251}},
+                  "integrated_cd": {"mae": .0218415, "mean_relative_error": .085677}},
+        "data_scaling": {"model": [{"n_train": 146, "r2": .75}, {"n_train": 2915, "r2": .87}]},
+    }
+    block = _builder().results_block(metrics, {})
+    assert "500,000 stored query cells" in block
+    assert "reference beats the field network" in block
+    assert "0.691" in block and "0.508" in block
+    assert "over-coverage" in block
+    assert "full native CFD surface quadrature" in block
+    assert "0.02184" in block and "8.57%" in block
+    assert "evaluation-only" in block
+    assert "do not replace the serving checkpoint" in block
+
+
+def test_field_renderer_reports_stronger_baseline_without_viewer_calibration_claim():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    source = (ROOT / "web/results.js").read_text(encoding="utf-8")
+    renderer = source.split("function renderField() {", 1)[1].split("// ---------------------------------------------------------------- scaling", 1)[0]
+    script = """
+const elements = {};
+const $ = (id) => elements[id] ??= {};
+const fmt = (v, digits) => Number(v).toFixed(digits);
+const signed = fmt;
+const charts = [];
+const barChart = (el, rows) => charts.push(rows);
+const state = {metrics: {field: {available:true, test_runs:[3,11,12,22,27], n_points:500000,
+  overall:{r2:.50803,mae:.145535,coverage_1sigma:.799376},
+  references:{nearest_training_car:{r2:.690518}},
+  integrated_cd:{pred_mean:.23024,true_mean:.24575,mae:.0218415,mean_relative_error:.085677}}}};
+""" + "function renderField() {" + renderer + """
+renderField();
+console.log(JSON.stringify({elements, charts}));
+"""
+    result = subprocess.run([node, "-e", script], capture_output=True, text=True,
+                            encoding="utf-8", timeout=30, check=True)
+    rendered = json.loads(result.stdout)
+    lede = rendered["elements"]["field-lede"]["textContent"]
+    note = rendered["elements"]["field-note"]["textContent"]
+    assert "outperforms the network" in lede and "over-coverage" in lede
+    assert "stored surface query cells" in lede
+    assert "not full native CFD surface quadrature" in note
+    assert "orientation and accuracy remain unvalidated" in note
+    assert rendered["charts"][0][1]["label"] == "Pooled nearest training points"
+
+
 def test_missing_numeric_values_never_render_as_zero_or_nan():
     node = shutil.which("node")
     if not node:

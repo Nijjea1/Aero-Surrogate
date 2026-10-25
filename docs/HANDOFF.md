@@ -182,10 +182,10 @@ pressure field, and it is measured, and it is **not good enough to act on**:
 
 | | model, per-car MAE | trivial baseline |
 |---|---|---|
-| Cd | **0.0326** | 0.0496 (predict the test mean) |
+| Cd, historical 4,096-point/car estimate | **0.0326** | 0.0496 (predict the test mean) |
 | Cl | 0.0802 | 0.1043 (predict zero) |
 
-Drag beats its baseline by 34%. Lift beats its by 23% **and gets the sign wrong
+In that historical subsample estimate, drag beats its mean baseline by 34%. Lift beats its by 23% **and gets the sign wrong
 on one of five held-out cars** (run 12: true +0.1285, predicted −0.0189). A
 wrong-signed lift coefficient is worse than no lift coefficient: it points
 downforce the wrong way. So no endpoint serves Cl as a prediction, and no
@@ -193,6 +193,18 @@ derived lift load or effect is displayed anywhere.
 
 Both stage-2 integrals are also **pressure-only**: the viscous term, roughly 8%
 of total Cd, is not predicted by this model at all.
+
+The received 27 October evaluation bundle grades all 100,000 stored query cells
+for each of five test cars: pressure-only Cd per-car MAE **0.0218415**, mean
+absolute relative error **8.57%**. Runs 3, 11 and 22 under-predict; 12 and 27
+over-predict. This supersedes the 0.0326 headline, but does not rewrite historical
+checkpoint metadata or establish complete native CFD surface quadrature.
+Cp R² is **0.5080**, MAE **0.14554** over 500,000 stored cells. The pooled
+nearest-training-point reference is stronger (**R² 0.6905**, **MAE 0.10251**).
+It averages eight neighbours from sampled points pooled across twenty training
+cars in position/normal space, rather than copying a whole training car.
+Fresh integrated-source reports in `web/results/metrics.json` are the release
+authority after regeneration; the incoming reports remain immutable provenance.
 
 ---
 
@@ -233,8 +245,11 @@ ratio is not a validated upper bound on attainable R-squared. Earlier
 The served scalar's independently graded nominal 90% interval covers 86.56%
 of held-out labels. Its sigma/error rank correlation is about 0.066, so sigma
 alone barely ranks individual errors. Present the distance gate as parameter-domain
-screening, not a guarantee of correctness. The category numbers above are
-historical training-side metrics until the category artifact is independently graded.
+screening, not a guarantee of correctness. The received category artifact reproduces
+R² 0.4792 / MAE 0.01016 on 1,403 held-out notchbacks; the release report records
+the independent regrade. Its 1σ coverage is 48.75%. The full-input detector's
+100% style detection relies on explicit style indicators; aerodynamic dials alone
+give AUROC about 0.536 and detect about 2.64%. Keep this checkpoint evaluation-only.
 
 ---
 
@@ -319,7 +334,7 @@ which cover all eight `PRESSURE_REGIONS`.
 That matters beyond filling a field: *"pressure is high on the rear fascia"* is
 something Nemotron can act on. A single scalar is not.
 
-## Current numbers, and how to read them
+## Historical training-side snapshot (superseded by §4 stored-cell grading)
 
 20 train / 5 val / 5 test cars — split **by car**, never by point:
 
@@ -348,8 +363,9 @@ not predict the viscous term, which is ~8% of total Cd):
 | run 22 | 0.2791 | 0.2445 | −0.0347 |
 | run 27 | 0.1958 | 0.2347 | +0.0389 |
 
-Mean absolute error 0.032, so roughly 12% per car. A real result, not a good
-one yet.
+This table records the historical 4,096-point/car estimate (MAE about 0.032,
+roughly 12% per car). The all-stored-cell evaluation in §4 supersedes this
+headline; preserve the table as historical evidence of the original sampling.
 
 ### Lift: measured, and not usable
 
@@ -359,15 +375,15 @@ review by Pranoy, fixed, and lift is now both constrained and measured:
 
 | | model MAE | trivial baseline |
 |---|---|---|
-| Cd | **0.0326** | 0.0496 (predict the mean) |
+| Cd, historical 4,096-point/car estimate | **0.0326** | 0.0496 (predict the mean) |
 | Cl | 0.0802 | 0.1043 (predict zero) |
 
-Drag beats its baseline by 34% — real skill. Lift beats its baseline by 23%
+On that historical subsample, drag beats its mean baseline by 34%. Lift beats its baseline by 23%
 **and gets the sign wrong on 1 of 5 held-out cars** (run 12: true +0.1285,
 predicted −0.0189). **Do not use Cl for decisions.** Stage 1 returning `cl` as
 a placeholder `0.0` remains the honest default.
 
-Fixing the bug did not change drag accuracy (0.0326 vs 0.0328 before), so no
+Fixing the bug did not change the historical subsample drag estimate (0.0326 vs 0.0328 before), so no
 retraining was required for the drag claims — only a narrower lift claim.
 
 **Still judge the field by its integral, not by Cp R².** A model predicting the
@@ -383,8 +399,12 @@ what a real H100 run should do. This is the scaled-down stand-in.
 
 # Four uncertainty signals, measured. Three do not work.
 
-This is the project's headline contribution, so here is the full honest state
-of it. Every row is measured in this repo, not asserted.
+This is the historical training-side comparison. The release independently grades
+the served scalar and separate category checkpoint in `web/results/metrics.json`.
+The additional feature-distance/ensemble rows are not fresh release experiments.
+The +20% sigma comparison below crosses different trained model heads; for the
+category checkpoint alone, familiar-validation to held-out sigma rises about 6%.
+Neither change compensates for the held-out error increase.
 
 | signal | in distribution | on a held-out body style |
 |---|---|---|
