@@ -30,6 +30,7 @@ here, independently, from the arrays and the checkpoint alone.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -37,6 +38,7 @@ import numpy as np
 
 KNN_POINTS_PER_CAR = 20_000     # training cells per car in the nearest-point reference
 KNN_K = 8
+DEFAULT_CHUNK_SIZE = 1024      # bound local-neighbour feature allocations on CPU
 NORMAL_WEIGHT = 0.25            # how much a normal counts against a position in that search
 
 
@@ -63,12 +65,17 @@ def _pressure_drag(cp, arrays, meta) -> float:
     return float((cp * -nx * area).sum() / float(meta["a_ref_m2"]) * scale)
 
 
+def _fields_directory(root) -> Path:
+    root = Path(root)
+    return root if root.name == "fields" or any(root.glob("run_*.npz")) else root / "fields"
+
+
 def load_runs(root: Path, runs) -> list[tuple[int, dict, dict]]:
     from src.data.fields import load_run
 
     out = []
     for run in runs:
-        path = Path(root) / "fields" / f"run_{run}.npz"
+        path = _fields_directory(root) / f"run_{run}.npz"
         if not path.exists():
             raise FileNotFoundError(f"{path} (run `python -m src.data.fields --extract`)")
         arrays, meta = load_run(path)
@@ -76,13 +83,15 @@ def load_runs(root: Path, runs) -> list[tuple[int, dict, dict]]:
     return out
 
 
-def checkpoint_predictor(path, device: str = "cpu", chunk: int = 20_000):
+def checkpoint_predictor(path, device: str = "cpu", chunk: int = DEFAULT_CHUNK_SIZE):
     """(predict, ckpt) for a fields-v1 checkpoint; predict(arrays) -> (cp, sigma) in Cp units."""
     import torch
 
     from src.train.field_predict import FieldPredictor
 
-    ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    if chunk < 1:
+        raise ValueError("chunk size must be positive")
+    ckpt = torch.load(path, map_location="cpu", weights_only=True)
     fp = FieldPredictor(ckpt, device=torch.device(device))
     n_cloud = int(fp.preprocess.get("n_cloud", 2048))
 
@@ -101,8 +110,8 @@ def checkpoint_predictor(path, device: str = "cpu", chunk: int = 20_000):
     return predict, ckpt
 
 
-def _nearest_car_reference(train, k: int = KNN_K, per_car: int = KNN_POINTS_PER_CAR, seed: int = 0):
-    """Cp of the nearest training points by position and normal: what copying another car gets."""
+def _nearest_car_reference(train, k: int = KNN_K, per_car: int = KNN_POINTS_PER_CAR, seed: int = 0, workers: int = 1):
+    """Average Cp of pooled nearest training points in position/normal space."""
     from scipy.spatial import cKDTree
 
     rng = np.random.default_rng(seed)
@@ -117,17 +126,17 @@ def _nearest_car_reference(train, k: int = KNN_K, per_car: int = KNN_POINTS_PER_
 
     def predict(arrays):
         q = np.hstack([arrays["query_xyz"], NORMAL_WEIGHT * arrays["query_normal"]]).astype(np.float64)
-        _, idx = tree.query(q, k=k, workers=-1)
+        _, idx = tree.query(q, k=k, workers=workers)
         return cp[idx].mean(axis=1)
 
     return predict
 
 
-def grade(test, train, predict) -> dict:
+def grade(test, train, predict, *, reference_workers: int = 1) -> dict:
     """The field block of metrics.json from loaded runs and a predictor."""
     regions = list(test[0][2].get("regions") or [])
     mean_cp = float(np.concatenate([a["cp"] for _, a, _ in train]).astype(np.float64).mean()) if train else 0.0
-    nearest = _nearest_car_reference(train) if train else None
+    nearest = _nearest_car_reference(train, workers=reference_workers) if train else None
 
     pooled = {"true": [], "pred": [], "sigma": [], "mean": [], "nearest": [], "region": [], "area": []}
     per_car, cd_rows = [], []
@@ -183,10 +192,11 @@ def grade(test, train, predict) -> dict:
     return out
 
 
-def grade_checkpoint(path, root="data/drivaerml", device: str = "cpu") -> dict:
+def grade_checkpoint(path, root="data/drivaerml", device: str = "cpu", *,
+                     chunk_size: int = DEFAULT_CHUNK_SIZE, reference_workers: int = 1) -> dict:
     """Grade a field checkpoint on its own held-out cars, or say why it cannot be."""
     try:
-        predict, ckpt = checkpoint_predictor(path, device)
+        predict, ckpt = checkpoint_predictor(path, device, chunk=chunk_size)
     except Exception as exc:  # torch or the checkpoint missing: report, don't crash the grade
         return {"available": False, "reason": f"field checkpoint {Path(path).name} could not be loaded: {exc}"}
     splits = ckpt.get("splits") or {}
@@ -197,13 +207,37 @@ def grade_checkpoint(path, root="data/drivaerml", device: str = "cpu") -> dict:
         train = load_runs(root, splits.get("train") or [])
     except FileNotFoundError as exc:
         return {"available": False, "reason": f"field data missing: {exc}"}
-    out = grade(test, train, predict)
+    out = grade(test, train, predict, reference_workers=reference_workers)
     out["checkpoint"] = {
-        "path": str(path).replace("\\", "/"), "version": ckpt.get("version"),
+        "path": str(path).replace("\\", "/"), "sha256": _sha256(path), "version": ckpt.get("version"),
         "schema_version": ckpt.get("schema_version"), "n_params": ckpt.get("n_params"),
         "self_reported_test_metrics": {k: v for k, v in (ckpt.get("test_metrics") or {}).items() if k != "per_region"},
     }
+    out["evaluation"] = {
+        "device": device, "chunk_size": chunk_size, "reference_workers": reference_workers,
+        "splits": splits,
+        "arrays": [{"run": run, "sha256": _sha256(_fields_directory(root) / f"run_{run}.npz"),
+                    "n_points": len(arrays["cp"])} for run, arrays, _ in train + test],
+        "reference": {"name": "pooled nearest-training-point", "legacy_key": "nearest_training_car",
+                      "k": KNN_K, "points_per_training_car": KNN_POINTS_PER_CAR,
+                      "normal_weight": NORMAL_WEIGHT, "seed": 0},
+    }
     return out
+
+
+def _sha256(path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _positive_int(value):
+    value = int(value)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return value
 
 
 def main(argv=None) -> int:
@@ -212,13 +246,22 @@ def main(argv=None) -> int:
     ap.add_argument("--root", default="data/drivaerml")
     ap.add_argument("--metrics", default="web/results/metrics.json")
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--chunk-size", type=_positive_int, default=DEFAULT_CHUNK_SIZE)
+    ap.add_argument("--reference-workers", type=_positive_int, default=1)
     args = ap.parse_args(argv)
 
     from .harness import portable_paths, write
 
-    block = grade_checkpoint(args.checkpoint, args.root, args.device)
     path = Path(args.metrics)
-    metrics = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        metrics = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        if not isinstance(metrics, dict):
+            raise ValueError("expected a JSON object")
+    except (OSError, ValueError) as exc:
+        print(f"cannot merge field metrics into {path.name}: {exc}")
+        return 2
+    block = grade_checkpoint(args.checkpoint, args.root, args.device,
+                             chunk_size=args.chunk_size, reference_workers=args.reference_workers)
     metrics["field"] = block
     write(portable_paths(metrics), path)
     if not block["available"]:
@@ -228,7 +271,8 @@ def main(argv=None) -> int:
     print(f"Cp R2 {o['r2']:.3f}  MAE {o['mae']:.4f}  1-sigma coverage {o['coverage_1sigma']:.2f}  "
           f"({block['n_points']:,} points, {len(block['test_runs'])} held-out cars)")
     for name, s in ref.items():
-        print(f"  reference {name:22} R2 {s['r2']:.3f}  MAE {s['mae']:.4f}")
+        label = "pooled nearest-training-point" if name == "nearest_training_car" else name
+        print(f"  reference {label:28} R2 {s['r2']:.3f}  MAE {s['mae']:.4f}")
     c = block["integrated_cd"]
     print(f"pressure drag: true {c['true_mean']:.4f}  predicted {c['pred_mean']:.4f}  per-car MAE {c['mae']:.4f}")
     return 0
