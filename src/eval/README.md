@@ -70,8 +70,9 @@ be passed to the harness with `--scaling` in a full regrade.
 ```powershell
 # with a full grade
 python -m src.eval.harness ... --field-checkpoint runs/fields/best.pt
-# or into the published metrics, leaving every other number alone
-python -m src.eval.fields --checkpoint runs/fields/best.pt --metrics web/results/metrics.json
+# create a standalone field report, or merge into an existing metrics object
+python -m src.eval.fields --checkpoint runs/fields/best.pt --metrics web/results/metrics.json `
+    --root data/drivaerml --chunk-size 1024 --reference-workers 1
 ```
 
 Graded on the checkpoint's own held-out cars (`splits["test"]`, whole runs),
@@ -80,7 +81,21 @@ It reports Cp R², MAE and σ coverage against two references with nothing
 learned about the car (the training mean everywhere, and the nearest point
 on any training car), the error per region, and the pressure drag
 integrated over each car's predicted and measured field. A missing
-checkpoint or missing arrays are reported in `field.reason`, never a crash.
+checkpoint or missing arrays are reported in `field.reason`, with exit status 1.
+`--root` accepts either the dataset root or its direct `fields/` directory.
+A fresh `--metrics` path creates a field-only report (including parent directories);
+an existing JSON object retains every unrelated section. Invalid existing JSON
+or a non-object document is rejected with exit status 2 and left untouched.
+
+The reference called `nearest_training_car` in JSON is a **pooled nearest-training-point**
+reference: it samples up to 20,000 cells per training run with seed 0, pools their
+position/normal features (normal weight 0.25), and averages eight neighbours.
+It does not select or copy one whole car. Reports record this configuration,
+checkpoint and array SHA-256 identities, split IDs, device and inference chunk size.
+The default 1,024-point inference chunks bound CPU feature allocations; change
+`--chunk-size` for available memory. `--reference-workers` defaults to one to avoid
+CPU oversubscription. These controls do not change the model or metric formulas.
+Checkpoints load using PyTorch's restricted `weights_only=True` loader.
 
 ## Agent against the baselines
 

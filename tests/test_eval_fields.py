@@ -90,7 +90,76 @@ def test_a_real_field_checkpoint_is_graded_on_its_own_test_cars(root, tmp_path):
     assert np.isfinite(out["overall"]["mae"]) and 0 <= out["overall"]["coverage_1sigma"] <= 1
     assert out["checkpoint"]["version"] == "fixture" and "per_region" not in out["checkpoint"]["self_reported_test_metrics"]
 
+    assert out["checkpoint"]["sha256"] == fields._sha256(path)
+    assert out["evaluation"]["splits"] == {"train": [1, 2], "val": [3], "test": [4]}
+    assert {row["run"] for row in out["evaluation"]["arrays"]} == {1, 2, 4}
+    assert out["evaluation"]["reference"]["name"] == "pooled nearest-training-point"
+    _, arrays, _ = fields.load_runs(root, [4])[0]
+    small, _ = fields.checkpoint_predictor(path, chunk=37)
+    large, _ = fields.checkpoint_predictor(path, chunk=600)
+    for first, second in zip(small(arrays), large(arrays)):
+        np.testing.assert_allclose(first, second, rtol=2e-5, atol=2e-6)
+
     # A test car with no extracted arrays is reported, not raised.
     (root / "fields" / "run_4.npz").unlink()
     missing = fields.grade_checkpoint(path, root)
     assert not missing["available"] and "field data missing" in missing["reason"]
+
+
+def test_load_runs_accepts_dataset_root_or_fields_directory(root):
+    for dataset, direct in zip(fields.load_runs(root, [1, 4]), fields.load_runs(root / "fields", [1, 4])):
+        assert dataset[0] == direct[0] and dataset[2] == direct[2]
+        np.testing.assert_array_equal(dataset[1]["cp"], direct[1]["cp"])
+
+
+def _available_block():
+    return {"available": True, "overall": {"r2": 0.5, "mae": 0.1, "coverage_1sigma": 0.7},
+            "references": {}, "n_points": 10, "test_runs": [4],
+            "integrated_cd": {"true_mean": 0.2, "pred_mean": 0.19, "mae": 0.01}}
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_cli_creates_output_or_preserves_other_sections(tmp_path, monkeypatch, existing):
+    path = tmp_path / "new folder" / "metrics.json"
+    if existing:
+        path.parent.mkdir()
+        path.write_text(json.dumps({"headline": {"r2": 0.8}, "field": {"old": True}}))
+    calls = []
+    def fake_grade(*args, **kwargs):
+        calls.append((args, kwargs))
+        return _available_block()
+    monkeypatch.setattr(fields, "grade_checkpoint", fake_grade)
+    assert fields.main(["--checkpoint", "fixture.pt", "--metrics", str(path),
+                        "--chunk-size", "64", "--reference-workers", "2"]) == 0
+    out = json.loads(path.read_text())
+    assert out["field"] == _available_block()
+    assert out.get("headline") == ({"r2": 0.8} if existing else None)
+    assert calls[0][1] == {"chunk_size": 64, "reference_workers": 2}
+
+
+@pytest.mark.parametrize("content", ['{broken', '[]', 'null'])
+def test_cli_refuses_invalid_existing_output_without_overwriting(tmp_path, monkeypatch, content, capsys):
+    path = tmp_path / "metrics.json"
+    path.write_text(content)
+    def unexpected(*args, **kwargs):
+        pytest.fail("invalid output must be rejected before grading")
+    monkeypatch.setattr(fields, "grade_checkpoint", unexpected)
+    assert fields.main(["--checkpoint", "fixture.pt", "--metrics", str(path)]) == 2
+    assert path.read_text() == content
+    assert "cannot merge field metrics" in capsys.readouterr().out
+
+
+def test_cli_missing_checkpoint_writes_explicit_unavailable_block(tmp_path):
+    path = tmp_path / "new" / "metrics.json"
+    assert fields.main(["--checkpoint", str(tmp_path / "missing.pt"), "--metrics", str(path)]) == 1
+    out = json.loads(path.read_text())
+    assert out["field"]["available"] is False
+    assert "could not be loaded" in out["field"]["reason"]
+    assert "overall" not in out["field"] and "references" not in out["field"]
+
+
+@pytest.mark.parametrize("option", ["--chunk-size", "--reference-workers"])
+def test_cli_rejects_unbounded_or_empty_worker_arguments(option):
+    with pytest.raises(SystemExit) as exc:
+        fields.main(["--checkpoint", "unused.pt", option, "0"])
+    assert exc.value.code == 2
