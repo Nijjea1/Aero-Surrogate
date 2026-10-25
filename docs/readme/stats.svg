@@ -37,6 +37,6 @@
       <text x="24" y="136" fill="#727379" font-size="13.5">Nemotron: 25 evaluations, 5 runs</text>
 
     </g>
-    <text x="20" y="222" fill="#727379" font-size="13">Release scalar: independently graded checkpoint 49e5a8b14d5b; category and full-field evaluations unavailable locally</text>
+    <text x="20" y="222" fill="#727379" font-size="13">Final independent evaluation, 27 October 2026</text>
   </g>
 </svg>

@@ -1,12 +1,12 @@
 {
   "format": "aero-surrogate-metrics/1",
-  "created_at": "2026-10-27T21:23:15+00:00",
-  "git_commit": "46bd7d14f8a30514efe54ad1c60e7cc3a2d74639",
-  "command": "src/eval/harness.py --checkpoint runs/drivaernet-random/best.pt --data .audit-track-b/submission-parametric-20261027.csv --splits runs/handover/splits.json --out web/results/metrics.json --label Release scalar: independently graded checkpoint 49e5a8b14d5b; category and full-field evaluations unavailable locally",
+  "created_at": "2026-10-28T02:47:41+00:00",
+  "git_commit": "43191bf2c9b9d87ffc313e63b3ff36ee127a0c92",
+  "command": "src/eval/harness.py --checkpoint best.pt --ood-checkpoint best.pt --data parametric.csv --splits splits.drivaernet.json --scaling best.pt best.pt best.pt best.pt best.pt --out scalar-category.json --device cpu --label 'Final independent evaluation, 27 October 2026'",
   "python": "3.13.14",
   "data": {
-    "path": ".audit-track-b/submission-parametric-20261027.csv",
-    "sha256": "9570826656321b9a7f468c8ef38e71709392b830917353aed97839170f26a7bd",
+    "path": "parametric.csv",
+    "sha256": "8f832cdc04439976a03f2305554b1e300832bd8d48384af937451b550c4573a3",
     "n_designs": 4165,
     "categories": {
       "estateback": 1386,
@@ -24,7 +24,7 @@
     "licence": "DrivAerNet, CC BY-NC 4.0 (non-commercial)"
   },
   "splits": {
-    "source": "runs/handover/splits.json",
+    "source": "splits.drivaernet.json",
     "seed": 0,
     "random": {
       "train": 2915,
@@ -66,7 +66,7 @@
   },
   "models": {
     "in_distribution": {
-      "path": "runs/drivaernet-random/best.pt",
+      "path": "best.pt",
       "sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
       "version": "drivaernet-random-2026-10-15-8fb6ed1",
       "schema_version": "2.0.0",
@@ -106,14 +106,56 @@
         "coverage_1sigma": 0.6448,
         "coverage_2sigma": 0.9296
       }
+    },
+    "out_of_distribution": {
+      "path": "best.pt",
+      "sha256": "6b6033efbe90d01a10534f9cc0a93665e76227095da18fb47ca39f2d2db6848f",
+      "version": "drivaernet-category-2026-10-15-8fb6ed1",
+      "schema_version": "2.0.0",
+      "preprocess": "params-v1",
+      "param_columns": [
+        "B_Ramp_Angle",
+        "B_Diffusor_Angle",
+        "B_Trunklid_Angle",
+        "D_Rear_Window_Inclination",
+        "D_Winscreen_Inclination",
+        "D_Winscreen_Length",
+        "D_Rear_Window_Length",
+        "E_A_B_C_Pillar_Thickness",
+        "E_Fenders_Arch_Offset",
+        "G_Trunklid_Curvature",
+        "G_Trunklid_Length",
+        "H_Front_Bumper_Curvature",
+        "H_Front_Bumper_Length",
+        "A_Car_Length",
+        "A_Car_Width",
+        "A_Car_Roof_Height",
+        "cat_fastback",
+        "cat_notchback",
+        "cat_estateback"
+      ],
+      "held_out_category": "notchback",
+      "n_params": 237186,
+      "n_train": 2348,
+      "ood_threshold": 4.716300983351741,
+      "self_reported_test_metrics": {
+        "loss": 0.4598154782909032,
+        "r2": 0.4792118370452969,
+        "mae": 0.010160996578633785,
+        "rmse": 0.012965749017894268,
+        "n": 1403,
+        "mean_sigma": 0.008607695810496807,
+        "coverage_1sigma": 0.48752672843905914,
+        "coverage_2sigma": 0.7883107626514612
+      }
     }
   },
   "speed": {
     "device": "cpu",
-    "single_design_ms_median": 0.6388000037986785,
-    "single_design_ms_p95": 1.143194970791228,
+    "single_design_ms_median": 0.172399973962456,
+    "single_design_ms_p95": 0.21795002685394135,
     "batch_size": 625,
-    "batch_designs_per_s": 340580.8941211817
+    "batch_designs_per_s": 305728.1183772343
   },
   "in_distribution": {
     "split": "random",
@@ -424,34 +466,34 @@
     },
     "overall": {
       "n": 625,
-      "r2": 0.8749716741173402,
-      "mae": 0.006160587536873854,
-      "rmse": 0.007921396750390055,
+      "r2": 0.8749716739588658,
+      "mae": 0.006160587542665499,
+      "rmse": 0.007921396755410275,
       "max_error": 0.03305859429764532,
       "mean_true": 0.25311475208868944
     },
     "per_category": {
       "estateback": {
         "n": 198,
-        "r2": 0.8045010178644743,
-        "mae": 0.0064810335790494705,
-        "rmse": 0.008230345871835007,
+        "r2": 0.8045010180937266,
+        "mae": 0.006481033572401576,
+        "rmse": 0.00823034586700934,
         "max_error": 0.029853653783181833,
         "mean_true": 0.27095835110514954
       },
       "fastback": {
         "n": 216,
-        "r2": 0.7955456946045166,
-        "mae": 0.0063329794450591335,
-        "rmse": 0.00850279857875162,
+        "r2": 0.795545694453154,
+        "mae": 0.006332979442773921,
+        "rmse": 0.008502798581899038,
         "max_error": 0.03305859429764532,
         "mean_true": 0.24423733431607603
       },
       "notchback": {
         "n": 211,
-        "r2": 0.8663738498025917,
-        "mae": 0.00568340759128716,
-        "rmse": 0.006949141420463477,
+        "r2": 0.866373849096047,
+        "mae": 0.005683407617020181,
+        "rmse": 0.0069491414388351755,
         "max_error": 0.017898075151579512,
         "mean_true": 0.24545830485468653
       }
@@ -459,13 +501,13 @@
     "calibration": {
       "available": true,
       "n": 625,
-      "mean_sigma": 0.007151769073752814,
-      "rmse": 0.007921396750390055,
+      "mean_sigma": 0.007151769070593734,
+      "rmse": 0.007921396755410275,
       "coverage_1sigma": 0.6448,
       "coverage_2sigma": 0.9296,
       "miscalibration": 0.02811666666666667,
-      "z_std": 1.1420175948933988,
-      "nll": -3.3894904503275574,
+      "z_std": 1.1420175964661656,
+      "nll": -3.3894904489894007,
       "sigma_error_spearman": 0.06568860074272566,
       "coverage": [
         {
@@ -520,8 +562,8 @@
       "sigma_bins": [
         {
           "n": 63,
-          "mean_sigma": 0.004736592006885864,
-          "rmse": 0.006550733466738311
+          "mean_sigma": 0.004736591996439173,
+          "rmse": 0.006550733479777986
         },
         {
           "n": 63,
@@ -531,7 +573,7 @@
         {
           "n": 63,
           "mean_sigma": 0.0060556838813324,
-          "rmse": 0.00654813259258662
+          "rmse": 0.006548132644956859
         },
         {
           "n": 63,
@@ -545,13 +587,13 @@
         },
         {
           "n": 62,
-          "mean_sigma": 0.0074888702023510655,
-          "rmse": 0.00733535522916065
+          "mean_sigma": 0.0074888701917358805,
+          "rmse": 0.007335355211869342
         },
         {
           "n": 62,
           "mean_sigma": 0.007923036847145508,
-          "rmse": 0.008801991437510868
+          "rmse": 0.008801991437751056
         },
         {
           "n": 62,
@@ -561,12 +603,12 @@
         {
           "n": 62,
           "mean_sigma": 0.00873886819280681,
-          "rmse": 0.008083169806180474
+          "rmse": 0.008083169814143077
         },
         {
           "n": 62,
-          "mean_sigma": 0.009535619379174805,
-          "rmse": 0.009249461179567675
+          "mean_sigma": 0.009535619368559619,
+          "rmse": 0.009249461182376876
         }
       ],
       "label_std_reference": 0.006368160997469784,
@@ -578,7 +620,7 @@
       "calibrated": {
         "n": 625,
         "pass_rate": 0.9968,
-        "mae_accepted": 0.006159703930692992,
+        "mae_accepted": 0.006159703936503231,
         "mae_rejected": 0.006435830862212111,
         "sigma_threshold": 0.013,
         "ood_threshold": 4.934834575358646,
@@ -592,7 +634,7 @@
         "n": 625,
         "pass_rate": 0.0,
         "mae_accepted": null,
-        "mae_rejected": 0.006160587536873854,
+        "mae_rejected": 0.006160587542665499,
         "sigma_threshold": 0.013,
         "ood_threshold": 3.0,
         "rejected_by": {
@@ -878,7 +920,157 @@
         "description": "ridge regression on the same inputs, constant sigma"
       }
     },
-    "model": null
+    "overall": {
+      "n": 1403,
+      "r2": 0.47921193138401896,
+      "mae": 0.01016099556914213,
+      "rmse": 0.012965747733826014,
+      "max_error": 0.050052079356441376,
+      "mean_true": 0.2458230034315006
+    },
+    "per_category": {
+      "notchback": {
+        "n": 1403,
+        "r2": 0.47921193138401896,
+        "mae": 0.01016099556914213,
+        "rmse": 0.012965747733826014,
+        "max_error": 0.050052079356441376,
+        "mean_true": 0.2458230034315006
+      }
+    },
+    "calibration": {
+      "available": true,
+      "n": 1403,
+      "mean_sigma": 0.008607695589418242,
+      "rmse": 0.012965747733826014,
+      "coverage_1sigma": 0.48752672843905914,
+      "coverage_2sigma": 0.7883107626514612,
+      "miscalibration": 0.13729918032786886,
+      "z_std": 1.285543368642708,
+      "nll": -2.401664795161902,
+      "sigma_error_spearman": 0.00932038467762013,
+      "coverage": [
+        {
+          "expected": 0.1,
+          "observed": 0.08125445473984319
+        },
+        {
+          "expected": 0.2,
+          "observed": 0.15609408410548825
+        },
+        {
+          "expected": 0.3,
+          "observed": 0.2195295794725588
+        },
+        {
+          "expected": 0.4,
+          "observed": 0.28296507483962935
+        },
+        {
+          "expected": 0.5,
+          "observed": 0.3549536707056308
+        },
+        {
+          "expected": 0.6,
+          "observed": 0.43193157519600855
+        },
+        {
+          "expected": 0.683,
+          "observed": 0.48823948681397006
+        },
+        {
+          "expected": 0.7,
+          "observed": 0.5032074126870991
+        },
+        {
+          "expected": 0.8,
+          "observed": 0.5994297933000713
+        },
+        {
+          "expected": 0.9,
+          "observed": 0.7042052744119743
+        },
+        {
+          "expected": 0.95,
+          "observed": 0.7769066286528866
+        },
+        {
+          "expected": 0.99,
+          "observed": 0.8766928011404134
+        }
+      ],
+      "sigma_bins": [
+        {
+          "n": 141,
+          "mean_sigma": 0.0048268505469499495,
+          "rmse": 0.010235392655511759
+        },
+        {
+          "n": 141,
+          "mean_sigma": 0.005650704252494103,
+          "rmse": 0.01489684566134856
+        },
+        {
+          "n": 141,
+          "mean_sigma": 0.006309479121712104,
+          "rmse": 0.012529269166419416
+        },
+        {
+          "n": 140,
+          "mean_sigma": 0.007095417709678853,
+          "rmse": 0.013697526852189125
+        },
+        {
+          "n": 140,
+          "mean_sigma": 0.007892083492799759,
+          "rmse": 0.01464625409059468
+        },
+        {
+          "n": 140,
+          "mean_sigma": 0.008762332046458193,
+          "rmse": 0.01256487799270194
+        },
+        {
+          "n": 140,
+          "mean_sigma": 0.009795092960879602,
+          "rmse": 0.012980696741091832
+        },
+        {
+          "n": 140,
+          "mean_sigma": 0.010922298630511359,
+          "rmse": 0.012709616704320486
+        },
+        {
+          "n": 140,
+          "mean_sigma": 0.012040950760357244,
+          "rmse": 0.013293025601244322
+        },
+        {
+          "n": 140,
+          "mean_sigma": 0.012846289606963384,
+          "rmse": 0.011438679660799323
+        }
+      ],
+      "label_std_reference": 0.006368160997469784,
+      "share_below_label_std_reference": 0.25659301496792586,
+      "label_std_reference_note": "descriptive solver spread, not a lower bound on prediction uncertainty"
+    },
+    "model": "checkpoint",
+    "gate": {
+      "calibrated": {
+        "n": 1403,
+        "pass_rate": 0.0,
+        "mae_accepted": null,
+        "mae_rejected": 0.01016099556914213,
+        "sigma_threshold": 0.013,
+        "ood_threshold": 4.716300983351741,
+        "rejected_by": {
+          "uncertainty": 28,
+          "out_of_distribution": 1375,
+          "body_style": 0
+        }
+      }
+    }
   },
   "ood_detection": {
     "harness_detector": {
@@ -916,12 +1108,68 @@
         "auroc": 0.535655995950706,
         "mean_in": 3.9999235581883785,
         "mean_out": 4.04474486595757
+      },
+      "sigma_alone": {
+        "threshold": 0.013,
+        "n_in": 414,
+        "n_out": 1403,
+        "detection_rate": 0.019957234497505347,
+        "false_alarm_rate": 0.04830917874396135,
+        "auroc": 0.5586889377834248,
+        "mean_in": 0.00810804935095577,
+        "mean_out": 0.008607695589418242
+      },
+      "checkpoint_detector": {
+        "threshold": 4.716300983351741,
+        "n_in": 414,
+        "n_out": 1403,
+        "detection_rate": 1.0,
+        "false_alarm_rate": 0.012077294685990338,
+        "auroc": 1.0,
+        "mean_in": 4.124610975830714,
+        "mean_out": 56.41071000691204
       }
     }
   },
   "data_scaling": {
     "test_set": "random split test, fixed for every point",
-    "model": [],
+    "model": [
+      {
+        "n_train": 146,
+        "r2": 0.7783539559242618,
+        "mae": 0.008488172089633894,
+        "coverage_1sigma": 0.7344,
+        "checkpoint": "best.pt"
+      },
+      {
+        "n_train": 292,
+        "r2": 0.8091802287146249,
+        "mae": 0.007696925736341332,
+        "coverage_1sigma": 0.7744,
+        "checkpoint": "best.pt"
+      },
+      {
+        "n_train": 729,
+        "r2": 0.8496556804889627,
+        "mae": 0.0068659057672754795,
+        "coverage_1sigma": 0.7984,
+        "checkpoint": "best.pt"
+      },
+      {
+        "n_train": 1458,
+        "r2": 0.8565221018672642,
+        "mae": 0.006565113276717648,
+        "coverage_1sigma": 0.6304,
+        "checkpoint": "best.pt"
+      },
+      {
+        "n_train": 2915,
+        "r2": 0.8785157043495532,
+        "mae": 0.0059890446555178126,
+        "coverage_1sigma": 0.664,
+        "checkpoint": "best.pt"
+      }
+    ],
     "linear_reference": [
       {
         "n_train": 58,
@@ -956,28 +1204,364 @@
     ]
   },
   "field": {
-    "available": false,
-    "reason": "no --field-checkpoint: surface-pressure error needs a stage-2 checkpoint"
+    "available": true,
+    "test_runs": [
+      3,
+      11,
+      12,
+      22,
+      27
+    ],
+    "n_train_runs": 20,
+    "n_points": 500000,
+    "overall": {
+      "r2": 0.5080304164367411,
+      "mae": 0.14553503732927545,
+      "rmse": 0.24985611278875883,
+      "coverage_1sigma": 0.799376,
+      "coverage_2sigma": 0.94742,
+      "mean_sigma": 0.22032486746284366
+    },
+    "references": {
+      "mean": {
+        "r2": -1.7730758821166148e-06,
+        "mae": 0.2391916978610095,
+        "rmse": 0.35622241003785066
+      },
+      "nearest_training_car": {
+        "r2": 0.6905177844598301,
+        "mae": 0.10250968007907472,
+        "rmse": 0.19817036129448395
+      }
+    },
+    "per_car": [
+      {
+        "run": 3,
+        "r2": 0.4847529587665821,
+        "mae": 0.14456426551598853,
+        "rmse": 0.2513321269458928,
+        "cd_pressure_true": 0.21657812513786515,
+        "cd_pressure_pred": 0.19174652000453224
+      },
+      {
+        "run": 11,
+        "r2": 0.4631408412601612,
+        "mae": 0.1669772877224793,
+        "rmse": 0.27374351832198807,
+        "cd_pressure_true": 0.29301471581548744,
+        "cd_pressure_pred": 0.23539731994942825
+      },
+      {
+        "run": 12,
+        "r2": 0.5168655501297548,
+        "mae": 0.1312301643301072,
+        "rmse": 0.23221789112442198,
+        "cd_pressure_true": 0.24427019979175615,
+        "cd_pressure_pred": 0.24713782576812485
+      },
+      {
+        "run": 22,
+        "r2": 0.47995830080714574,
+        "mae": 0.15293143555196897,
+        "rmse": 0.2628475071209737,
+        "cd_pressure_true": 0.27911107475060387,
+        "cd_pressure_pred": 0.26817964012662854
+      },
+      {
+        "run": 27,
+        "r2": 0.5899235642409647,
+        "mae": 0.13197203352583328,
+        "rmse": 0.22588287379328628,
+        "cd_pressure_true": 0.19578563532152662,
+        "cd_pressure_pred": 0.20874395727817477
+      }
+    ],
+    "per_region": {
+      "front_fascia": {
+        "mae": 0.30350690568470867,
+        "cp_true": 0.057471178278654195,
+        "cp_pred": 0.12696960681892625,
+        "n": 14232
+      },
+      "hood": {
+        "mae": 0.10626873537660889,
+        "cp_true": -0.0991694017530711,
+        "cp_pred": -0.13785854126183594,
+        "n": 2023
+      },
+      "other": {
+        "mae": 0.1614123305300786,
+        "cp_true": -0.2703503364825091,
+        "cp_pred": -0.2648004000383207,
+        "n": 62732
+      },
+      "rear_fascia": {
+        "mae": 0.0706109915577439,
+        "cp_true": -0.11136526660507692,
+        "cp_pred": -0.11629509550517253,
+        "n": 14418
+      },
+      "rear_window": {
+        "mae": 0.09081381120780477,
+        "cp_true": -0.1008945731811706,
+        "cp_pred": -0.1915008925011673,
+        "n": 8588
+      },
+      "roof": {
+        "mae": 0.13088291836567134,
+        "cp_true": -0.504502391495659,
+        "cp_pred": -0.40925160665867416,
+        "n": 3749
+      },
+      "underbody": {
+        "mae": 0.09283303531494959,
+        "cp_true": -0.19217460843171214,
+        "cp_pred": -0.19783616775807236,
+        "n": 59411
+      },
+      "wheel_wells": {
+        "mae": 0.14740570715460066,
+        "cp_true": -0.27884230398003607,
+        "cp_pred": -0.270718489808876,
+        "n": 323440
+      },
+      "windscreen": {
+        "mae": 0.23024850367209593,
+        "cp_true": 0.020941981811960823,
+        "cp_pred": -0.0989307071709173,
+        "n": 11407
+      }
+    },
+    "integrated_cd": {
+      "what": "pressure part of drag, integrated over each held-out car's field and scaled to its whole surface",
+      "true_mean": 0.24575195016344784,
+      "pred_mean": 0.23024105262537775,
+      "mae": 0.021841276711276853,
+      "mean_relative_error": 0.08567636119792679
+    },
+    "checkpoint": {
+      "path": "best.pt",
+      "sha256": "6a210c09b09205459f59d17b5ff913648587c9af086fc972e9090e3d69aa688c",
+      "version": "fields-2026-10-15-8fb6ed1",
+      "schema_version": "2.0.0",
+      "n_params": 646754,
+      "self_reported_test_metrics": {
+        "loss": -0.1773731827735901,
+        "cp_r2": 0.5078778824673638,
+        "cp_mae": 0.14757463335990906,
+        "cp_rmse": 0.25323352217674255,
+        "n_points": 20480,
+        "mean_sigma": 0.21976304054260254,
+        "coverage_1sigma": 0.79365234375,
+        "coverage_2sigma": 0.945263671875,
+        "corr_sigma_pprime2": 0.007122372164714203,
+        "cd_partial_pred": 0.2100616693496704,
+        "cd_partial_true": 0.2077697217464447,
+        "cd_partial_mae": 0.03260866552591324,
+        "cd_partial_r2": 0.49451668208972654,
+        "cl_partial_pred": -0.09709709137678146,
+        "cl_partial_true": -0.03744063526391983,
+        "cl_partial_mae": 0.08023419976234436,
+        "cl_partial_r2": 0.5285008851104858
+      }
+    },
+    "evaluation": {
+      "device": "cpu",
+      "chunk_size": 1024,
+      "reference_workers": 1,
+      "splits": {
+        "test": [
+          3,
+          11,
+          12,
+          22,
+          27
+        ],
+        "val": [
+          5,
+          7,
+          17,
+          24,
+          29
+        ],
+        "train": [
+          1,
+          2,
+          4,
+          6,
+          8,
+          9,
+          10,
+          13,
+          14,
+          15,
+          16,
+          18,
+          19,
+          20,
+          21,
+          23,
+          25,
+          26,
+          28,
+          30
+        ]
+      },
+      "arrays": [
+        {
+          "run": 1,
+          "sha256": "c201350cbfcfd03563042e1c52dc01c3b6d4ab353ec8cf30d5c045c0d4dc1cf5",
+          "n_points": 100000
+        },
+        {
+          "run": 2,
+          "sha256": "93fb18d030dd883e43e010dc8cdd9743e6dd57d30c243187f4f467061cc3861b",
+          "n_points": 100000
+        },
+        {
+          "run": 4,
+          "sha256": "031cf6d57fdbac8dcb3fac53050ffff19790ed31d05efccb06f12ee4d14865c8",
+          "n_points": 100000
+        },
+        {
+          "run": 6,
+          "sha256": "6fecf3facd9724c69a0af01f22b087834b1caaf488505b7bfb03be71f56edd3b",
+          "n_points": 100000
+        },
+        {
+          "run": 8,
+          "sha256": "358e46f96ac1d26d6fd1b597e1657d022fbc65c5a8da191192c3ccb82817490a",
+          "n_points": 100000
+        },
+        {
+          "run": 9,
+          "sha256": "c98625968e60acd08636a7238a68797d82e59cf37f531815eda47e16bf423282",
+          "n_points": 100000
+        },
+        {
+          "run": 10,
+          "sha256": "b9871097171306a046ba2b637056966a268a7a8978058e1b0541d438e8f8926d",
+          "n_points": 100000
+        },
+        {
+          "run": 13,
+          "sha256": "ffe1ce1bbc6825471098de484c1841aa837ec31b419ed8caa2f012b4f6806a19",
+          "n_points": 100000
+        },
+        {
+          "run": 14,
+          "sha256": "b30c22fc262b5206b731c756a1cf2fdccf00f341268ad790097de9104ca7fae0",
+          "n_points": 100000
+        },
+        {
+          "run": 15,
+          "sha256": "bc973b86ee0d13b7cf97dcb3dfcb03327de5b7da79f03cbd359e330621a47cf2",
+          "n_points": 100000
+        },
+        {
+          "run": 16,
+          "sha256": "b9a211928313402fa9b5076f6eef608e5d4bf8004d2aa218c9c69e5d9552174a",
+          "n_points": 100000
+        },
+        {
+          "run": 18,
+          "sha256": "b6d2518a348cdd74353253a70499565b28060a99d9661325ddb57f4523fea2b7",
+          "n_points": 100000
+        },
+        {
+          "run": 19,
+          "sha256": "c7bdf9ad012a4585545fff42a342b427a2f9775afe3af2e79a8175ad2f723e80",
+          "n_points": 100000
+        },
+        {
+          "run": 20,
+          "sha256": "8d0178b59980626c1357f474c28e5218094e153e4512a879f93743d4d5256503",
+          "n_points": 100000
+        },
+        {
+          "run": 21,
+          "sha256": "0715efe01a2d2c0216cee97df346b0ae31b17da4e10c0963f05d844ace1b8c31",
+          "n_points": 100000
+        },
+        {
+          "run": 23,
+          "sha256": "5140735b20f1c13c5a9c4dea3177f33a15a91e9539dcaf3819882362c793ca5d",
+          "n_points": 100000
+        },
+        {
+          "run": 25,
+          "sha256": "14de76879ebe11f921f2eadf7bc45fd2050a9f9f29633066fca11d9748a879c7",
+          "n_points": 100000
+        },
+        {
+          "run": 26,
+          "sha256": "f1ee9358db95ab2107c855d279fece19df36d19c20a58a5f86d5f363f6070e6e",
+          "n_points": 100000
+        },
+        {
+          "run": 28,
+          "sha256": "55e4102c105fffb81692ed1a94ac5949d2dcd8f649c12b568104b1b413706f78",
+          "n_points": 100000
+        },
+        {
+          "run": 30,
+          "sha256": "3b3a244c5703f031bf1877b9ced595347020d4a259db9ffe6806ff3a132b760e",
+          "n_points": 100000
+        },
+        {
+          "run": 3,
+          "sha256": "9aaa20193c74ca42ec21bf02049c330c8eaa67bd79c24ebf757b99a63c22531f",
+          "n_points": 100000
+        },
+        {
+          "run": 11,
+          "sha256": "5b9423de877953a91feb2b6dd7cc88791f756511734a6c137adb15cc43e58faa",
+          "n_points": 100000
+        },
+        {
+          "run": 12,
+          "sha256": "46f990f7bbc66019e79e574a7f7f7736879ac91e89433c296c8f79991c53db01",
+          "n_points": 100000
+        },
+        {
+          "run": 22,
+          "sha256": "65153c41ac055803cbb89111f7e8999f5e30bf7fd567a671c03ecad5c1c5c61f",
+          "n_points": 100000
+        },
+        {
+          "run": 27,
+          "sha256": "98872b06f1e0e0beb815f1c763cf415a1e0b4bb86e4dbeb3aa6a9e3a7e9082f8",
+          "n_points": 100000
+        }
+      ],
+      "reference": {
+        "name": "pooled nearest-training-point",
+        "legacy_key": "nearest_training_car",
+        "k": 8,
+        "points_per_training_car": 20000,
+        "normal_weight": 0.25,
+        "seed": 0
+      },
+      "git_commit": "43191bf2c9b9d87ffc313e63b3ff36ee127a0c92"
+    }
   },
   "headline": {
-    "r2_in_distribution": 0.8749716741173402,
-    "mae_in_distribution": 0.006160587536873854,
+    "r2_in_distribution": 0.8749716739588658,
+    "mae_in_distribution": 0.006160587542665499,
     "r2_linear_reference": 0.8352341038460134,
     "coverage_1sigma": 0.6448,
     "coverage_90": 0.8656,
     "uncertainty_note": "Empirical interval coverage; the head and domain gate do not guarantee physical correctness.",
     "held_out_category": "notchback",
-    "r2_held_out_category": null,
-    "ood_detection_rate": null,
+    "r2_held_out_category": 0.47921193138401896,
+    "ood_detection_rate": 1.0,
     "ood_false_alarm_rate": 0.0032,
-    "sigma_alone_detection_auroc": null,
-    "latency_ms": 0.6388000037986785
+    "sigma_alone_detection_auroc": 0.5586889377834248,
+    "latency_ms": 0.172399973962456
   },
   "warnings": [
     "at the contract's fallback OOD threshold (3.0) the gate passes 0.0% of ordinary test designs vs 99.7% at the checkpoint's calibrated 4.93: the service must pass the checkpoint's threshold",
-    "sigma barely ranks designs by risk (rank correlation with the error 0.07): it says how wide the bars are on average, not which designs to distrust",
-    "no --ood-checkpoint: the held-out-style numbers are reference models only",
-    "no --scaling checkpoints: the data-scaling curve has the linear reference only"
+    "sigma barely ranks designs by risk (rank correlation with the error 0.07): it says how wide the bars are on average, not which designs to distrust"
   ],
-  "label": "Release scalar: independently graded checkpoint 49e5a8b14d5b; category and full-field evaluations unavailable locally"
+  "label": "Final independent evaluation, 27 October 2026"
 }
