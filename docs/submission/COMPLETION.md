@@ -1,9 +1,16 @@
 # Local completion and deployment handoff — 27 October 2026
 
-Implementation is on branch **`finish/submission-local`**, committed locally.
-No remote push, deployment, video upload or Devpost submission was performed.
-The original audit remains a dated record; this report describes the fixes and
-the limits of the final local verification.
+Integration is on branch **`finish/predeploy-complete`**. Source changes are
+committed locally; remote freshness and push are unverified because outbound
+GitHub access is restricted. Deployment, video upload and Devpost submission
+are deliberately left to the team. The original audit and earlier verification
+reports remain dated records, not certification of later source changes.
+
+The verified incoming bundle supplies both the category checkpoint and all thirty
+field arrays. Scalar/category/field regrading is complete in private staging;
+publication, final scaling results, integrated tests and the refreshed package
+are being completed by the coordinator. Check the final release manifest and
+current machine-readable report rather than assuming an older ZIP is current.
 
 ## Completed
 
@@ -49,12 +56,32 @@ Scalar SHA-256:
   **3.875% Nemotron**, **3.841% CMA-ES**, **2.793% random search**. This is a small
   surrogate-only comparison, not evidence of superiority or new CFD validation.
 
-The category checkpoint and full DrivAerML evaluation arrays are still missing
-locally. Their independent release-model metrics are absent. The optional field
-checkpoint passed fixed-query numerical parity and functional generated-mesh
-inference; neither establishes generated-geometry accuracy/calibration or lift.
+The category checkpoint grades **1,403 held-out notchbacks**, R² **0.4792**,
+MAE **0.01016**, 1σ coverage **48.75%**. It remains evaluation-only with its own
+threshold; it never replaces the all-styles serving checkpoint. Style-indicator
+novelty explains the strong full-input detector; aerodynamic dials alone give
+AUROC about **0.536**.
 
-## Verification performed
+Fields are graded on **500,000 stored query cells** from five held-out cars:
+Cp R² **0.5080**, MAE **0.14554**. The pooled nearest-training-point reference
+is stronger, R² **0.6905**, MAE **0.10251**. Field 1σ coverage **79.94%**
+over-covers stored labels, unlike the scalar intervals. Pressure-only integrated
+Cd per-car MAE is **0.0218415**, mean absolute relative error **8.57%**.
+The old **0.0326** was a 4,096-point/car training estimate. These results use
+extracted stored cells, not complete native CFD quadrature, and establish neither
+generated-viewer orientation/calibration nor lift. Source arrays and raw reports
+stay separate from the serving ZIP.
+
+Scaling uses new, separately identified CPU subset checkpoints on a fixed test
+split. Only the completed, independently graded curve may be published; it does
+not replace the production model. Final results are pending coordinator publication.
+
+## Earlier verification snapshots (before final evaluation integration)
+
+The counts below describe the recorded earlier source revisions. The coordinator
+must append current integrated suite, model/HTTP, archive installation and browser
+results before calling steps 1–9 complete. No fresh Firefox success is claimed:
+the later post-merge Firefox setup crashed before navigation and needs a retry.
 
 | Check | Result and scope |
 |---|---|
@@ -120,9 +147,10 @@ and browser-asset licences.
 
 ## What the team must do next
 
-1. Provide the missing data/checkpoint bundle using [the teammate prompt](teammate-artifacts.md)
-   if those extra experiments are wanted. The scalar-led release does not depend on them.
-2. Deploy the selected source and artifacts using the API/web runbooks. Validate
+1. Finish coordinator publication and local qualification: current metrics/graphics,
+   tests, artifact hashes, installation and browser checks. Synchronize and push
+   from a network-enabled terminal without rewriting history.
+2. Deploy the selected source and refreshed artifacts using the API/web runbooks. Validate
    actual HTTPS/CORS/proxy/persistence and full checkpoint identity on the host.
 3. In a network-enabled environment, rerun the live browser/provider rehearsal,
    public cancellation/auth checks and external judge walkthrough. Do not mark
@@ -130,5 +158,5 @@ and browser-asset licences.
 4. Publish a trusted artifact download, update pending URLs, record the final
    working deployed footage, upload a public video under three minutes, and
    submit Devpost. Submission and video/tooling copy are already prepared.
-5. Fund and monitor the public demo through December 15 judging end, preserving
+5. Fund and monitor the public demo through the verified official judging period, preserving
    the submitted version and enough inference budget for judges.

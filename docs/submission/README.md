@@ -120,7 +120,7 @@ and the completion report for the command and scope actually verified here.
 - [Tooling feedback](tooling-feedback.md): measured observations and concrete requests.
 - [Video script](video-script.md): under-three-minute recording plan; distinguish
   raw browser recordings from a finished narrated submission video.
-- [Teammate artifact handoff](teammate-artifacts.md): missing category/full-field inputs.
+- [Teammate artifact handoff](teammate-artifacts.md): original request; the category/full-field bundle is now received and verified.
 - [Original audit](../REPO_AUDIT_2026-10-27.md): findings at the pre-fix revision.
 
 The historical audit is preserved. It is not a claim that all listed findings

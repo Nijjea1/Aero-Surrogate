@@ -1,6 +1,6 @@
 # Updated plan after branch consolidation
 
-Updated 27 October 2026. The working branch is now **`main`**. This supersedes
+Updated 27 October 2026. The working branch is **`finish/predeploy-complete`**. This supersedes
 the branch-location statement in the earlier local-completion report; the
 evaluation evidence and historical experiment identities remain unchanged.
 
@@ -21,7 +21,7 @@ evaluation evidence and historical experiment identities remain unchanged.
   failed because this runner could not connect to `github.com:443`. Cached
   `origin/*` refs must not be described as the latest server state.
 
-## Post-merge checks
+## Earlier post-merge checks (dated snapshot)
 
 - Full suite: **1,021 passed, four expected skips, three warnings**, 99.61 s.
 - Desktop Chromium completed the real-model walkthrough.
@@ -40,11 +40,11 @@ evaluation evidence and historical experiment identities remain unchanged.
    complete, but fresh server changes may still exist. Preserve history:
 
    ```powershell
-   git switch main
+   git switch finish/predeploy-complete
    git fetch origin --prune
    git merge origin/main
    python -m pytest -q -rs
-   git push origin main
+   git push -u origin finish/predeploy-complete
    ```
 
    Resolve any newly discovered conflicts before testing/pushing. Do not force
@@ -52,17 +52,19 @@ evaluation evidence and historical experiment identities remain unchanged.
    PR targeting `main` instead. Existing commits are already separated by their
    actual feature/fix work; rewriting their dates is unnecessary.
 
-2. **Receive the optional teammate artifacts.** Use
-   [teammate-artifacts.md](teammate-artifacts.md). Independently grade the category
-   checkpoint and full field data if supplied. The scalar release can proceed
-   without them; keep missing experiments explicitly unavailable.
+2. **Finish final local publication and qualification.** The incoming bundle is
+   received and verified: both checkpoint hashes match, all thirty field arrays
+   load and frozen splits reproduce. Category and all-stored-cell field grades
+   are complete in staging. Publish their fresh sanitized reports, the stronger
+   pooled-neighbour field reference and fresh scaling results when complete.
+   Regenerate README/graphics, run integrated tests/model/HTTP/browser checks,
+   rebuild the serving ZIP and verify installation/checksums. Keep the category
+   model evaluation-only; do not replace the serving model or threshold.
 
 3. **Deploy the API and dynamic web server.** Mount the verified model bundle,
    persist logs/spend, configure HTTPS/CORS/proxy trust and keep one API worker.
-   The current ZIP remains the verified model/evidence snapshot from its recorded
-   source revision; the mobile-only merge did not alter its model payload. If a
-   new release bundle is generated for the final deployed source, regenerate and
-   verify its manifest/checksum and installation report together.
+   Use the refreshed ZIP whose source revision, current report checksums and
+   installation test agree. The large raw evaluation bundle stays separate.
 
 4. **Verify the actual hosted judge path.** Check the full scalar hash and real
    baseline, parameter updates, genuine domain rejection, recorded runs and final
@@ -73,11 +75,12 @@ evaluation evidence and historical experiment identities remain unchanged.
 5. **Finish the video and submission.** Use [video-script.md](video-script.md),
    [submission.md](submission.md) and [tooling-feedback.md](tooling-feedback.md).
    Record working deployed footage, keep the public YouTube video under three
-   minutes, fill the real URLs and submit Devpost. Target October 29; the stated
-   deadline is October 30 at 1pm Toronto time.
+   minutes, fill the real URLs and submit Devpost. Target October 29; verify the
+   official event deadline and judging availability before submission rather
+   than relying on the planning document's dates.
 
 6. **Keep the judged release available.** Assign hosting/monitoring/inference
-   budget through December 15 judging end. Preserve the submitted source and
+   budget through the official judging period. Preserve the submitted source and
    evidence identities; avoid untracked model or gate changes.
 
 The model architecture, parameter contract and gate remain frozen. No additional
