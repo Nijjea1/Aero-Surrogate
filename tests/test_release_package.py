@@ -6,7 +6,7 @@ import zipfile
 
 import pytest
 
-from scripts.package_release import Artifact, build_bundle, validate_evidence_binding, validate_published_summaries
+from scripts.package_release import Artifact, build_bundle, validate_evidence_binding, validate_published_summaries, evaluation_availability
 
 
 def test_bundle_snapshots_hashes_and_builds_identically(tmp_path):
@@ -55,6 +55,24 @@ def test_release_refuses_stale_benchmark_binding():
     with pytest.raises(ValueError, match="different scalar"):
         validate_evidence_binding("current", metric, {"protocol": {"checkpoint_sha256": "older"}})
     validate_evidence_binding("current", metric, {"protocol": {"checkpoint_sha256": "current"}})
+
+
+def test_evaluation_availability_requires_completed_bound_grades():
+    assert not evaluation_availability({})["category_checkpoint"]
+    metrics = {"models": {"out_of_distribution": {"sha256": "category"}},
+               "out_of_distribution": {"n_test": 1403, "model": "reference"},
+               "field": {"available": True}}
+    assert not evaluation_availability(metrics)["category_checkpoint"]
+    assert not evaluation_availability(metrics)["full_field_test_arrays"]
+    metrics["out_of_distribution"].update(model="checkpoint", overall={"n": 1403})
+    metrics["field"].update(checkpoint={"sha256": "fields"},
+                            evaluation={"arrays": [{"run": 3, "sha256": "input"}]})
+    available = evaluation_availability(metrics, "fields")
+    assert available["category_checkpoint"] and available["full_field_test_arrays"]
+    assert not available["category_checkpoint_in_serving_archive"]
+    assert not available["full_field_test_arrays_in_serving_archive"]
+    with pytest.raises(ValueError, match="different checkpoint"):
+        evaluation_availability(metrics, "wrong")
 
 
 def test_metadata_cannot_replace_payload_declarations(tmp_path):

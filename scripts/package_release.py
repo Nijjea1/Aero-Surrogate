@@ -125,6 +125,31 @@ def validate_published_summaries(root: Path, benchmark: dict) -> None:
         seen.add(name.casefold())
 
 
+def evaluation_availability(metrics: dict, field_sha256: str | None = None) -> dict:
+    """Describe completed grades separately from serving-archive contents.
+
+    Evaluation data and the held-out-style checkpoint travel separately. An
+    available grade must identify the checkpoint and the field arrays it used.
+    """
+    category = metrics.get("models", {}).get("out_of_distribution") or {}
+    category_score = metrics.get("out_of_distribution") or {}
+    category_graded = bool(category.get("sha256") and category_score.get("model") == "checkpoint"
+                           and category_score.get("n_test", 0) > 0
+                           and category_score.get("overall", {}).get("n", 0) > 0)
+    field = metrics.get("field") or {}
+    arrays = field.get("evaluation", {}).get("arrays") or []
+    field_graded = bool(field.get("available") and field.get("checkpoint", {}).get("sha256")
+                        and arrays and all(row.get("sha256") for row in arrays))
+    if field_graded and field_sha256 and field["checkpoint"]["sha256"] != field_sha256:
+        raise ValueError("field evaluation uses a different checkpoint from the serving bundle")
+    return {"category_checkpoint": category_graded,
+            "full_field_test_arrays": field_graded,
+            "meaning": "verified inputs used by published evaluations; raw evaluation inputs are not included in this serving ZIP",
+            "category_checkpoint_in_serving_archive": False,
+            "full_field_test_arrays_in_serving_archive": False,
+            "deployment": "pending; bundle generation does not publish anything"}
+
+
 def collect_release(root: Path, *, include_fields: bool) -> tuple[list[Artifact], dict, dict, dict]:
     """Select explicit trusted local files, and verify the scalar metric binding."""
     from src.service.predictor import TorchPredictor
@@ -179,8 +204,7 @@ def collect_release(root: Path, *, include_fields: bool) -> tuple[list[Artifact]
         "experiment_identities": {"scalar_evaluation_git_revision": metrics.get("git_commit"),
                                   "matched_protocol": benchmark.get("protocol_id"),
                                   "matched_experiment_git_revision": benchmark.get("protocol", {}).get("git_revision")},
-        "availability": {"category_checkpoint": False, "full_field_test_arrays": False,
-                         "deployment": "pending; bundle generation does not publish anything"}}
+        "availability": evaluation_availability(metrics, models.get("fields", {}).get("sha256"))}
     return artifacts, models, source, metadata
 
 

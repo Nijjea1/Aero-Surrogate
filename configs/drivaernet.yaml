@@ -5,11 +5,11 @@
 #   python -m src.train.train --config configs/drivaernet.yaml
 #   python -m src.train.train --config configs/drivaernet.yaml --split category
 #
-# 4,165 designs, 23 morph parameters, CFD-measured Average Cd.
+# 4,165 designs, 16 selected morph parameters plus three style indicators.
 # Source: github.com/Mohamedelrefaie/DrivAerNet — CC BY-NC 4.0, NON-COMMERCIAL.
 #
-# REPORT R² AGAINST 0.906, NOT 1.0. The Std Cd column gives the solver's own
-# run-to-run spread; it caps any model at R² = 0.906. See src/data/drivaernet.py.
+# Std Cd describes solver coefficient spread, not uncertainty of averaged labels.
+# Its derived 0.906 reference level is an assumption, not a performance ceiling.
 
 run_name: drivaernet
 seed: 0
@@ -22,7 +22,7 @@ data:
   target_column: Average Cd
   category_column: Category      # fastback | notchback | estateback, from the id prefix
 
-  # The 23 morph parameters, in CSV order. These are DELTAS from the baseline
+  # Selected morph parameters are DELTAS from the baseline
   # DrivAer body, not absolute dimensions, and they are NOT the same space as
   # contracts.PARAM_BOUNDS — see docs/HANDOFF.md.
   # The 16 morph parameters of contracts.PARAM_BOUNDS, in that order, plus
