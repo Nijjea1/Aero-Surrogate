@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import sys
 import tempfile
@@ -131,15 +132,42 @@ def evaluation_availability(metrics: dict, field_sha256: str | None = None) -> d
     Evaluation data and the held-out-style checkpoint travel separately. An
     available grade must identify the checkpoint and the field arrays it used.
     """
+    def digest(value):
+        return isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{64}", value) is not None
+
     category = metrics.get("models", {}).get("out_of_distribution") or {}
     category_score = metrics.get("out_of_distribution") or {}
-    category_graded = bool(category.get("sha256") and category_score.get("model") == "checkpoint"
+    category_split = metrics.get("splits", {}).get("category") or {}
+    category_graded = bool(digest(category.get("sha256")) and category_score.get("model") == "checkpoint"
                            and category_score.get("n_test", 0) > 0
-                           and category_score.get("overall", {}).get("n", 0) > 0)
+                           and category_score.get("overall", {}).get("n") == category_score.get("n_test")
+                           and category_split.get("test") == category_score.get("n_test")
+                           and category.get("n_train") == category_split.get("train")
+                           and category.get("held_out_category") == category_score.get("held_out_category")
+                           == category_split.get("held_out_category")
+                           and bool(category.get("held_out_category")))
     field = metrics.get("field") or {}
-    arrays = field.get("evaluation", {}).get("arrays") or []
-    field_graded = bool(field.get("available") and field.get("checkpoint", {}).get("sha256")
-                        and arrays and all(row.get("sha256") for row in arrays))
+    evaluation = field.get("evaluation") or {}
+    splits = evaluation.get("splits") or {}
+    arrays = evaluation.get("arrays") or []
+    # Require exactly the graded train/test arrays, distinct split IDs and the
+    # complete reported point count; an arbitrary hashed array is insufficient.
+    split_lists = [splits.get(name, []) for name in ("train", "val", "test")]
+    valid_splits = all(isinstance(ids, list) and all(type(run) is int for run in ids) for ids in split_lists)
+    field_graded = False
+    if valid_splits:
+        train, val, test = split_lists
+        ids = train + val + test
+        expected = set(train + test)
+        valid_rows = (isinstance(arrays, list) and all(isinstance(row, dict) and type(row.get("run")) is int
+                      and digest(row.get("sha256")) and type(row.get("n_points")) is int
+                      and row["n_points"] > 0 for row in arrays))
+        if valid_rows:
+            field_graded = bool(field.get("available") and digest(field.get("checkpoint", {}).get("sha256"))
+                                and train and test and len(ids) == len(set(ids))
+                                and len(arrays) == len(expected) and {row["run"] for row in arrays} == expected
+                                and field.get("test_runs") == test and field.get("n_train_runs") == len(train)
+                                and sum(row["n_points"] for row in arrays if row["run"] in test) == field.get("n_points"))
     if field_graded and field_sha256 and field["checkpoint"]["sha256"] != field_sha256:
         raise ValueError("field evaluation uses a different checkpoint from the serving bundle")
     return {"category_checkpoint": category_graded,
