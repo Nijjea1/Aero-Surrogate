@@ -67,13 +67,21 @@ comparisons immediately; no run is replayed as a new model call.
 
 ## Reproduce
 
-After obtaining the trusted model artifact, public table and original handover:
+The serving ZIP supplies the scalar and optional field models plus native
+references; reproducing the complete evaluation also needs the separate immutable
+evaluation bundle and newly trained scaling checkpoints. Use the commands and
+identities in [the independent evaluation report](../INDEPENDENT_EVALUATION.md).
+They write private outputs under `runs/`, leaving the published report untouched.
+
+For a scalar-only check from the trusted serving artifact and public table:
 
 ```bash
-python -m src.eval.harness --checkpoint runs/drivaernet-random/best.pt --data data/drivaernet/parametric.csv --splits runs/handover/splits.json --out web/results/metrics.json --label "Release scalar evaluation"
-python -m src.eval.benchmark --matched-summaries docs/submission/evidence/matched --out web/results/benchmark.json
+python -m src.eval.harness --checkpoint runs/drivaernet-random/best.pt --data data/drivaernet/parametric.csv --splits runs/handover/splits.json --out runs/regrade/scalar-only.json --label "Scalar-only reproduction"
+python -m src.eval.benchmark --matched-summaries docs/submission/evidence/matched --out runs/regrade/benchmark.json
 ```
 
 The harness accepts the complete nested handover directly. It rejects malformed,
 overlapping or repeated split IDs. A fresh regrade produces new timing and
 timestamp metadata; it should reproduce accuracy to numerical tolerance.
+Scalar-only output deliberately omits category, field and scaling experiments;
+do not replace the complete published metrics with that partial report.
