@@ -1,2 +1,4 @@
 # Stable checksum for the published environment lock across checkout settings.
 requirements-release-win-py313.lock text eol=lf
+# Published evidence digests must survive Windows checkouts byte-for-byte.
+docs/submission/evidence/matched/*.json text eol=lf

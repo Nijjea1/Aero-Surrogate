@@ -1,0 +1,226 @@
+{
+  "format": "aero-surrogate-evaluation-input-receipt/1",
+  "received_bundle": "aero-eval-artifacts-2026-10-27",
+  "files_verified": 43,
+  "payload_bytes": 146948587,
+  "all_hashes_match": true,
+  "preserved_originals": true,
+  "files": [
+    {
+      "file": "checkpoints/drivaernet-category/best.pt",
+      "sha256": "6b6033efbe90d01a10534f9cc0a93665e76227095da18fb47ca39f2d2db6848f",
+      "bytes": 1060633
+    },
+    {
+      "file": "checkpoints/drivaernet-category/metadata.json",
+      "sha256": "0bcb7248c676387f3307db90c605a5bd9d7f7875ff34026d80c8dc5b94bf6f47",
+      "bytes": 113385
+    },
+    {
+      "file": "checkpoints/fields/best.pt",
+      "sha256": "6a210c09b09205459f59d17b5ff913648587c9af086fc972e9090e3d69aa688c",
+      "bytes": 6448637
+    },
+    {
+      "file": "data/drivaerml/field_array_manifest.json",
+      "sha256": "989a20b8ba5d5401be7adc8b4d6d812e73bf90be43277ee2c90293d55dcadfd4",
+      "bytes": 62622
+    },
+    {
+      "file": "data/drivaerml/fields/run_1.npz",
+      "sha256": "c201350cbfcfd03563042e1c52dc01c3b6d4ab353ec8cf30d5c045c0d4dc1cf5",
+      "bytes": 4579535
+    },
+    {
+      "file": "data/drivaerml/fields/run_10.npz",
+      "sha256": "b9871097171306a046ba2b637056966a268a7a8978058e1b0541d438e8f8926d",
+      "bytes": 4580993
+    },
+    {
+      "file": "data/drivaerml/fields/run_11.npz",
+      "sha256": "5b9423de877953a91feb2b6dd7cc88791f756511734a6c137adb15cc43e58faa",
+      "bytes": 4582212
+    },
+    {
+      "file": "data/drivaerml/fields/run_12.npz",
+      "sha256": "46f990f7bbc66019e79e574a7f7f7736879ac91e89433c296c8f79991c53db01",
+      "bytes": 4581747
+    },
+    {
+      "file": "data/drivaerml/fields/run_13.npz",
+      "sha256": "ffe1ce1bbc6825471098de484c1841aa837ec31b419ed8caa2f012b4f6806a19",
+      "bytes": 4579844
+    },
+    {
+      "file": "data/drivaerml/fields/run_14.npz",
+      "sha256": "b30c22fc262b5206b731c756a1cf2fdccf00f341268ad790097de9104ca7fae0",
+      "bytes": 4580561
+    },
+    {
+      "file": "data/drivaerml/fields/run_15.npz",
+      "sha256": "bc973b86ee0d13b7cf97dcb3dfcb03327de5b7da79f03cbd359e330621a47cf2",
+      "bytes": 4576739
+    },
+    {
+      "file": "data/drivaerml/fields/run_16.npz",
+      "sha256": "b9a211928313402fa9b5076f6eef608e5d4bf8004d2aa218c9c69e5d9552174a",
+      "bytes": 4582932
+    },
+    {
+      "file": "data/drivaerml/fields/run_17.npz",
+      "sha256": "0c7b3b1a46b5a6881aa437300b218399c155ec136cde1012a7241956cd5183f5",
+      "bytes": 4581364
+    },
+    {
+      "file": "data/drivaerml/fields/run_18.npz",
+      "sha256": "b6d2518a348cdd74353253a70499565b28060a99d9661325ddb57f4523fea2b7",
+      "bytes": 4583903
+    },
+    {
+      "file": "data/drivaerml/fields/run_19.npz",
+      "sha256": "c7bdf9ad012a4585545fff42a342b427a2f9775afe3af2e79a8175ad2f723e80",
+      "bytes": 4578892
+    },
+    {
+      "file": "data/drivaerml/fields/run_2.npz",
+      "sha256": "93fb18d030dd883e43e010dc8cdd9743e6dd57d30c243187f4f467061cc3861b",
+      "bytes": 4584742
+    },
+    {
+      "file": "data/drivaerml/fields/run_20.npz",
+      "sha256": "8d0178b59980626c1357f474c28e5218094e153e4512a879f93743d4d5256503",
+      "bytes": 4582485
+    },
+    {
+      "file": "data/drivaerml/fields/run_21.npz",
+      "sha256": "0715efe01a2d2c0216cee97df346b0ae31b17da4e10c0963f05d844ace1b8c31",
+      "bytes": 4581935
+    },
+    {
+      "file": "data/drivaerml/fields/run_22.npz",
+      "sha256": "65153c41ac055803cbb89111f7e8999f5e30bf7fd567a671c03ecad5c1c5c61f",
+      "bytes": 4579428
+    },
+    {
+      "file": "data/drivaerml/fields/run_23.npz",
+      "sha256": "5140735b20f1c13c5a9c4dea3177f33a15a91e9539dcaf3819882362c793ca5d",
+      "bytes": 4577154
+    },
+    {
+      "file": "data/drivaerml/fields/run_24.npz",
+      "sha256": "6ff3020a7153a3947d56fd4b2d549425d9d383ca006b9b70ed4d28d116794b38",
+      "bytes": 4585934
+    },
+    {
+      "file": "data/drivaerml/fields/run_25.npz",
+      "sha256": "14de76879ebe11f921f2eadf7bc45fd2050a9f9f29633066fca11d9748a879c7",
+      "bytes": 4584972
+    },
+    {
+      "file": "data/drivaerml/fields/run_26.npz",
+      "sha256": "f1ee9358db95ab2107c855d279fece19df36d19c20a58a5f86d5f363f6070e6e",
+      "bytes": 4581618
+    },
+    {
+      "file": "data/drivaerml/fields/run_27.npz",
+      "sha256": "98872b06f1e0e0beb815f1c763cf415a1e0b4bb86e4dbeb3aa6a9e3a7e9082f8",
+      "bytes": 4581488
+    },
+    {
+      "file": "data/drivaerml/fields/run_28.npz",
+      "sha256": "55e4102c105fffb81692ed1a94ac5949d2dcd8f649c12b568104b1b413706f78",
+      "bytes": 4581513
+    },
+    {
+      "file": "data/drivaerml/fields/run_29.npz",
+      "sha256": "83b45b8c52e9c2df4abc486666b9c91cbfd773240d93d4c909b096138abe91bb",
+      "bytes": 4575493
+    },
+    {
+      "file": "data/drivaerml/fields/run_3.npz",
+      "sha256": "9aaa20193c74ca42ec21bf02049c330c8eaa67bd79c24ebf757b99a63c22531f",
+      "bytes": 4583073
+    },
+    {
+      "file": "data/drivaerml/fields/run_30.npz",
+      "sha256": "3b3a244c5703f031bf1877b9ced595347020d4a259db9ffe6806ff3a132b760e",
+      "bytes": 4583326
+    },
+    {
+      "file": "data/drivaerml/fields/run_4.npz",
+      "sha256": "031cf6d57fdbac8dcb3fac53050ffff19790ed31d05efccb06f12ee4d14865c8",
+      "bytes": 4580871
+    },
+    {
+      "file": "data/drivaerml/fields/run_5.npz",
+      "sha256": "546758a14ee84aea10b28e67236cb373c677fb5cd7892074f82e52771adf96d9",
+      "bytes": 4584043
+    },
+    {
+      "file": "data/drivaerml/fields/run_6.npz",
+      "sha256": "6fecf3facd9724c69a0af01f22b087834b1caaf488505b7bfb03be71f56edd3b",
+      "bytes": 4577274
+    },
+    {
+      "file": "data/drivaerml/fields/run_7.npz",
+      "sha256": "fa66804cbef0db698cceebcb7e0368b9282434248d8e311a714f6a56cd3c5ba0",
+      "bytes": 4584830
+    },
+    {
+      "file": "data/drivaerml/fields/run_8.npz",
+      "sha256": "358e46f96ac1d26d6fd1b597e1657d022fbc65c5a8da191192c3ccb82817490a",
+      "bytes": 4577467
+    },
+    {
+      "file": "data/drivaerml/fields/run_9.npz",
+      "sha256": "c98625968e60acd08636a7238a68797d82e59cf37f531815eda47e16bf423282",
+      "bytes": 4583393
+    },
+    {
+      "file": "data/drivaernet/parametric.csv",
+      "sha256": "8f832cdc04439976a03f2305554b1e300832bd8d48384af937451b550c4573a3",
+      "bytes": 1532841
+    },
+    {
+      "file": "INVENTORY.md",
+      "sha256": "c9fc0b6905873846c88d95f79be1575e60537665d05c6874f8136a0fd75eeb3f",
+      "bytes": 15540
+    },
+    {
+      "file": "reports/environment.json",
+      "sha256": "848f67ecd840cdadb656dbd117f9f4996ba04b3869f05657be1021ab6cd8ed76",
+      "bytes": 524
+    },
+    {
+      "file": "reports/log.fields.txt",
+      "sha256": "046f2868f8ce220aa7c2ae51bf8ea82d6dd8dda08a9a9a6d8bebe5bc7a9e15de",
+      "bytes": 260
+    },
+    {
+      "file": "reports/log.harness.txt",
+      "sha256": "5ecc7fe2036ed24aed7b27bfbf153cd8490087cb9dc80b6e56a336cab89638b4",
+      "bytes": 835
+    },
+    {
+      "file": "reports/log.splits.txt",
+      "sha256": "aae7c2c06d73391780a1d8c311df8db00a230188a1027759c888c2f504d01c51",
+      "bytes": 243
+    },
+    {
+      "file": "reports/metrics.combined.json",
+      "sha256": "d49507eb8226b44176fbb74737b49e079c3b09f87e8c645362e07fedda4b07b7",
+      "bytes": 39713
+    },
+    {
+      "file": "reports/metrics.harness.json",
+      "sha256": "810a4c28622f844359927a7424230dbc5e9c4e0c997597bfa3d70bc2e552431d",
+      "bytes": 35155
+    },
+    {
+      "file": "splits/splits.drivaernet.json",
+      "sha256": "1db808061eb435feb01799e789e4376eb32704b30baac1679d8207128d390508",
+      "bytes": 198438
+    }
+  ],
+  "scope": "Transfer integrity only; final numerical grading is recorded separately. Raw inputs remain outside Git and outside the serving ZIP."
+}
