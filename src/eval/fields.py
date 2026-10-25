@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -79,6 +80,20 @@ def load_runs(root: Path, runs) -> list[tuple[int, dict, dict]]:
         if not path.exists():
             raise FileNotFoundError(f"{path} (run `python -m src.data.fields --extract`)")
         arrays, meta = load_run(path)
+        n = len(arrays["cp"])
+        for name, shape in (("query_xyz", (n, 3)), ("query_normal", (n, 3)),
+                            ("query_area", (n,)), ("cp", (n,)), ("region", (n,))):
+            if arrays[name].shape != shape or not np.isfinite(arrays[name]).all():
+                raise ValueError(f"run {run}: invalid {name} shape or nonfinite values")
+        cloud = arrays["cloud_xyz"]
+        if (n == 0 or cloud.ndim != 2 or cloud.shape[1] != 3 or not len(cloud)
+                or not np.isfinite(cloud).all() or np.any(arrays["query_area"] <= 0)):
+            raise ValueError(f"run {run}: empty/nonfinite geometry or nonpositive area")
+        if not isinstance(meta, dict) or not np.isfinite(float(meta["a_ref_m2"])) or float(meta["a_ref_m2"]) <= 0:
+            raise ValueError(f"run {run}: invalid reference area")
+        total = meta.get("total_area_m2")
+        if total is not None and (not np.isfinite(float(total)) or float(total) <= 0):
+            raise ValueError(f"run {run}: invalid total surface area")
         out.append((int(run), arrays, meta))
     return out
 
@@ -200,13 +215,21 @@ def grade_checkpoint(path, root="data/drivaerml", device: str = "cpu", *,
     except Exception as exc:  # torch or the checkpoint missing: report, don't crash the grade
         return {"available": False, "reason": f"field checkpoint {Path(path).name} could not be loaded: {exc}"}
     splits = ckpt.get("splits") or {}
-    if not splits.get("test"):
+    if not isinstance(splits, dict) or not splits.get("test"):
         return {"available": False, "reason": "the field checkpoint records no test runs"}
+    groups = [splits.get(key, []) for key in ("train", "val", "test")]
+    if not all(isinstance(ids, list) and all(type(run) is int for run in ids) for ids in groups):
+        return {"available": False, "reason": "field checkpoint split IDs must be integer lists"}
+    ids = sum(groups, [])
+    if len(ids) != len(set(ids)):
+        return {"available": False, "reason": "field checkpoint splits overlap or contain duplicate runs"}
     try:
         test = load_runs(root, splits["test"])
         train = load_runs(root, splits.get("train") or [])
     except FileNotFoundError as exc:
         return {"available": False, "reason": f"field data missing: {exc}"}
+    except (OSError, ValueError, TypeError, KeyError, EOFError, zipfile.BadZipFile) as exc:
+        return {"available": False, "reason": f"field data invalid: {exc}"}
     out = grade(test, train, predict, reference_workers=reference_workers)
     out["checkpoint"] = {
         "path": str(path).replace("\\", "/"), "sha256": _sha256(path), "version": ckpt.get("version"),

@@ -163,3 +163,30 @@ def test_cli_rejects_unbounded_or_empty_worker_arguments(option):
     with pytest.raises(SystemExit) as exc:
         fields.main(["--checkpoint", "unused.pt", option, "0"])
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("corruption", ["not_npz", "missing_array", "nonfinite"])
+def test_corrupt_field_arrays_are_explicitly_unavailable(root, tmp_path, monkeypatch, corruption):
+    if corruption == "not_npz":
+        (root / "fields" / "run_4.npz").write_bytes(b"not a numpy archive")
+    else:
+        _, arrays, meta = fields.load_runs(root, [4])[0]
+        if corruption == "missing_array":
+            del arrays["query_normal"]
+        else:
+            arrays["cp"][0] = np.nan
+        np.savez_compressed(root / "fields" / "run_4.npz", **arrays, meta=json.dumps(meta))
+    monkeypatch.setattr(fields, "checkpoint_predictor", lambda *args, **kwargs:
+                        (lambda arrays: pytest.fail("corrupt input must not be graded"),
+                         {"splits": {"train": [1], "test": [4]}}))
+    out = fields.grade_checkpoint(tmp_path / "fixture.pt", root)
+    assert out["available"] is False and "field data invalid" in out["reason"]
+    assert "overall" not in out
+
+
+@pytest.mark.parametrize("splits", [{"train": [1], "test": [1]}, {"train": [1], "test": [4, 4]},
+                                    {"train": [1], "test": "4"}])
+def test_invalid_recorded_splits_are_not_graded(tmp_path, monkeypatch, splits):
+    monkeypatch.setattr(fields, "checkpoint_predictor", lambda *args, **kwargs: (None, {"splits": splits}))
+    out = fields.grade_checkpoint(tmp_path / "fixture.pt", tmp_path)
+    assert out["available"] is False and "split" in out["reason"]
