@@ -43,9 +43,18 @@ endorse the resulting surrogate. Preserve the share-alike terms for redistribute
 adaptations of that sample.
 
 The separate field checkpoint was trained by the team on twenty cars, with five
-validation and five test cars recorded in its metadata. Its generated viewer
-mesh is approximate. Fixed-query parity does not establish full-test accuracy,
-viewer orientation, generated-geometry calibration, lift or wall shear.
+validation and five test cars recorded in its metadata. The independent field
+evaluation uses all 100,000 stored query cells per test car, not necessarily every
+cell of the original native CFD surface. The pooled nearest-training-point
+reference outperforms the field network on Cp. Its generated viewer mesh is
+approximate. Neither fixed-query parity nor grading on original extracted arrays
+establishes viewer orientation, generated-geometry calibration, lift or wall shear.
+
+The separate notchback-held-out scalar checkpoint is evaluation-only; it does not
+replace the all-styles serving model or its domain threshold. Scaling experiments
+likewise retain separate checkpoint identities. The incoming evaluation inventory
+erroneously labels DrivAerML non-commercial; the author dataset card and the
+CC BY-SA 4.0 notice above govern this public attribution.
 
 ## Checkpoint provenance and intended use
 

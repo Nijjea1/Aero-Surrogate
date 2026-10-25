@@ -199,13 +199,15 @@ function renderField() {
   }
   const o = f.overall, ref = f.references || {}, near = ref.nearest_training_car;
   const pct = (v) => `${fmt(100 * v, 0)} %`;
-  $("field-lede").textContent = `On ${f.test_runs.length} DrivAerML cars it never trained on (${f.n_points.toLocaleString()} surface points), ` +
+  $("field-lede").textContent = `On ${f.test_runs.length} held-out DrivAerML cars (${f.n_points.toLocaleString()} stored surface query cells), ` +
     `predicted Cp scores R² ${fmt(o.r2, 2)} with a typical error of ${fmt(o.mae, 3)}` +
-    (near ? `; copying the nearest point on a training car scores ${fmt(near.r2, 2)}.` : ".") +
-    ` Its error bars hold ${pct(o.coverage_1sigma)} of the points where a nominal 1σ band holds 68 %.`;
+    (near ? `; the pooled nearest-training-point reference scores ${fmt(near.r2, 2)}${near.r2 > o.r2 ? " and outperforms the network" : ""}.` : ".") +
+    ` Its 1σ intervals cover ${pct(o.coverage_1sigma)} of stored labels versus nominal 68 %: ` +
+    (o.coverage_1sigma > 0.683 ? "over-coverage on these CFD arrays." : "under-coverage on these CFD arrays.") +
+    " This does not establish interval coverage on generated viewer geometry.";
   const rows = [
     { label: "Predict the average", value: ref.mean?.r2, kind: "muted" },
-    ...(near ? [{ label: "Nearest training car", value: near.r2, kind: "muted" }] : []),
+    ...(near ? [{ label: "Pooled nearest training points", value: near.r2, kind: "muted" }] : []),
     { label: "Surface model", value: o.r2, kind: "accent" },
   ];
   barChart($("field-acc"), rows, { domain: [0, 1], format: (v) => fmt(v, 3) });
@@ -217,8 +219,11 @@ function renderField() {
   })), { domain: [0, top * 1.1], format: (v) => fmt(v, 3) });
   const c = f.integrated_cd;
   $("field-note").textContent = c
-    ? `Integrated over each car, the predicted pressure drag averages ${fmt(c.pred_mean, 4)} against ${fmt(c.true_mean, 4)} ` +
-      `from CFD, off by ${fmt(c.mae, 4)} per car (${pct(c.mean_relative_error)}). Region means are what the designer's Regions paint shows.`
+    ? `Pressure-only integration over the stored query cells averages ${fmt(c.pred_mean, 4)} against ${fmt(c.true_mean, 4)} ` +
+      `from CFD, with per-car MAE ${fmt(c.mae, 5)} (${pct(c.mean_relative_error)} mean absolute relative error). ` +
+      "This excludes viscous drag and is not full native CFD surface quadrature. " +
+      (near ? "The reference pools sampled points across training cars and averages eight neighbours in position/normal space. " : "") +
+      "Generated viewer mesh orientation and accuracy remain unvalidated."
     : "";
 }
 
@@ -234,7 +239,7 @@ function renderScaling() {
   legend($("scaling-legend"), series);
   const xs = series.flatMap((d) => d.points.map((p) => p[0]));
   const ys = series.flatMap((d) => d.points.map((p) => p[1]));
-  // Training size doubles from point to point, so the x axis is logarithmic.
+  // A logarithmic axis separates the different training-set sizes.
   const lo = Math.min(...xs, 50), hi = Math.max(...xs, 100);
   lineChart($("scaling"), {
     series, x: [lo * 0.85, hi * 1.15], y: [Math.min(0.5, ...ys) - 0.05, Math.max(0.9, ...ys) + 0.03], logX: true,
@@ -254,7 +259,7 @@ function scalingTakeaway(s) {
   }
   const first = pts[0], last = pts[pts.length - 1], prev = pts[pts.length - 2];
   const n = (p) => p.n_train.toLocaleString();
-  let text = `From ${n(first)} to ${n(last)} training designs, R² rises from ${fmt(first.r2, 2)} to ${fmt(last.r2, 2)}. ` +
+  let text = `From ${n(first)} to ${n(last)} training designs, R² changes from ${fmt(first.r2, 2)} to ${fmt(last.r2, 2)}. ` +
     `The last step, from ${n(prev)}, adds ${signed(last.r2 - prev.r2, 3)}`;
   text += ".";
   const linear = s.linear_reference || [];
@@ -270,10 +275,10 @@ function scalingTakeaway(s) {
   const linLast = linear[linear.length - 1];
   const beats = pts.find((p) => lineAt(p.n_train) !== null && p.r2 > lineAt(p.n_train));
   if (linLast && beats) {
-    text += beats === first
-      ? ` It beats a straight line at every size; the line levels off near ${fmt(linLast.r2, 2)}.`
-      : ` With little data a straight line does better; the network overtakes it by ${n(beats)} designs and keeps improving ` +
-        `while the line levels off near ${fmt(linLast.r2, 2)}.`;
+    const allBeat = pts.every((p) => lineAt(p.n_train) !== null && p.r2 > lineAt(p.n_train));
+    text += allBeat
+      ? ` It beats the interpolated straight-line reference at every measured size.`
+      : ` It first exceeds the interpolated straight-line reference at ${n(beats)} designs; the curve may not improve monotonically.`;
   }
   if (s.subsets) text += ` Subsets: ${s.subsets}.`;
   return text;

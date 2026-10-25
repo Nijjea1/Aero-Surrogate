@@ -266,9 +266,17 @@ not independent authentication of an upstream source hash the pack never supplie
 This command qualifies fixed-query Cp/sigma parity only. It does not qualify
 design-to-viewer preprocessing, learned region accuracy, field OOD, uncertainty
 calibration or aerodynamic accuracy. CFD targets and the pack's descriptive
-performance claims remain distinct. Avneet reports pressure-only Cd MAE 0.0326
-and Cl MAE 0.0802, with a lift sign error on one of five held-out cars. Cl must
-remain unavailable for decisions; none of these numbers are local measurements.
+performance claims remain distinct. The original training-side pressure-only Cd
+MAE 0.0326 used 4,096 query points per car. The received 27 October bundle's
+100,000 stored cells per test car gives per-car MAE 0.0218415 and mean absolute
+relative error 8.57% (three under-predictions, two over-predictions). This is
+stored-cell quadrature, not a complete native CFD surface. Its Cp R² 0.5080 /
+MAE 0.14554 loses to the pooled nearest-training-point reference, R² 0.6905 /
+MAE 0.10251. Release claims use the fresh independent report in
+`web/results/metrics.json`, not fixed-query parity or historical pack prose.
+The historical Cl MAE 0.0802 and one lift sign error were not recomputed by that
+bundle. Cl remains unavailable for decisions; viewer field orientation and
+generated-geometry calibration remain unvalidated.
 
 ## Agent-run UI packet for Paramveer
 
