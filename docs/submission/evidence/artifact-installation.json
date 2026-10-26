@@ -2,24 +2,25 @@
   "format": "aero-surrogate-artifact-installation/1",
   "passed": true,
   "archive": "runs/release/aero-surrogate-models.zip",
-  "archive_sha256": "0bc5f028bef466cabffc6c0fb2fb52a81eb0a2e81c540d15643ef89dcfbe4963",
-  "archive_bytes": 10087759,
-  "payload_files": 59,
+  "archive_sha256": "988918de06d5a323751f3d80f74884c92b31148f19ebe2841f558dc09f91204a",
+  "archive_bytes": 10116583,
+  "payload_files": 66,
   "all_installed_file_hashes_match": true,
   "all_15_benchmark_published_summary_hashes_match_archived_bytes": true,
   "zip_crc_check_passed": true,
   "manifest_source": {
-    "git_revision": "c2e21caed754b6bb21ad7c59d2c7c91438a25b56",
+    "git_revision": "d30db5480d43f4d5be41c6acc3a3febd7bdde684",
     "source_dirty": false,
-    "source_sha256": "5acca7b9435ceaaf261e7b4661e9da049ae8fd9869a322e78c274f6923fb0c60",
+    "source_sha256": "f567ac93e0d7636a4bc0ad85366960e30f9bc065d2e8ac36cd9d08792fe4df6f",
     "source_sha256_scope": "serving Python sources under src/ and requirements-service.txt/requirements-model.txt; not the full repository"
   },
   "scalar_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+  "field_sha256": "6a210c09b09205459f59d17b5ff913648587c9af086fc972e9090e3d69aa688c",
   "historical_runs": 15,
   "history_rows_per_run": 25,
-  "real_scalar_baseline_and_domain_gate_passed": true,
+  "qualification_source_fingerprint_matches": true,
+  "scope": "Final ZIP independently installed into a new directory; all66payload hashes,15published summaries, both models and15historical25row histories verified; six installed-model real HTTP checks pass. No deployment or provider calls.",
   "real_scalar_field_http_checks_passed": true,
-  "payload_identical_to_real_scalar_field_http_checked_candidate": true,
   "http_checks": [
     "API ready and expected model identity",
     "trusted baseline evaluation",
@@ -28,5 +29,5 @@
     "real field inference (functional only; calibration not established)",
     "five-step scripted agent over HTTP with persisted history and gate rejection"
   ],
-  "scope": "final ZIP independently installed into separate directory; all59 files,15 published summary hashes, models and historical runs checked locally; no deployment/provider calls"
+  "real_scalar_baseline_and_domain_gate_passed": true
 }

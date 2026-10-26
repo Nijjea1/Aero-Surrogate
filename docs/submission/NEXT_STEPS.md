@@ -1,6 +1,6 @@
 # Remaining work after local completion
 
-All pre-deployment steps 1?9 are complete. Source is integrated on local `main`;
+All pre-deployment steps 1–9 are complete. Source is integrated on local `main`;
 the serving weights and thresholds remain unchanged. See [COMPLETION.md](COMPLETION.md)
 for measured results, current verification evidence and explicit environment limits.
 

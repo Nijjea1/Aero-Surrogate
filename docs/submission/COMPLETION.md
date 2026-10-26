@@ -31,14 +31,14 @@ and submission remain with the team.
 
 | Experiment | Result and scope |
 |---|---|
-| Served scalar | R? 0.87497, MAE 0.006161, 625 held-out designs |
-| Linear scalar reference | R? 0.83523 on the same split |
-| Scalar intervals | 1? coverage 64.48%; nominal 90% coverage 86.56%; under-coverage |
-| Held-out notchback | R? 0.47921, MAE 0.010161, 1,403 designs; evaluation-only model |
-| Surface pressure | Cp R? 0.50803, MAE 0.145535, 500,000 stored queries across five cars |
-| Stronger field reference | Pooled nearest-training-point R? 0.69052, MAE 0.102510; beats the network |
+| Served scalar | R² 0.87497, MAE 0.006161, 625 held-out designs |
+| Linear scalar reference | R² 0.83523 on the same split |
+| Scalar intervals | 1-sigma coverage 64.48%; nominal 90% coverage 86.56%; under-coverage |
+| Held-out notchback | R² 0.47921, MAE 0.010161, 1,403 designs; evaluation-only model |
+| Surface pressure | Cp R² 0.50803, MAE 0.145535, 500,000 stored queries across five cars |
+| Stronger field reference | Pooled nearest-training-point R² 0.69052, MAE 0.102510; beats the network |
 | Pressure-only integral | Per-car MAE 0.0218413, mean absolute relative error 8.57%; three under/two over |
-| New data-scaling experiment | 146?2,915 training designs, R? 0.77835?0.87852; separate checkpoints |
+| New data-scaling experiment | 146–2,915 training designs, R² 0.77835–0.87852; separate checkpoints |
 | Historical matched search | Five runs/method, 25 evaluations; median predicted Cd reductions 3.875% Nemotron, 3.841% CMA-ES, 2.793% random |
 
 The field integral is a scaled estimator over stored cells, excludes viscous drag
