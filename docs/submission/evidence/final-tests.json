@@ -1,0 +1,26 @@
+{
+  "format": "aero-surrogate-final-test-verification/1",
+  "git_revision": "2268b0e",
+  "command": "python -X utf8 -m pytest -q -rs -p no:cacheprovider --basetemp .audit-track-b/final-verification/pytest-2",
+  "platform": "Windows, Python 3.13.14, CPU",
+  "passed": 1060,
+  "failed": 0,
+  "skipped": 2,
+  "warnings": 3,
+  "duration_seconds": 74.08,
+  "skip_reasons": [
+    "optional geometry checkpoint/detector not supplied",
+    "Windows symbolic-link creation privilege unavailable"
+  ],
+  "warning_reasons": [
+    "Starlette/httpx deprecation",
+    "two deliberate warnings for ignored obsolete geometry parameter names"
+  ],
+  "dependency_check": "python -m pip check: no broken requirements found",
+  "browser_asset_hashes": {
+    "three": 17,
+    "fonts": 9,
+    "all_match": true
+  },
+  "scope": "Local full suite. Later documentation-only integration does not alter tested runtime sources. Linux/remote CI is not certified by this Windows run."
+}

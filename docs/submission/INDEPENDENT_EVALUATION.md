@@ -2,7 +2,8 @@
 
 Evaluated source: `43191bf2c9b9d87ffc313e63b3ff36ee127a0c92` (clean).
 This report records a fresh local regrade, not a copy of the incoming reports.
-The original bundle remains unchanged. Reports and checkpoint bytes stay outside Git.
+The original bundle remains unchanged. Raw inputs and checkpoint bytes stay outside Git;
+the sanitized combined report is published at `web/results/metrics.json`.
 
 ## Inputs and reproduction
 
