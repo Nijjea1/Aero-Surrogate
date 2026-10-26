@@ -9,9 +9,9 @@
       "predictor": "torch",
       "synthetic": false,
       "schema_version": "2.0.0",
-      "git_revision": "7d39f7c987db8663b6c306c8a8bf9e8f87a93f00",
+      "git_revision": "f2549bf1b401996d730539fef2866a82c5bd0e13",
       "source_dirty": false,
-      "source_sha256": "f567ac93e0d7636a4bc0ad85366960e30f9bc065d2e8ac36cd9d08792fe4df6f",
+      "source_sha256": "f9b1ee449c278bf234924711c637f9d25700cd026a7bd78908c964de0d35c906",
       "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
       "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
       "preprocess_version": "params-v1",
@@ -45,9 +45,9 @@
         "predictor": "torch",
         "synthetic": false,
         "schema_version": "2.0.0",
-        "git_revision": "7d39f7c987db8663b6c306c8a8bf9e8f87a93f00",
+        "git_revision": "f2549bf1b401996d730539fef2866a82c5bd0e13",
         "source_dirty": false,
-        "source_sha256": "f567ac93e0d7636a4bc0ad85366960e30f9bc065d2e8ac36cd9d08792fe4df6f",
+        "source_sha256": "f9b1ee449c278bf234924711c637f9d25700cd026a7bd78908c964de0d35c906",
         "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
         "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
         "preprocess_version": "params-v1",
@@ -111,7 +111,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.5951000493951142,
+            "latency_ms": 0.5934999790042639,
             "ood_score": 2.699723411559878,
             "reject_reason": null,
             "contract_rejection_reason": null
@@ -153,7 +153,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.2652000403031707,
+            "latency_ms": 0.26299996534362435,
             "ood_score": 2.6803634715242266,
             "reject_reason": null,
             "contract_rejection_reason": null
@@ -195,7 +195,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.2300000051036477,
+            "latency_ms": 0.21549995290115476,
             "ood_score": 2.701113597373457,
             "reject_reason": null,
             "contract_rejection_reason": null
@@ -237,7 +237,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.21279999054968357,
+            "latency_ms": 0.20289997337386012,
             "ood_score": 2.547102160341634,
             "reject_reason": null,
             "contract_rejection_reason": null
@@ -279,7 +279,7 @@
             "in_distribution": false,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.22280000848695636,
+            "latency_ms": 0.22760004503652453,
             "ood_score": 7.069249199279294,
             "reject_reason": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar; return toward the last trusted geometry",
             "contract_rejection_reason": "out of distribution (score 7.07 > 4.93) -- this design is unlike anything in the training set, so the prediction is extrapolation regardless of its error bar"
@@ -315,9 +315,9 @@
         "predictor": "torch",
         "synthetic": false,
         "schema_version": "2.0.0",
-        "git_revision": "7d39f7c987db8663b6c306c8a8bf9e8f87a93f00",
+        "git_revision": "f2549bf1b401996d730539fef2866a82c5bd0e13",
         "source_dirty": false,
-        "source_sha256": "f567ac93e0d7636a4bc0ad85366960e30f9bc065d2e8ac36cd9d08792fe4df6f",
+        "source_sha256": "f9b1ee449c278bf234924711c637f9d25700cd026a7bd78908c964de0d35c906",
         "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
         "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
         "preprocess_version": "params-v1",
@@ -467,7 +467,7 @@
           "in_distribution": true,
           "pressure_summary": {},
           "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-          "latency_ms": 1.0852999985218048,
+          "latency_ms": 0.9248999995179474,
           "ood_score": 2.699723411559878
         },
         "errors": []
@@ -482,7 +482,7 @@
           "in_distribution": true,
           "pressure_summary": {},
           "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-          "latency_ms": 0.4938999773003161,
+          "latency_ms": 0.34339999547228217,
           "ood_score": 2.6803634715242266
         },
         "errors": []
@@ -497,7 +497,7 @@
           "in_distribution": true,
           "pressure_summary": {},
           "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-          "latency_ms": 0.5232000257819891,
+          "latency_ms": 0.31869998201727867,
           "ood_score": 2.701113597373457
         },
         "errors": []
@@ -512,7 +512,7 @@
           "in_distribution": true,
           "pressure_summary": {},
           "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-          "latency_ms": 1.0771999950520694,
+          "latency_ms": 0.31370000215247273,
           "ood_score": 2.547102160341634
         },
         "errors": []
@@ -527,7 +527,7 @@
           "in_distribution": false,
           "pressure_summary": {},
           "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-          "latency_ms": 0.4563999827951193,
+          "latency_ms": 0.278000021353364,
           "ood_score": 7.069249199279294
         },
         "errors": []
@@ -547,7 +547,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.7712000515311956,
+            "latency_ms": 0.33870001789182425,
             "ood_score": 2.699723411559878
           },
           "design_b": {
@@ -557,7 +557,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.5788999842479825,
+            "latency_ms": 0.22340001305565238,
             "ood_score": 2.6803634715242266
           },
           "delta": {
@@ -598,7 +598,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.7719999994151294,
+            "latency_ms": 0.29579998226836324,
             "ood_score": 2.699723411559878
           },
           "design_b": {
@@ -608,7 +608,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.5671000108122826,
+            "latency_ms": 0.2145000034943223,
             "ood_score": 2.701113597373457
           },
           "delta": {
@@ -649,7 +649,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.7345000049099326,
+            "latency_ms": 0.3103999770246446,
             "ood_score": 2.699723411559878
           },
           "design_b": {
@@ -659,7 +659,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.5990000208839774,
+            "latency_ms": 0.2161000156775117,
             "ood_score": 2.547102160341634
           },
           "delta": {
@@ -700,7 +700,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.5002999678254128,
+            "latency_ms": 0.2872999757528305,
             "ood_score": 2.699723411559878
           },
           "design_b": {
@@ -710,7 +710,7 @@
             "in_distribution": false,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.3127999952994287,
+            "latency_ms": 0.20910002058371902,
             "ood_score": 7.069249199279294
           },
           "delta": {
@@ -751,7 +751,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.7975000189617276,
+            "latency_ms": 0.33660000190138817,
             "ood_score": 2.6803634715242266
           },
           "design_b": {
@@ -761,7 +761,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.5976000102236867,
+            "latency_ms": 0.21979998564347625,
             "ood_score": 2.701113597373457
           },
           "delta": {
@@ -802,7 +802,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.8368000271730125,
+            "latency_ms": 0.33220002660527825,
             "ood_score": 2.6803634715242266
           },
           "design_b": {
@@ -812,7 +812,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.5737000028602779,
+            "latency_ms": 0.21759996889159083,
             "ood_score": 2.547102160341634
           },
           "delta": {
@@ -853,7 +853,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.8486999431625009,
+            "latency_ms": 0.3340000403113663,
             "ood_score": 2.6803634715242266
           },
           "design_b": {
@@ -863,7 +863,7 @@
             "in_distribution": false,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.6559000466950238,
+            "latency_ms": 0.215300009585917,
             "ood_score": 7.069249199279294
           },
           "delta": {
@@ -904,7 +904,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.47670002095401287,
+            "latency_ms": 0.638800032902509,
             "ood_score": 2.701113597373457
           },
           "design_b": {
@@ -914,7 +914,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.6480000447481871,
+            "latency_ms": 0.42830000165849924,
             "ood_score": 2.547102160341634
           },
           "delta": {
@@ -955,7 +955,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.75559999095276,
+            "latency_ms": 0.3168000257574022,
             "ood_score": 2.701113597373457
           },
           "design_b": {
@@ -965,7 +965,7 @@
             "in_distribution": false,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.3375000087544322,
+            "latency_ms": 0.23100001271814108,
             "ood_score": 7.069249199279294
           },
           "delta": {
@@ -1006,7 +1006,7 @@
             "in_distribution": true,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.806800031568855,
+            "latency_ms": 0.3265999839641154,
             "ood_score": 2.547102160341634
           },
           "design_b": {
@@ -1016,7 +1016,7 @@
             "in_distribution": false,
             "pressure_summary": {},
             "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
-            "latency_ms": 0.5514000076800585,
+            "latency_ms": 0.222400005441159,
             "ood_score": 7.069249199279294
           },
           "delta": {

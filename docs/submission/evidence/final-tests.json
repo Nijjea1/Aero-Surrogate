@@ -1,13 +1,13 @@
 {
   "format": "aero-surrogate-final-test-verification/1",
-  "git_revision": "59c0b05c9cf25664149412f9333f5c1ce9e2c517",
-  "command": "python -X utf8 -m pytest -q -rs -p no:cacheprovider --basetemp .audit-track-b/final-verification/pytest-final",
+  "git_revision": "f2549bf1b401996d730539fef2866a82c5bd0e13",
+  "command": "python -X utf8 -m pytest -q -rs -p no:cacheprovider --basetemp .audit-track-b/cleanup-verification/pytest",
   "platform": "Windows, Python 3.13.14, CPU",
   "passed": 1065,
   "failed": 0,
   "skipped": 2,
   "warnings": 3,
-  "duration_seconds": 104.27,
+  "duration_seconds": 76.69,
   "skip_reasons": [
     "optional geometry checkpoint/detector not supplied",
     "Windows symbolic-link creation privilege unavailable"

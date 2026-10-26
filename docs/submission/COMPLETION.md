@@ -49,7 +49,7 @@ Surrogate optimisation improvements have not been verified by new CFD.
 
 ## Final local verification
 
-- **1,065 tests passed, two expected skips, three existing warnings** in 104.27 s.
+- **1,065 tests passed, two expected skips, three existing warnings** in 76.69 s.
   Skips: optional geometry checkpoint/detector and Windows symlink privilege.
   `pip check` passed. No unexplained test failure remains.
 - Scalar/shared-gate native-reference qualification, authenticated fixed-query
@@ -77,6 +77,14 @@ Current evidence: [tests](evidence/final-tests.json),
 See [independent evaluation](INDEPENDENT_EVALUATION.md) for commands and hashes.
 Earlier reports remain dated historical evidence, including the separate
 [clean-environment installation](evidence/clean-environment.json).
+
+Repository cleanup removed five superseded documents and consolidated navigation
+in the [documentation index](../README.md). Nine fully merged local branches and
+seventeen fully merged GitHub branches were deleted; remote deletion required
+exact matching tips. Artifact-bearing worktrees were detached and preserved.
+All 81 existing local Markdown links passed. A fresh full scalar/category/field/
+scaling evaluation reproduced the published accuracy exactly; the published
+experiment file remains unchanged. See the [cleanup receipt](evidence/repository-cleanup.json).
 
 Current real application proofs: [Designer](proof/final-designer.png),
 [rejection](proof/final-rejected-corner.png), [Runs](proof/final-runs.png),

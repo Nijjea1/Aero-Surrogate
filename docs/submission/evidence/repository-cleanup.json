@@ -1,0 +1,210 @@
+{
+  "format": "aero-surrogate-repository-cleanup/1",
+  "source_revision": "f2549bf1b401996d730539fef2866a82c5bd0e13",
+  "commits_use_actual_dates": true,
+  "removed_superseded_documents": 5,
+  "remaining_local_markdown_links_checked": 81,
+  "broken_local_markdown_links": [],
+  "local_branches_deleted": [
+    {
+      "name": "backup/pre-merge-20261027-5aa669f",
+      "tip": "5aa669f29ceecfe274a533c4744263d512b77ebe",
+      "ancestor_of_main": true
+    },
+    {
+      "name": "finish/final-evaluation",
+      "tip": "8a6433f59b017de526428848d5bc4370ffa67dc1",
+      "ancestor_of_main": true
+    },
+    {
+      "name": "finish/final-product",
+      "tip": "109efc6ca5179e270ae358b8d7612cb61e5dd5c6",
+      "ancestor_of_main": true
+    },
+    {
+      "name": "finish/final-tooling",
+      "tip": "857e11eeb9350869ca605d331ac50f5b18650c35",
+      "ancestor_of_main": true
+    },
+    {
+      "name": "finish/predeploy-complete",
+      "tip": "d30db5480d43f4d5be41c6acc3a3febd7bdde684",
+      "ancestor_of_main": true
+    },
+    {
+      "name": "finish/submission-evidence",
+      "tip": "438212b646974a4fccd67ec6dc39f15e10bd9468",
+      "ancestor_of_main": true
+    },
+    {
+      "name": "finish/submission-local",
+      "tip": "27868280be03f1fddd3387f84d07579d1e9bc627",
+      "ancestor_of_main": true
+    },
+    {
+      "name": "finish/submission-product",
+      "tip": "36c07a4fe166a21909643aa9f7cfb42bcf045727",
+      "ancestor_of_main": true
+    },
+    {
+      "name": "finish/submission-repro",
+      "tip": "1dfa36124242dc5c8f54f7d53662d6a969640ffa",
+      "ancestor_of_main": true
+    }
+  ],
+  "worktrees_detached_without_deleting_artifacts": [
+    {
+      "path": ".audit-track-b/worktrees/final-evaluation",
+      "head": "8a6433f59b017de526428848d5bc4370ffa67dc1",
+      "preserved_untracked_files": false
+    },
+    {
+      "path": ".audit-track-b/worktrees/final-product",
+      "head": "109efc6ca5179e270ae358b8d7612cb61e5dd5c6",
+      "preserved_untracked_files": false
+    },
+    {
+      "path": ".audit-track-b/worktrees/final-tooling",
+      "head": "857e11eeb9350869ca605d331ac50f5b18650c35",
+      "preserved_untracked_files": false
+    },
+    {
+      "path": ".audit-track-b/worktrees/submission-evidence",
+      "head": "438212b646974a4fccd67ec6dc39f15e10bd9468",
+      "preserved_untracked_files": false
+    },
+    {
+      "path": ".audit-track-b/worktrees/submission-product",
+      "head": "36c07a4fe166a21909643aa9f7cfb42bcf045727",
+      "preserved_untracked_files": true
+    },
+    {
+      "path": ".audit-track-b/worktrees/submission-repro",
+      "head": "1dfa36124242dc5c8f54f7d53662d6a969640ffa",
+      "preserved_untracked_files": false
+    }
+  ],
+  "remote_branches_deleted": [
+    {
+      "name": "avneet/stage1-data-training",
+      "tip": "669d4d9f8f81806d2a791f2343d22f597a6f206f"
+    },
+    {
+      "name": "paramveer/airflow",
+      "tip": "129a5fe8bd577b81d89485b46f6f449f47a01b18"
+    },
+    {
+      "name": "paramveer/baseline",
+      "tip": "e8771677aacb0f976c957a38ee2887ccc34b826d"
+    },
+    {
+      "name": "paramveer/deploy-web",
+      "tip": "516c924f307ac5f6048a433a63bf42ef763e7d01"
+    },
+    {
+      "name": "paramveer/eval",
+      "tip": "c79ee3f29f189201db3c8c7d94e982db12a8a7f7"
+    },
+    {
+      "name": "paramveer/geometry",
+      "tip": "fec0e97a3a956c9b289d2a677b340b81411eeb28"
+    },
+    {
+      "name": "paramveer/instrument-ui",
+      "tip": "962ffa148650e5fa5fb40392541be313e0543e3b"
+    },
+    {
+      "name": "paramveer/pages-scaling",
+      "tip": "7657207b3b980648ef3593a8351acf8114751778"
+    },
+    {
+      "name": "paramveer/polish",
+      "tip": "1da197c9729ba7b99bdcfefb79be7f8e43b07e15"
+    },
+    {
+      "name": "paramveer/readme",
+      "tip": "c0f5f8a75a441f01919da09e168b839f526e6eff"
+    },
+    {
+      "name": "paramveer/real-cars",
+      "tip": "131d72197fbde3e6fa4ae84298deb8f894b2cfc5"
+    },
+    {
+      "name": "paramveer/results",
+      "tip": "f120cee48a983261dae8ad75fd49da8dc3d49a73"
+    },
+    {
+      "name": "paramveer/run-control",
+      "tip": "4e1d8d23c7d8e18d63fafb78e8dc1ba0e790d75f"
+    },
+    {
+      "name": "paramveer/runs",
+      "tip": "ec7c576b3ce2f3788d3cd3ee44c4a43073b348de"
+    },
+    {
+      "name": "paramveer/showcase",
+      "tip": "17cdfc4a7e648b60773616aed245c423cb186599"
+    },
+    {
+      "name": "paramveer/viewer",
+      "tip": "0bb5201c9bc7ad3b857df920aace733e79ef471f"
+    },
+    {
+      "name": "paramveer/web",
+      "tip": "e92b6af854d73e672caa0c2a837eb8824f3f69e1"
+    }
+  ],
+  "remote_deletion_guard": "Atomic deletion only if every live branch tip exactly equals its already-merged cached SHA; main excluded.",
+  "tests": {
+    "passed": 1065,
+    "skipped": 2,
+    "warnings": 3,
+    "duration_seconds": 76.69
+  },
+  "fresh_evaluation": {
+    "report_sha256": "441d77c7fa29df882e614bb40abbe2725a5533787789e8bff370c7896f837b48",
+    "metrics": [
+      {
+        "metric": "scalar R2",
+        "fresh": 0.8749716739588658,
+        "published": 0.8749716739588658,
+        "matches_tolerance": true
+      },
+      {
+        "metric": "scalar MAE",
+        "fresh": 0.006160587542665499,
+        "published": 0.006160587542665499,
+        "matches_tolerance": true
+      },
+      {
+        "metric": "category R2",
+        "fresh": 0.47921193138401896,
+        "published": 0.47921193138401896,
+        "matches_tolerance": true
+      },
+      {
+        "metric": "field Cp R2",
+        "fresh": 0.5080304164367411,
+        "published": 0.5080304164367411,
+        "matches_tolerance": true
+      },
+      {
+        "metric": "field Cp MAE",
+        "fresh": 0.14553503732927545,
+        "published": 0.14553503732927545,
+        "matches_tolerance": true
+      },
+      {
+        "metric": "pressure-only Cd MAE",
+        "fresh": 0.021841276711276853,
+        "published": 0.021841276711276853,
+        "matches_tolerance": true
+      }
+    ],
+    "field_queries": 500000,
+    "scaling_checkpoints": 5,
+    "checkpoint_identities_match_published": true,
+    "scope": "Fresh full scalar/category/field/scaling regrade; published report retained unchanged to preserve its recorded experiment identity."
+  },
+  "serving_qualification_passed": true
+}
