@@ -130,7 +130,7 @@ python -m pytest tests -q
 python -m src.service.qualify --checkpoint runs/drivaernet-random/best.pt --references runs/handover/scalar_reference.json --out runs/service-qualification.json
 ```
 
-The full local audit ran 956 passing tests with three data-dependent skips before these release fixes. Current verification is recorded in the release material; tests that use synthetic fixtures do not establish physical model accuracy. [The audit](docs/REPO_AUDIT_2026-10-27.md) separates numerical parity, independent grading and browser checks.
+The final local suite passed 1,065 tests with two expected skips. Tests that use synthetic fixtures do not establish physical model accuracy. The [completion report](docs/submission/COMPLETION.md) separates numerical parity, independent grading and browser checks; the [documentation index](docs/README.md) links the current guides.
 
 ## Deployment boundary
 

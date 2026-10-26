@@ -120,11 +120,11 @@ and the completion report for the command and scope actually verified here.
 - [Tooling feedback](tooling-feedback.md): measured observations and concrete requests.
 - [Video script](video-script.md): under-three-minute recording plan; distinguish
   raw browser recordings from a finished narrated submission video.
-- [Teammate artifact handoff](teammate-artifacts.md): original request; the category/full-field bundle is now received and verified.
-- [Original audit](../REPO_AUDIT_2026-10-27.md): findings at the pre-fix revision.
+- [Independent evaluation](INDEPENDENT_EVALUATION.md): complete reproduction commands,
+  checkpoint identities and the verified category/full-field results.
 
-The historical audit is preserved. It is not a claim that all listed findings
-remain open after the release fixes; use the completion report for final status.
+Superseded plans and the pre-fix audit remain in Git history. Use the completion
+report for final status and the [documentation index](../README.md) for current guides.
 
 The final local verification is recorded in [COMPLETION.md](COMPLETION.md),
 [browser checks](evidence/final-browser-verification.json), [model/HTTP qualification](evidence/final-qualification.json),
