@@ -160,6 +160,24 @@ def engine_for_attempt(index: int, attempts: int, engines: list[str]) -> str:
     return engines[min(len(engines) - 1, index * len(engines) // attempts)]
 
 
+def attempt_schedule(attempts: int, engines: list[str], *, responsive: bool = False,
+                     browser_batch_size: int = 3):
+    """Fresh contexts every attempt, bounded browser lifetime, mobile once/engine.
+
+    Rotation is proactive resource cleanup, never a retry of a failed attempt.
+    """
+    seen, active, used = set(), None, 0
+    for index in range(attempts):
+        engine = engine_for_attempt(index, attempts, engines)
+        restart = engine != active or used >= browser_batch_size
+        if restart:
+            active, used = engine, 0
+        mobile = responsive and engine not in seen
+        seen.add(engine)
+        used += 1
+        yield index, engine, restart, mobile
+
+
 def cancellation_check(api: str) -> dict:
     """One public run, immediately cancelled. Tokens remain only in local variables."""
     status, started = request_json(api + "/runs", {"model": "super", "iterations": 25, "body_style": "fastback"})
@@ -195,7 +213,7 @@ def exercise_attempt(browser, services: LocalServices, output: Path, number: int
 
     started_at, started = datetime.now(timezone.utc).isoformat(), time.monotonic()
     row = {"attempt": number, "engine": engine, "live_requested": live, "passed": False,
-           "started_at": started_at, "checks": [], "page_errors": [], "failed_requests": [],
+           "started_at": started_at, "responsive_requested": responsive, "checks": [], "page_errors": [], "failed_requests": [],
            "http_errors": [], "screenshots": []}
     context_options = {"viewport": {"width": 1600, "height": 1000}, "reduced_motion": "reduce"}
     if record:
@@ -369,10 +387,14 @@ def main(argv=None) -> int:
     parser.add_argument("--max-spend", type=float, default=1.0, help="Isolated application ledger cap, USD")
     parser.add_argument("--engines", nargs="+", choices=("chromium", "firefox"), default=["chromium", "firefox"])
     parser.add_argument("--record", action="store_true", help="Record raw browser WebM; no composition or publishing")
-    parser.add_argument("--responsive", action="store_true", help="Also check Designer, Runs and Results at 390px and 412px in each context")
+    parser.add_argument("--responsive", action="store_true", help="Also check Designer, Runs and Results at 390px and 412px once per engine")
+    parser.add_argument("--browser-batch-size", type=int, default=3,
+                        help="Restart the owned browser after this many fresh contexts (default: 3)")
     args = parser.parse_args(argv)
     if not 1 <= args.attempts <= 100 or not 0 <= args.live_runs <= args.attempts:
         parser.error("attempts must be 1-100; live-runs must be between zero and attempts")
+    if not 1 <= args.browser_batch_size <= 20:
+        parser.error("browser-batch-size must be 1-20")
     if not math.isfinite(args.max_spend) or not 0 < args.max_spend <= 5:
         parser.error("max-spend must be finite and in (0, 5]")
     root, output = args.project_root.resolve(), args.out.resolve()
@@ -382,7 +404,9 @@ def main(argv=None) -> int:
         parser.error("project-root must be the Aero Surrogate repository")
     report = {"browser_rehearsal_version": 1, "scope": "real local services, fresh logged-out contexts; not public hosted testing",
               "requested_attempts": args.attempts, "requested_live_runs": args.live_runs,
-              "max_spend_usd": args.max_spend, "passed": False, "attempts": [], "errors": []}
+              "max_spend_usd": args.max_spend, "responsive_requested": args.responsive,
+              "responsive_scope": "first fresh context per selected engine",
+              "browser_batch_size": args.browser_batch_size, "passed": False, "attempts": [], "errors": []}
     output.mkdir(parents=True)
     try:
         from playwright.sync_api import sync_playwright
@@ -402,12 +426,13 @@ def main(argv=None) -> int:
             report["service"]["checkpoint_sha256_full"] = expected_hash
             selected = live_indices(args.attempts, args.live_runs)
             with sync_playwright() as playwright:
-                browser, active_engine = None, None
-                report["engine_strategy"] = "grouped sequential engines, one browser process at a time"
+                browser = None
+                report["engine_strategy"] = "grouped sequential engines, one owned browser at a time, bounded context batches"
                 try:
-                    for index in range(args.attempts):
-                        engine = engine_for_attempt(index, args.attempts, args.engines)
-                        if engine != active_engine:
+                    schedule = attempt_schedule(args.attempts, args.engines, responsive=args.responsive,
+                                                browser_batch_size=args.browser_batch_size)
+                    for index, engine, restart, mobile in schedule:
+                        if restart:
                             if browser is not None:
                                 browser.close()
                                 browser = None
@@ -417,9 +442,9 @@ def main(argv=None) -> int:
                             else:
                                 options["firefox_user_prefs"] = {"webgl.force-enabled": True, "webgl.disabled": False}
                             browser = getattr(playwright, engine).launch(**options)
-                            active_engine = engine
                         row = exercise_attempt(browser, services, output, index + 1, engine,
-                                               index in selected, args.record, args.responsive)
+                                               index in selected, args.record, mobile)
+                        row["browser_restarted"] = restart
                         report["attempts"].append(row)
                         write_reports(output, report)
                         print(f"Attempt {index + 1}/{args.attempts} {engine}: {'passed' if row['passed'] else 'FAILED'}", flush=True)

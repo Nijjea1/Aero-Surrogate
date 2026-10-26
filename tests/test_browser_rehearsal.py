@@ -130,3 +130,82 @@ def test_historical_seed_works_from_fresh_clone_public_traces(tmp_path):
     assert module().seed_historical_logs(tmp_path, output) == 15
     assert not (tmp_path / "runs/matched-20261016").exists()
     assert (output / "logs/events/matched-0.jsonl").is_file()
+
+
+
+def test_resource_schedule_rotates_owned_browser_and_checks_mobile_once_per_engine():
+    schedule = list(module().attempt_schedule(20, ["chromium", "firefox"], responsive=True))
+    assert len(schedule) == 20
+    assert [index for index, _, restart, _ in schedule if restart] == [0, 3, 6, 9, 10, 13, 16, 19]
+    assert [(index, engine) for index, engine, _, mobile in schedule if mobile] == [(0, "chromium"), (10, "firefox")]
+    assert [engine for _, engine, _, _ in schedule] == ["chromium"] * 10 + ["firefox"] * 10
+
+
+def test_resource_schedule_explicit_single_context_batches_and_no_mobile_by_default():
+    schedule = list(module().attempt_schedule(4, ["firefox"], browser_batch_size=1))
+    assert all(restart and not mobile for _, _, restart, mobile in schedule)
+
+
+def test_invalid_browser_batch_size_fails_before_output_creation(tmp_path):
+    for value in ("0", "21"):
+        with pytest.raises(SystemExit) as exc:
+            module().main(["--out", str(tmp_path / "unused"), "--browser-batch-size", value])
+        assert exc.value.code == 2
+    assert not (tmp_path / "unused").exists()
+
+
+@pytest.mark.parametrize("fail_at", [None, 5])
+def test_runner_closes_only_owned_browser_batches_and_never_retries_failure(tmp_path, monkeypatch, fail_at):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    import hashlib
+    import sys
+
+    rehearsal = module()
+    root = tmp_path / "project"
+    (root / "src/service").mkdir(parents=True)
+    (root / "src/service/app.py").touch()
+    (root / "runs/drivaernet-random").mkdir(parents=True)
+    checkpoint = b"selected checkpoint fixture"
+    (root / "runs/drivaernet-random/best.pt").write_bytes(checkpoint)
+    launched, calls = [], []
+
+    class Browser:
+        closed = False
+
+        def close(self):
+            assert not self.closed
+            self.closed = True
+
+    def launch(**options):
+        assert all(browser.closed for browser in launched)
+        browser = Browser()
+        launched.append(browser)
+        return browser
+
+    services = SimpleNamespace(api="http://local-api", web="http://local-web")
+    playwright = SimpleNamespace(chromium=SimpleNamespace(launch=launch), firefox=SimpleNamespace(launch=launch))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", SimpleNamespace(sync_playwright=lambda: nullcontext(playwright)))
+    monkeypatch.setattr(rehearsal, "LocalServices", lambda *args: nullcontext(services))
+    monkeypatch.setattr(rehearsal, "isolated_environment", lambda *args: {"PLAYWRIGHT_BROWSERS_PATH": "fixture"})
+    monkeypatch.setattr(rehearsal, "seed_historical_logs", lambda *args: 15)
+    monkeypatch.setattr(rehearsal, "request_json", lambda *args, **kwargs: (200, {
+        "synthetic": False, "provenance": {"checkpoint_sha256": hashlib.sha256(checkpoint).hexdigest()}}))
+    monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", "fixture")
+
+    def attempt(browser, services, output, number, engine, live, record, responsive):
+        assert not browser.closed and live is False
+        calls.append((number, responsive))
+        return {"attempt": number, "engine": engine, "passed": number != fail_at,
+                "responsive_requested": responsive}
+
+    monkeypatch.setattr(rehearsal, "exercise_attempt", attempt)
+    output = tmp_path / "evidence"
+    result = rehearsal.main(["--project-root", str(root), "--out", str(output), "--attempts", "8", "--responsive"])
+    report = json.loads((output / "report.json").read_text())
+    assert len(calls) == (fail_at or 8)
+    assert len(launched) == (3 if fail_at else 4)
+    assert all(browser.closed for browser in launched)
+    assert [number for number, mobile in calls if mobile] == [1, 5]
+    assert report["passed"] == (fail_at is None)
+    assert result == (1 if fail_at else 0)
