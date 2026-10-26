@@ -35,9 +35,9 @@ So this module makes the safe thing the default and the dangerous thing
 impossible to do by accident:
 
   * SURFACE ONLY by default. drivaer_N.stl (geometry) + boundary_N.vtp
-    (surface fields) and nothing else. Cut-list item 4 in docs/PLAN.md says
-    surface-only is sufficient for drag and lift, so the volumetric fields are
-    not on our critical path. --include-volume exists but demands --force.
+    (surface fields) and nothing else. The experimental pressure workflow uses
+    surface arrays; volumetric fields are not required. --include-volume exists
+    but demands --force.
   * NO DEFAULT RUN COUNT. --runs is required. The DoMINO fine-tuning recipe we
     are following was validated with 16 training and 8 test samples, so start
     near 20, not 500.
