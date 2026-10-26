@@ -1,9 +1,10 @@
 # Final local completion and deployment handoff
 
 All nine pre-deployment steps are complete locally. Final integration is on
-local `main`; GitHub freshness and push remain unverified because this runner
-cannot connect to GitHub. Deployment, hosted verification, the finished video
-and submission remain with the team.
+`main`, and GitHub accepted the push through `fc283a2`. Fetch and `ls-remote`
+remain blocked in this runner, so other remote branches were not freshly read.
+Deployment, hosted verification, the finished video and submission remain
+with the team.
 
 ## Completed work
 
@@ -85,7 +86,8 @@ and [412 px](proof/final-results-mobile-412.png).
 ## External limits and next actions
 
 No deployment, video rendering/upload or Devpost submission was performed.
-GitHub fetch/push and new Token Factory calls require a network-enabled terminal.
+GitHub push succeeded; fetch/remote-read checks and new Token Factory calls still
+need a network-enabled environment.
 Historical successful Nemotron runs remain labelled historical; local scripted
 HTTP checks do not certify live provider availability. Docker daemon access was
 denied, so container build/runtime certification must occur on the deployment host.

@@ -4,19 +4,19 @@ All pre-deployment steps 1–9 are complete. Source is integrated on local `main
 the serving weights and thresholds remain unchanged. See [COMPLETION.md](COMPLETION.md)
 for measured results, current verification evidence and explicit environment limits.
 
-1. **Synchronize and publish source from a network-enabled terminal.** This
-   runner could not reach GitHub, so cached remote refs are not proof of freshness.
+1. **Confirm source on the deployment host.** GitHub accepted the completed
+   `main` push. This runner still cannot fetch or read remote refs, so confirm
+   the checkout and any concurrent changes in a network-enabled terminal.
 
    ```powershell
    git switch main
    git fetch origin --prune
-   git merge origin/main
-   python -m pytest -q -rs
-   git push origin main
+   git merge --ff-only origin/main
+   git status --short
    ```
 
-   Resolve and test any new incoming changes before pushing. Do not force-push.
-   If branch protection requires review, push a review branch and open a PR.
+   If unexpected concurrent changes exist, review and test them before deployment.
+   Do not force-push or overwrite the qualified release to resolve divergence.
    Preserve the current source/evaluation/model identities; new runtime changes
    require relevant requalification and a rebuilt bundle.
 
