@@ -127,9 +127,9 @@ The historical audit is preserved. It is not a claim that all listed findings
 remain open after the release fixes; use the completion report for final status.
 
 The final local verification is recorded in [COMPLETION.md](COMPLETION.md),
-[browser checks](evidence/browser-verification.json), [model/HTTP qualification](evidence/local-qualification.json),
-and the [fresh environment report](evidence/clean-environment.json). The four
-[proof screenshots](proof/) show actual local UI output.
+[browser checks](evidence/final-browser-verification.json), [model/HTTP qualification](evidence/final-qualification.json),
+and the [fresh environment report](evidence/clean-environment.json). The current
+[proof screenshots](proof/) show actual local UI output, including both phone widths.
 
 ## Deployment handoff
 

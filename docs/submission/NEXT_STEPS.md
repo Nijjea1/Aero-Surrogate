@@ -1,87 +1,64 @@
-# Updated plan after branch consolidation
+# Remaining work after local completion
 
-Updated 27 October 2026. The working branch is **`finish/predeploy-complete`**. This supersedes
-the branch-location statement in the earlier local-completion report; the
-evaluation evidence and historical experiment identities remain unchanged.
+All pre-deployment steps 1?9 are complete. Source is integrated on local `main`;
+the serving weights and thresholds remain unchanged. See [COMPLETION.md](COMPLETION.md)
+for measured results, current verification evidence and explicit environment limits.
 
-## Integration status
-
-- All branch tips already available in this checkout are ancestors of local
-  `main`, including the three agent branches and the cached teammate branches.
-- The one remaining teammate change, phone-layout commit `516c924`, was merged
-  normally: whole-car framing, bounded labels, initially hidden phone labels and
-  truncated service status.
-- Agent branch commits were first verified patch-equivalent to the integration
-  work, then their original history was recorded without overwriting later fixes.
-- Existing feature/fix commits and original author/committer dates were retained.
-  No backdating, fabricated activity, squashing or force-push was performed.
-- A backup branch preserves the pre-consolidation state:
-  `backup/pre-merge-20261027-5aa669f`.
-- **Remote freshness and publication are unverified.** Fetch, pull and push all
-  failed because this runner could not connect to `github.com:443`. Cached
-  `origin/*` refs must not be described as the latest server state.
-
-## Earlier post-merge checks (dated snapshot)
-
-- Full suite: **1,021 passed, four expected skips, three warnings**, 99.61 s.
-- Desktop Chromium completed the real-model walkthrough.
-- Six responsive checks passed: Designer, Runs and Results at both **390 px**
-  and **412 px**, with no document-level horizontal overflow. The real 3D car
-  rendered, Cd matched the qualified baseline, and phone labels started hidden.
-- Firefox launch/context setup crashed before page navigation, including an
-  isolated retry. This is retained as a failed environment-level check, not a
-  passing post-merge Firefox result. The previous release's twenty successful
-  Chromium/Firefox contexts remain dated pre-merge evidence.
-- No new provider calls or deployment occurred during branch consolidation.
-
-## Remaining work, in order
-
-1. **Synchronize with GitHub from a network-enabled terminal.** Local merging is
-   complete, but fresh server changes may still exist. Preserve history:
+1. **Synchronize and publish source from a network-enabled terminal.** This
+   runner could not reach GitHub, so cached remote refs are not proof of freshness.
 
    ```powershell
-   git switch finish/predeploy-complete
+   git switch main
    git fetch origin --prune
    git merge origin/main
    python -m pytest -q -rs
-   git push -u origin finish/predeploy-complete
+   git push origin main
    ```
 
-   Resolve any newly discovered conflicts before testing/pushing. Do not force
-   push. If branch protection requires review, push a review branch and open a
-   PR targeting `main` instead. Existing commits are already separated by their
-   actual feature/fix work; rewriting their dates is unnecessary.
+   Resolve and test any new incoming changes before pushing. Do not force-push.
+   If branch protection requires review, push a review branch and open a PR.
+   Preserve the current source/evaluation/model identities; new runtime changes
+   require relevant requalification and a rebuilt bundle.
 
-2. **Finish final local publication and qualification.** The incoming bundle is
-   received and verified: both checkpoint hashes match, all thirty field arrays
-   load and frozen splits reproduce. Category and all-stored-cell field grades
-   are complete in staging. Publish their fresh sanitized reports, the stronger
-   pooled-neighbour field reference and fresh scaling results when complete.
-   Regenerate README/graphics, run integrated tests/model/HTTP/browser checks,
-   rebuild the serving ZIP and verify installation/checksums. Keep the category
-   model evaluation-only; do not replace the serving model or threshold.
+2. **Transfer or publish the trusted serving bundle.** Use
+   `runs/release/aero-surrogate-models.zip` and its adjacent `.zip.sha256`.
+   Check [release-manifest.json](release-manifest.json) and
+   [installation receipt](evidence/artifact-installation.json). The ZIP includes
+   serving models, native references, frozen splits, complete metrics and the
+   fifteen historical histories. The large raw evaluation bundle and category
+   checkpoint are evaluation inputs, not requirements for serving.
 
-3. **Deploy the API and dynamic web server.** Mount the verified model bundle,
-   persist logs/spend, configure HTTPS/CORS/proxy trust and keep one API worker.
-   Use the refreshed ZIP whose source revision, current report checksums and
-   installation test agree. The large raw evaluation bundle stays separate.
+   ```powershell
+   python scripts/install_artifacts.py --archive PATH_TO_ZIP --sha256 TRUSTED_SHA256 --destination .
+   ```
 
-4. **Verify the actual hosted judge path.** Check the full scalar hash and real
-   baseline, parameter updates, genuine domain rejection, recorded runs and final
-   results. Run real Nemotron completion and cancellation with network access.
-   Repeat external logged-out browser checks, including Firefox/mobile. Local
-   socket/daemon restrictions prevented provider/container certification here.
+3. **Deploy the API and dynamic web server.** Follow the
+   [API runbook](../../src/service/DEPLOY.md) and [web runbook](../../web/DEPLOY.md).
+   Build/test the containers on the target host: Docker daemon access was denied
+   here. Configure domain/HTTPS/CORS/proxy trust, one API worker, persistent
+   histories/spend accounting, provider credentials and deliberate public budgets.
+   A static-only web host cannot provide `/api/mesh`.
 
-5. **Finish the video and submission.** Use [video-script.md](video-script.md),
+4. **Verify the actual hosted judge path.** Confirm `/health.synthetic=false`,
+   the full scalar hash
+   `49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a`,
+   baseline Cd about 0.22456, slider changes, genuine joint-extreme rejection,
+   Runs/logbooks and complete Results. Run a real Nemotron completion and
+   cancellation/auth test with network access; verify persistence after restart
+   and public budget limits. Repeat logged-out external Chromium/Firefox/mobile
+   checks. Local Firefox passed twenty contexts; Chromium had seven passes and
+   two preserved host resource failures, so hosted Chromium still needs checking.
+
+5. **Record, upload and submit.** Use [video-script.md](video-script.md),
    [submission.md](submission.md) and [tooling-feedback.md](tooling-feedback.md).
-   Record working deployed footage, keep the public YouTube video under three
-   minutes, fill the real URLs and submit Devpost. Target October 29; verify the
-   official event deadline and judging availability before submission rather
-   than relying on the planning document's dates.
+   Record the verified deployed flow, produce the public video under three
+   minutes, fill the real demo/repository/video/artifact URLs and submit Devpost.
+   Confirm current deadline, eligibility, required fields and technology rules
+   against the official portal before final submission. Submission copy must
+   retain uncertainty/field/reference limitations and historical-run labels.
 
-6. **Keep the judged release available.** Assign hosting/monitoring/inference
-   budget through the official judging period. Preserve the submitted source and
-   evidence identities; avoid untracked model or gate changes.
+6. **Keep the submitted version available.** Assign ownership for hosting,
+   monitoring and inference budget through the official judging period. Preserve
+   submitted source/model/evidence identities and keep credentials private.
 
-The model architecture, parameter contract and gate remain frozen. No additional
-datasets, frameworks, services or unvalidated physics claims are release blockers.
+No further model training or new features are needed for this release.

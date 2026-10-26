@@ -1,0 +1,1520 @@
+{
+  "format": "aero-surrogate-final-browser-verification/1",
+  "application_source_revision": "59c0b05c9cf25664149412f9333f5c1ce9e2c517",
+  "scope": "Real local services, fresh logged-out browser contexts; not public HTTPS/provider testing.",
+  "primary": {
+    "browser_rehearsal_version": 1,
+    "scope": "real local services, fresh logged-out contexts; not public hosted testing",
+    "requested_attempts": 20,
+    "requested_live_runs": 0,
+    "max_spend_usd": 1.0,
+    "responsive_requested": true,
+    "responsive_scope": "first fresh context per selected engine",
+    "browser_batch_size": 3,
+    "passed": true,
+    "attempts": [
+      {
+        "attempt": 1,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T02:59:59.488080+00:00",
+        "responsive_requested": true,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          },
+          {
+            "check": "responsive 390px index.html",
+            "passed": true,
+            "detail": {
+              "viewport": 390,
+              "document": 390
+            }
+          },
+          {
+            "check": "responsive 390px runs.html",
+            "passed": true,
+            "detail": {
+              "viewport": 390,
+              "document": 390
+            }
+          },
+          {
+            "check": "responsive 390px results.html",
+            "passed": true,
+            "detail": {
+              "viewport": 390,
+              "document": 390
+            }
+          },
+          {
+            "check": "responsive 412px index.html",
+            "passed": true,
+            "detail": {
+              "viewport": 412,
+              "document": 412
+            }
+          },
+          {
+            "check": "responsive 412px runs.html",
+            "passed": true,
+            "detail": {
+              "viewport": 412,
+              "document": 412
+            }
+          },
+          {
+            "check": "responsive 412px results.html",
+            "passed": true,
+            "detail": {
+              "viewport": 412,
+              "document": 412
+            }
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-01-firefox-rejected-corner.png",
+          "attempt-01-firefox-designer.png",
+          "attempt-01-firefox-runs.png",
+          "attempt-01-firefox-results.png",
+          "attempt-01-firefox-results-mobile-390.png",
+          "attempt-01-firefox-results-mobile-412.png"
+        ],
+        "wall_s": 17.851,
+        "browser_restarted": true
+      },
+      {
+        "attempt": 2,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:00:17.340305+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-02-firefox-rejected-corner.png",
+          "attempt-02-firefox-designer.png",
+          "attempt-02-firefox-runs.png",
+          "attempt-02-firefox-results.png"
+        ],
+        "wall_s": 7.598,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 3,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:00:24.940207+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          },
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-03-firefox-rejected-corner.png",
+          "attempt-03-firefox-designer.png",
+          "attempt-03-firefox-runs.png",
+          "attempt-03-firefox-results.png"
+        ],
+        "wall_s": 5.514,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 4,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:00:31.157174+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-04-firefox-rejected-corner.png",
+          "attempt-04-firefox-designer.png",
+          "attempt-04-firefox-runs.png",
+          "attempt-04-firefox-results.png"
+        ],
+        "wall_s": 4.752,
+        "browser_restarted": true
+      },
+      {
+        "attempt": 5,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:00:35.909912+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-05-firefox-rejected-corner.png",
+          "attempt-05-firefox-designer.png",
+          "attempt-05-firefox-runs.png",
+          "attempt-05-firefox-results.png"
+        ],
+        "wall_s": 3.971,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 6,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:00:39.882132+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-06-firefox-rejected-corner.png",
+          "attempt-06-firefox-designer.png",
+          "attempt-06-firefox-runs.png",
+          "attempt-06-firefox-results.png"
+        ],
+        "wall_s": 4.345,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 7,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:00:44.840112+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-07-firefox-rejected-corner.png",
+          "attempt-07-firefox-designer.png",
+          "attempt-07-firefox-runs.png",
+          "attempt-07-firefox-results.png"
+        ],
+        "wall_s": 4.527,
+        "browser_restarted": true
+      },
+      {
+        "attempt": 8,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:00:49.367805+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-08-firefox-rejected-corner.png",
+          "attempt-08-firefox-designer.png",
+          "attempt-08-firefox-runs.png",
+          "attempt-08-firefox-results.png"
+        ],
+        "wall_s": 3.995,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 9,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:00:53.363895+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-09-firefox-rejected-corner.png",
+          "attempt-09-firefox-designer.png",
+          "attempt-09-firefox-runs.png",
+          "attempt-09-firefox-results.png"
+        ],
+        "wall_s": 6.505,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 10,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:00.841463+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-10-firefox-rejected-corner.png",
+          "attempt-10-firefox-designer.png",
+          "attempt-10-firefox-runs.png",
+          "attempt-10-firefox-results.png"
+        ],
+        "wall_s": 6.503,
+        "browser_restarted": true
+      },
+      {
+        "attempt": 11,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:07.346197+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-11-firefox-rejected-corner.png",
+          "attempt-11-firefox-designer.png",
+          "attempt-11-firefox-runs.png",
+          "attempt-11-firefox-results.png"
+        ],
+        "wall_s": 7.019,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 12,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:14.365977+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          },
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-12-firefox-rejected-corner.png",
+          "attempt-12-firefox-designer.png",
+          "attempt-12-firefox-runs.png",
+          "attempt-12-firefox-results.png"
+        ],
+        "wall_s": 6.359,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 13,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:21.610365+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-13-firefox-rejected-corner.png",
+          "attempt-13-firefox-designer.png",
+          "attempt-13-firefox-runs.png",
+          "attempt-13-firefox-results.png"
+        ],
+        "wall_s": 6.473,
+        "browser_restarted": true
+      },
+      {
+        "attempt": 14,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:28.085558+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-14-firefox-rejected-corner.png",
+          "attempt-14-firefox-designer.png",
+          "attempt-14-firefox-runs.png",
+          "attempt-14-firefox-results.png"
+        ],
+        "wall_s": 6.854,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 15,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:34.942327+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-15-firefox-rejected-corner.png",
+          "attempt-15-firefox-designer.png",
+          "attempt-15-firefox-runs.png",
+          "attempt-15-firefox-results.png"
+        ],
+        "wall_s": 6.655,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 16,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:42.603449+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-16-firefox-rejected-corner.png",
+          "attempt-16-firefox-designer.png",
+          "attempt-16-firefox-runs.png",
+          "attempt-16-firefox-results.png"
+        ],
+        "wall_s": 7.386,
+        "browser_restarted": true
+      },
+      {
+        "attempt": 17,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:49.990519+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-17-firefox-rejected-corner.png",
+          "attempt-17-firefox-designer.png",
+          "attempt-17-firefox-runs.png",
+          "attempt-17-firefox-results.png"
+        ],
+        "wall_s": 6.628,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 18,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:01:56.620224+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-18-firefox-rejected-corner.png",
+          "attempt-18-firefox-designer.png",
+          "attempt-18-firefox-runs.png",
+          "attempt-18-firefox-results.png"
+        ],
+        "wall_s": 6.661,
+        "browser_restarted": false
+      },
+      {
+        "attempt": 19,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:02:04.161862+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-19-firefox-rejected-corner.png",
+          "attempt-19-firefox-designer.png",
+          "attempt-19-firefox-runs.png",
+          "attempt-19-firefox-results.png"
+        ],
+        "wall_s": 7.126,
+        "browser_restarted": true
+      },
+      {
+        "attempt": 20,
+        "engine": "firefox",
+        "live_requested": false,
+        "passed": true,
+        "started_at": "2026-10-28T03:02:11.290826+00:00",
+        "responsive_requested": false,
+        "checks": [
+          {
+            "check": "real baseline and WebGL viewer",
+            "passed": true,
+            "detail": {
+              "cd_display": "0.2246"
+            }
+          },
+          {
+            "check": "parameter change updates real prediction",
+            "passed": true
+          },
+          {
+            "check": "legal joint-extreme corner rejected",
+            "passed": true,
+            "detail": "Distance from the training data is 6.66, above the 4.93 limit. Every dial may be legal, but no real design looks like this combination."
+          },
+          {
+            "check": "historical matched runs and logbook visible",
+            "passed": true
+          },
+          {
+            "check": "release scalar and all three benchmark methods visible",
+            "passed": true
+          },
+          {
+            "check": "category, full stored-cell field grade, stronger reference and five-point scaling visible",
+            "passed": true
+          }
+        ],
+        "page_errors": [],
+        "failed_requests": [
+          {
+            "path": "fields",
+            "failure": "NS_BINDING_ABORTED",
+            "navigation_abort": true
+          }
+        ],
+        "http_errors": [
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          },
+          {
+            "path": "fields",
+            "status": 503
+          }
+        ],
+        "screenshots": [
+          "attempt-20-firefox-rejected-corner.png",
+          "attempt-20-firefox-designer.png",
+          "attempt-20-firefox-runs.png",
+          "attempt-20-firefox-results.png"
+        ],
+        "wall_s": 6.018,
+        "browser_restarted": false
+      }
+    ],
+    "errors": [],
+    "seeded_historical_runs": 15,
+    "service": {
+      "predictor": "torch",
+      "synthetic": false,
+      "schema_version": "2.0.0",
+      "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+      "checkpoint_sha256": "49e5a8b14d5b",
+      "checkpoint_sha256_full": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a"
+    },
+    "engine_strategy": "grouped sequential engines, one owned browser at a time, bounded context batches",
+    "spent_usd": 0
+  },
+  "supplementary_chromium_passed_contexts": 7,
+  "preserved_chromium_resource_failures": [
+    {
+      "report": "browser/report.json",
+      "report_sha256": "9e09dff4ba0aea091dedf4cf9c4258c1954ec48f3b4805ec0973ef7ac85823eb",
+      "engine": "chromium",
+      "attempt": 8,
+      "failed_requests": [
+        {
+          "path": "physics.js",
+          "failure": "net::ERR_NO_BUFFER_SPACE",
+          "navigation_abort": false
+        }
+      ],
+      "page_errors": [],
+      "failure": "Host Chromium net::ERR_NO_BUFFER_SPACE; original full report preserved privately, no failure counted as passing."
+    },
+    {
+      "report": "browser-final/report.json",
+      "report_sha256": "407f56fb2a8993877eac0f16bd1b7c88d2d65db3c17457eafde73af63b055f2d",
+      "engine": "chromium",
+      "attempt": 1,
+      "failed_requests": [
+        {
+          "path": "font-6dbe082463cf.ttf",
+          "failure": "net::ERR_NO_BUFFER_SPACE",
+          "navigation_abort": false
+        }
+      ],
+      "page_errors": [],
+      "failure": "Host Chromium net::ERR_NO_BUFFER_SPACE; original full report preserved privately, no failure counted as passing."
+    }
+  ],
+  "interpretation": "Twenty of twenty final Firefox desktop contexts passed; mobile390/412 Designer/Runs/Results checked once per engine. Seven earlier Chromium desktop+mobile contexts passed, but two Chromium host resource failures remain explicit. This is not a clean twenty-context cross-browser certification."
+}
