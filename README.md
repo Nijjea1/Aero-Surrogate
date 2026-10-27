@@ -10,7 +10,7 @@
 
 Public deployment and the final YouTube upload are **pending**. This repository contains the locally runnable application and submission materials; no hosted URL is implied. See [release instructions](docs/submission/README.md) and the [submission description](docs/submission/submission.md).
 
-Final pre-deployment integration is on `main` and was pushed successfully to GitHub. This runner still blocks fetch/remote-read checks; confirm the checkout on the deployment host. See the [remaining plan](docs/submission/NEXT_STEPS.md) for deployment, hosted verification, video and submission.
+Final integration is committed and pushed to GitHub; `main` is the only remaining branch. Tests and a fresh complete evaluation pass. See the [remaining plan](docs/submission/NEXT_STEPS.md) for deployment, hosted verification, video and submission, or the [documentation index](docs/README.md) for current guides.
 
 ## What works
 

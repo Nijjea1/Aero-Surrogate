@@ -4,9 +4,9 @@ All pre-deployment steps 1–9 are complete. Source is integrated on local `main
 the serving weights and thresholds remain unchanged. See [COMPLETION.md](COMPLETION.md)
 for measured results, current verification evidence and explicit environment limits.
 
-1. **Confirm source on the deployment host.** GitHub accepted the completed
-   `main` push. This runner still cannot fetch or read remote refs, so confirm
-   the checkout and any concurrent changes in a network-enabled terminal.
+1. **Check out the release on the deployment host.** GitHub publication is
+   verified, and `main` is the only remote branch after cleanup. Update the
+   deployment checkout before installing the trusted artifacts.
 
    ```powershell
    git switch main

@@ -206,5 +206,9 @@
     "checkpoint_identities_match_published": true,
     "scope": "Fresh full scalar/category/field/scaling regrade; published report retained unchanged to preserve its recorded experiment identity."
   },
-  "serving_qualification_passed": true
+  "serving_qualification_passed": true,
+  "remote_heads_verified": {
+    "refs/heads/main": "225fa5a17454291a6796e4815cba2ce04bc0c922"
+  },
+  "remote_head_verification_command": "git ls-remote --heads origin"
 }
