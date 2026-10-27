@@ -12,7 +12,7 @@
     "licensing": "MIT code does not relicense third-party datasets or model weights",
     "optimisation": "surrogate-predicted Cd changes, not CFD-validated improvements"
   },
-  "created_at": "2026-10-28T03:04:02.613115+00:00",
+  "created_at": "2026-10-28T03:16:14.214058+00:00",
   "dataset_notices": [
     {
       "licence": "CC BY-NC 4.0",
@@ -302,10 +302,10 @@
       "sha256": "f19b7741b6cdce88a917c2ddade0daa0181e544ffa8d12b77c51a118b6413ab8"
     },
     {
-      "bytes": 80639,
+      "bytes": 80652,
       "path": "runs/release/evidence/final-qualification.json",
       "role": "public evaluation evidence",
-      "sha256": "f89f50ab9beb05302733c0d78555cd7fc279b06a95d5c3e98539f93703b6caba"
+      "sha256": "98ad9912ef4ea56f5ac899accb1d5bd2c930d8ad28a2a926dcb8f2656422cffe"
     },
     {
       "bytes": 501,
@@ -314,10 +314,10 @@
       "sha256": "6293686209a90efb4973a30ee5015ee18d94bb6f3118bb70153d7bbd9993addb"
     },
     {
-      "bytes": 1021,
+      "bytes": 1016,
       "path": "runs/release/evidence/final-tests.json",
       "role": "public evaluation evidence",
-      "sha256": "e617b646182431d326753fe1760cc8de0cc543c26385d3e409d2d3dd6a6e42de"
+      "sha256": "893e46b858470280c94f6b60c611f932c6d0830c824e89437550a1a43a758f1d"
     },
     {
       "bytes": 1360,
@@ -422,6 +422,12 @@
       "sha256": "91fe5fd57048b62086b450338f9bddd33b51062cf3603f49bba4bfca064b31ee"
     },
     {
+      "bytes": 6386,
+      "path": "runs/release/evidence/repository-cleanup.json",
+      "role": "public evaluation evidence",
+      "sha256": "fac4ddb0cbdfaae287352a1195db16b628be62202fea8eb8fa26bdc5ed32f895"
+    },
+    {
       "bytes": 45746,
       "path": "runs/release/metrics.json",
       "role": "independent scalar evaluation",
@@ -457,9 +463,9 @@
     }
   },
   "source": {
-    "git_revision": "d30db5480d43f4d5be41c6acc3a3febd7bdde684",
+    "git_revision": "8aebe4be163bf70fa037807f8696b1df2bdcc8d0",
     "source_dirty": false,
-    "source_sha256": "f567ac93e0d7636a4bc0ad85366960e30f9bc065d2e8ac36cd9d08792fe4df6f",
+    "source_sha256": "f9b1ee449c278bf234924711c637f9d25700cd026a7bd78908c964de0d35c906",
     "source_sha256_scope": "serving Python sources under src/ and requirements-service.txt/requirements-model.txt; not the full repository"
   }
 }
