@@ -1,9 +1,27 @@
-# Final local completion and deployment handoff
+# Final local completion
 
 All nine pre-deployment steps are complete locally. Final integration and
 repository cleanup are committed and pushed. A successful GitHub remote-head
-check confirms that `main` is the only remaining branch. Deployment, hosted
-verification, the finished video and submission remain with the team.
+check confirms that `main` is the only remaining branch. The release is
+local-run (no public hosting); the video and submission remain with the team.
+
+## Linux containers and Docker Compose (5 November 2026)
+
+The two Linux images were built and run on Docker Desktop, first by hand from the
+release commit `2901a47` and then with `docker compose up --build` from a fresh
+GitHub clone plus the checksum-verified bundle. Results are in
+[compose-verification.json](evidence/compose-verification.json):
+
+- `/health.synthetic` false; full scalar hash `49e5a8b1…706a`; baseline Cd 0.22456;
+  a dial change moves Cd; the "Edge of the box" joint-extreme design is rejected;
+  mesh and experimental pressure inference work; all fifteen historical runs load.
+- Without a key, starting a run is refused with "NEBIUS_API_KEY is not set" and
+  nothing is spent. With a key, a live Nano run (5 evaluations, $0.00097) and a
+  live Super run (25 evaluations, $0.0265, Cd 0.22456 to 0.21746) completed.
+- Concurrency limit (429), wrong cancel token (403), cancellation, a low spend cap
+  (refused at $0 spent), process-exit restart and container recreation all behaved
+  as documented; history and the spend ledger persisted.
+- API memory about 276 MB with pressure enabled, web about 64 MB.
 
 ## Completed work
 

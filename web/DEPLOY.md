@@ -1,5 +1,8 @@
 # Deploying the web UI
 
+Hosting is optional: to run everything locally, use the README Quick start
+(`docker compose up --build`). This guide is for a public deployment.
+
 The site is two containers on one VM behind one Caddy:
 
 | | Image | Serves | Guide |

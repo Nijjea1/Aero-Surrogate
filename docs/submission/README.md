@@ -116,7 +116,7 @@ and the completion report for the command and scope actually verified here.
 - [Scalar and matched evidence](evidence/README.md): actual release-model grading,
   all fifteen matched trajectories and their original experiment identities.
 - [Submission description](submission.md): copy ready for the final form, with
-  pending external URLs explicitly marked.
+  testing instructions; the video URL is filled in after upload.
 - [Tooling feedback](tooling-feedback.md): measured observations and concrete requests.
 - [Video script](video-script.md): under-three-minute recording plan; distinguish
   raw browser recordings from a finished narrated submission video.
@@ -131,14 +131,18 @@ The final local verification is recorded in [COMPLETION.md](COMPLETION.md),
 and the [fresh environment report](evidence/clean-environment.json). The current
 [proof screenshots](proof/) show actual local UI output, including both phone widths.
 
-## Deployment handoff
+## Docker Compose (recommended)
 
-The team must supply the public host/domain, provision the API and dynamic web
-server, mount the selected models, persist logs and spend accounting, configure
-HTTPS/CORS/proxy trust, and fund judge-period inference. Follow the [API
-runbook](../../src/service/DEPLOY.md) and [web runbook](../../web/DEPLOY.md).
+After installing the bundle, `docker compose up --build` from the repository root
+starts the API with both checkpoints mounted read-only, the web server, and a
+one-time `seed` step that copies the installed historical run logs into the
+persistent `aero-surrogate_data` volume. A `.env` is optional; its
+`NEBIUS_API_KEY` enables live runs, while container paths and CORS are fixed by
+the compose file. This path was verified from a fresh clone, with and without a
+key and across `down`/`up`: [compose-verification.json](evidence/compose-verification.json).
 
-After deployment, repeat the judge walkthrough externally and verify model hashes
-against the manifest. Replace pending URLs in the submission copy, record the
-final deployed footage, upload the public YouTube video and submit Devpost. The
-local browser tests do not establish public HTTPS availability or remote uptime.
+## Hosting
+
+The release is local-run and not publicly hosted. Optional hosting follows the
+[API runbook](../../src/service/DEPLOY.md) and [web runbook](../../web/DEPLOY.md);
+see [NEXT_STEPS.md](NEXT_STEPS.md) for the checks to repeat on a host.

@@ -1,0 +1,113 @@
+{
+ "format": "aero-surrogate-compose-verification/1",
+ "date": "2026-11-05",
+ "scope": "Local Linux containers on Docker Desktop (Windows host). Not a public deployment.",
+ "source": {
+  "clone": "fresh shallow clone of https://github.com/Nijjea1/Aero-Surrogate at 2901a47",
+  "added": "docker-compose.yml from the commit that adds this file",
+  "model_archive_sha256": "70b2829ae2a5e0f1a8bc82f7d1f2321cad1d8fba62ff3f191c4a53b399834a93",
+  "installed_payload_files": 67,
+  "manifest_mismatches": 0
+ },
+ "environment": {
+  "docker_engine": "29.7.2",
+  "docker_compose": "5.4.0",
+  "api_image_id": "313679b006b7",
+  "web_image_id": "f46fa2ba3156"
+ },
+ "commands": [
+  "python scripts/install_artifacts.py --archive <bundle> --sha256 70b2829a...4a93 --destination .",
+  "docker compose -p aero-verify up --build -d",
+  "docker compose -p aero-verify down && docker compose -p aero-verify up -d"
+ ],
+ "without_key": {
+  "health": {
+   "synthetic": false,
+   "predictor": "torch",
+   "model_version": "drivaernet-random-2026-10-15-8fb6ed1",
+   "checkpoint_sha256": "49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a",
+   "fields_available": true
+  },
+  "baseline": {
+   "cd": 0.22456,
+   "in_distribution": true,
+   "ms": 17,
+   "cors": "http://localhost:5173"
+  },
+  "changed": {
+   "param": "B_Ramp_Angle",
+   "value": 7.5,
+   "cd": 0.22174
+  },
+  "joint_extreme": {
+   "in_distribution": false
+  },
+  "mesh": {
+   "vertices": 172192,
+   "ms": 14
+  },
+  "fields": {
+   "cp_values": 21248,
+   "ms": 2945,
+   "checkpoint_sha256": "6a210c09b09205459f59d17b5ff913648587c9af086fc972e9090e3d69aa688c"
+  },
+  "runs": {
+   "count": 15,
+   "matched": 15
+  },
+  "web_config": "window.AERO_CONFIG = {\"api\": \"http://localhost:8000\"};",
+  "pages": {
+   "/": 200,
+   "/runs.html": 200,
+   "/results.html": 200,
+   "/results/metrics.json": 200,
+   "/results/benchmark.json": 200
+  }
+ },
+ "without_key_run_start": {
+  "status": 503,
+  "detail": "the agent provider is not available: NEBIUS_API_KEY is not set",
+  "spent_usd": 0
+ },
+ "with_key_live_run": {
+  "run_id": "agent-886aa464d279",
+  "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+  "state": "finished",
+  "stop_reason": "evaluation budget used",
+  "scored": 5,
+  "best_cd": 0.22273035565274973,
+  "cost_usd": 0.0009673799999999999,
+  "history_records": 5
+ },
+ "after_down_up": {
+  "runs": {
+   "count": 16,
+   "matched": 15
+  },
+  "baseline_cd": 0.22456,
+  "spend_ledger_lines": 12
+ },
+ "earlier_manual_container_checks_2901a47": {
+  "live_super_run": {
+   "scored": 25,
+   "stop_reason": "evaluation budget used",
+   "best_cd": 0.21746,
+   "cost_usd": 0.0265
+  },
+  "second_concurrent_public_run": 429,
+  "wrong_cancel_token": 403,
+  "cancel": "cancelled after 5 evaluations",
+  "spend_cap_0.01": "run finished with stop_reason 'budget: spend cap $0.01 reached', cost 0",
+  "process_exit": "container restarted automatically",
+  "recreate": "history and spend ledger persisted",
+  "memory_mib": {
+   "api_with_fields": 276,
+   "web": 64
+  },
+  "qualification": "python -m src.service.qualify against the container passed"
+ },
+ "limitations": [
+  "Local Docker Desktop only; no public HTTPS, uptime or remote-browser claim.",
+  "Latency figures are single local measurements, not benchmarks."
+ ]
+}

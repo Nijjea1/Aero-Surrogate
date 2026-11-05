@@ -5,7 +5,7 @@ Start with the [project README](../README.md) for setup, capabilities and result
 | Topic | Guide |
 |---|---|
 | Current release status and verification | [Completion report](submission/COMPLETION.md) |
-| Deployment, hosted checks and submission | [Remaining steps](submission/NEXT_STEPS.md) |
+| Release, video, submission and optional hosting | [Remaining steps](submission/NEXT_STEPS.md) |
 | Installing the trusted model bundle | [Release instructions](submission/README.md) |
 | API deployment | [API runbook](../src/service/DEPLOY.md) |
 | Dynamic web deployment | [Web runbook](../web/DEPLOY.md) |

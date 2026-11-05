@@ -5,6 +5,10 @@ dynamic server for `/api/mesh`; see [web/DEPLOY.md](../../web/DEPLOY.md). Config
 its API origin with `AERO_WEB_API`; `?api=` is only a testing override.
 
 This is an operator runbook, not evidence that a public deployment exists.
+Hosting is optional: to run everything locally, use the README Quick start
+(`docker compose up --build`). If you host, mount the scalar and field checkpoints
+from separate directories (both are named `best.pt`) and seed `/data/logs` with the
+release's historical run logs, as the compose `seed` service does.
 
 All configuration is environment variables (table at the end). Nothing secret
 is baked into the image or committed: secrets go in a host file passed with

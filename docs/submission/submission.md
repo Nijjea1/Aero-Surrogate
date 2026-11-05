@@ -4,9 +4,24 @@ Track: **Best Apps and Agents**.
 
 Repository: https://github.com/Nijjea1/Aero-Surrogate
 
-Public demo: **pending team deployment**. Public YouTube video: **pending team upload**.
-Do not submit this document with those two entries unresolved. The local application,
-release package and recording script are prepared separately from publication.
+Test build: https://github.com/Nijjea1/Aero-Surrogate/releases/tag/v1.0.0 (local-run
+release; no hosted demo). Public YouTube video: **VIDEO_URL** (replace before submitting).
+
+## Testing instructions
+
+The complete application runs locally with Docker, Git and Python 3:
+
+```bash
+git clone https://github.com/Nijjea1/Aero-Surrogate.git && cd Aero-Surrogate
+python scripts/install_artifacts.py --archive https://github.com/Nijjea1/Aero-Surrogate/releases/download/v1.0.0/aero-surrogate-models.zip --sha256 70b2829ae2a5e0f1a8bc82f7d1f2321cad1d8fba62ff3f191c4a53b399834a93 --destination .
+docker compose up --build
+```
+
+Open http://localhost:5173. Without any key: the designer (move a dial, then choose the
+"Edge of the box" preset to see a domain-gate rejection, then "Baseline"), the fifteen historical runs with logbooks,
+and the complete Results page all work. Live Nemotron runs need your own Nebius Token
+Factory key in `.env` (`NEBIUS_API_KEY=...`); a 25-evaluation Super run cost about
+$0.03 in our tests. The video shows a genuine live run.
 
 ## Short description
 
@@ -113,8 +128,8 @@ licence; attribution and provenance accompany distributed samples and weights.
 
 ## Final form checks
 
-- [ ] Replace the pending demo and video entries with tested public URLs.
-- [ ] Verify the pushed release commit and artifact hashes match the application.
+- [ ] Replace VIDEO_URL with the tested public YouTube URL.
+- [ ] Confirm the v1.0.0 release download installs with the testing instructions.
 - [ ] Link the public evidence package and factual [tooling feedback](tooling-feedback.md).
-- [ ] Check public video playback and application access logged out.
+- [ ] Check public video playback and the release download logged out.
 - [ ] Submit the entry and have a second teammate verify confirmation.

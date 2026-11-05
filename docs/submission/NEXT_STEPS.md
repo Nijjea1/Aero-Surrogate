@@ -1,64 +1,41 @@
-# Remaining work after local completion
+# Remaining steps
 
-All pre-deployment steps 1–9 are complete. Source is integrated on local `main`;
-the serving weights and thresholds remain unchanged. See [COMPLETION.md](COMPLETION.md)
-for measured results, current verification evidence and explicit environment limits.
+The release is local-run: the application, with the real trained models, starts
+from a fresh clone with the [Quick start](../../README.md#quick-start)
+(`install_artifacts.py` plus `docker compose up --build`). That path was verified
+from a fresh clone; see [compose-verification.json](evidence/compose-verification.json).
+No public hosting is planned. Source, weights, thresholds and published metrics
+are unchanged from the qualified release.
 
-1. **Check out the release on the deployment host.** GitHub publication is
-   verified, and `main` is the only remote branch after cleanup. Update the
-   deployment checkout before installing the trusted artifacts.
+## Release and submission (team)
 
-   ```powershell
-   git switch main
-   git fetch origin --prune
-   git merge --ff-only origin/main
-   git status --short
-   ```
+1. **GitHub release `v1.0.0`.** Attach `runs/release/aero-surrogate-models.zip`
+   and its `.sha256` (archive SHA-256
+   `70b2829ae2a5e0f1a8bc82f7d1f2321cad1d8fba62ff3f191c4a53b399834a93`). Keep the
+   dataset licences and the note that MIT does not cover the weights in the
+   release notes. Confirm a logged-out download installs with the Quick start.
+2. **Video.** Record the local application with [video-script.md](video-script.md),
+   including a genuine live Nemotron run. Export below three minutes, upload
+   publicly to YouTube and check playback logged out.
+3. **Links.** Put the video URL in the README and [submission.md](submission.md).
+4. **Devpost.** Use [submission.md](submission.md) and
+   [tooling-feedback.md](tooling-feedback.md). The release page is the test-build
+   link; testing instructions are the Quick start, noting that live runs need the
+   judge's own Token Factory key and that the video shows one. Submit (not only
+   save) and have a teammate check every link.
+5. **Spend.** Stop the local stack after recording (`docker compose down`) and
+   reconcile the Token Factory account with the application ledger.
 
-   If unexpected concurrent changes exist, review and test them before deployment.
-   Do not force-push or overwrite the qualified release to resolve divergence.
-   Preserve the current source/evaluation/model identities; new runtime changes
-   require relevant requalification and a rebuilt bundle.
+## Optional: public hosting
 
-2. **Transfer or publish the trusted serving bundle.** Use
-   `runs/release/aero-surrogate-models.zip` and its adjacent `.zip.sha256`.
-   Check [release-manifest.json](release-manifest.json) and
-   [installation receipt](evidence/artifact-installation.json). The ZIP includes
-   serving models, native references, frozen splits, complete metrics and the
-   fifteen historical histories. The large raw evaluation bundle and category
-   checkpoint are evaluation inputs, not requirements for serving.
-
-   ```powershell
-   python scripts/install_artifacts.py --archive PATH_TO_ZIP --sha256 TRUSTED_SHA256 --destination .
-   ```
-
-3. **Deploy the API and dynamic web server.** Follow the
-   [API runbook](../../src/service/DEPLOY.md) and [web runbook](../../web/DEPLOY.md).
-   Build/test the containers on the target host: Docker daemon access was denied
-   here. Configure domain/HTTPS/CORS/proxy trust, one API worker, persistent
-   histories/spend accounting, provider credentials and deliberate public budgets.
-   A static-only web host cannot provide `/api/mesh`.
-
-4. **Verify the actual hosted judge path.** Confirm `/health.synthetic=false`,
-   the full scalar hash
-   `49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a`,
-   baseline Cd about 0.22456, slider changes, genuine joint-extreme rejection,
-   Runs/logbooks and complete Results. Run a real Nemotron completion and
-   cancellation/auth test with network access; verify persistence after restart
-   and public budget limits. Repeat logged-out external Chromium/Firefox/mobile
-   checks. Local Firefox passed twenty contexts; Chromium had seven passes and
-   two preserved host resource failures, so hosted Chromium still needs checking.
-
-5. **Record, upload and submit.** Use [video-script.md](video-script.md),
-   [submission.md](submission.md) and [tooling-feedback.md](tooling-feedback.md).
-   Record the verified deployed flow, produce the public video under three
-   minutes, fill the real demo/repository/video/artifact URLs and submit Devpost.
-   Confirm current deadline, eligibility, required fields and technology rules
-   against the official portal before final submission. Submission copy must
-   retain uncertainty/field/reference limitations and historical-run labels.
-
-6. **Keep the submitted version available.** Assign ownership for hosting,
-   monitoring and inference budget through the official judging period. Preserve
-   submitted source/model/evidence identities and keep credentials private.
+If the team later hosts the application, follow the [API runbook](../../src/service/DEPLOY.md)
+and [web runbook](../../web/DEPLOY.md): one small CPU VM, one API worker,
+persistent `/data`, Caddy for HTTPS, exact CORS origin, deliberate public budgets.
+Seed the data volume with the release's historical run logs (the compose `seed`
+service shows how) and mount the scalar and field checkpoints from separate
+directories, because both files are named `best.pt`. Verify `/health`, the full
+scalar hash `49e5a8b14d5b21bc2fd3dedaeb2c997e8eb176da4bfb557b6d119deec473706a`,
+baseline Cd about 0.22456 and `python -m src.service.qualify --service-url` from
+outside before sharing the URL.
 
 No further model training or new features are needed for this release.

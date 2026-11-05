@@ -8,9 +8,29 @@
 
 **Aero Surrogate helps explore vehicle design parameters before the next CFD verification.** A neural drag model scores candidates, NVIDIA Nemotron proposes changes through Nebius Token Factory, and a domain gate rejects unsupported parameter combinations. Each hypothesis is checked against the observed surrogate result in an inspectable logbook.
 
-Public deployment and the final YouTube upload are **pending**. This repository contains the locally runnable application and submission materials; no hosted URL is implied. See [release instructions](docs/submission/README.md) and the [submission description](docs/submission/submission.md).
+**This is a local-run release.** The complete application, with the real trained models, starts on your machine with Docker in three commands ([Quick start](#quick-start)). The checksummed model bundle is attached to the [v1.0.0 release](https://github.com/Nijjea1/Aero-Surrogate/releases/tag/v1.0.0). There is no hosted demo. Demo video: _link added after upload_.
 
-Final integration is committed and pushed to GitHub; `main` is the only remaining branch. Tests and a fresh complete evaluation pass. See the [remaining plan](docs/submission/NEXT_STEPS.md) for deployment, hosted verification, video and submission, or the [documentation index](docs/README.md) for current guides.
+See the [submission description](docs/submission/submission.md), the [completion report](docs/submission/COMPLETION.md) or the [documentation index](docs/README.md).
+
+## Quick start
+
+You need [Docker](https://docs.docker.com/get-docker/) with Compose, Git and Python 3 (the installer uses only the standard library; use `python3` on macOS/Linux).
+
+```bash
+git clone https://github.com/Nijjea1/Aero-Surrogate.git && cd Aero-Surrogate
+python scripts/install_artifacts.py --archive https://github.com/Nijjea1/Aero-Surrogate/releases/download/v1.0.0/aero-surrogate-models.zip --sha256 70b2829ae2a5e0f1a8bc82f7d1f2321cad1d8fba62ff3f191c4a53b399834a93 --destination .
+docker compose up --build
+```
+
+Open <http://localhost:5173>. The first build downloads CPU PyTorch and takes a few minutes. The installer verifies the archive and every file in it against the published hash before writing anything. `http://localhost:8000/health` should report `"synthetic": false` and checkpoint `49e5a8b1…706a`.
+
+| Without a Token Factory key | With your own key |
+|---|---|
+| Designer: all sixteen parameters, predicted Cd, sigma and the domain gate; 3D car; experimental pressure view | Everything on the left |
+| Runs: the fifteen historical matched Nemotron, CMA-ES and random-search runs with full logbooks | Start live Nemotron Super/Nano runs from the Runs page and cancel them |
+| Results: complete independent evaluation | Spend recorded in a persistent ledger |
+
+To enable live runs, create `.env` containing `NEBIUS_API_KEY=<your key>` (never commit it) and run `docker compose up -d` again. Without a key, starting a run is refused with a clear message and nothing is spent. A 25-evaluation Super run cost about $0.03 in our tests; per-run, daily and lifetime application caps apply (defaults $0.10, $1.00 and $5.00, see [the API runbook](src/service/DEPLOY.md#6-environment-variables)). Run history and the spend ledger live in the `aero-surrogate_data` Docker volume and survive restarts. `docker compose down` stops everything; add `-v` only if you want to erase that history.
 
 ## What works
 
@@ -82,18 +102,27 @@ These are **surrogate-predicted Cd changes**, not new CFD-validated improvements
 
 Published files: [scalar metrics](web/results/metrics.json), [matched benchmark](web/results/benchmark.json). The generator `python docs/readme/build.py` keeps these tables and graphics aligned with those files. See [evaluation instructions](src/eval/README.md).
 
-## Run it locally
+## Run without Docker
 
-Python 3.13 is the container target. A fresh Windows/Python 3.13 CPU installation passed dependency checks, tests and real-model HTTP wiring; [the environment evidence](docs/submission/evidence/clean-environment.json) records the verified official-wheel installation. Linux container execution remains unverified in this environment.
+Python 3.13 is the tested version. The Linux containers in the [Quick start](#quick-start) were verified from a fresh clone ([compose evidence](docs/submission/evidence/compose-verification.json)); a fresh Windows/Python 3.13 CPU installation also passed dependency checks, tests and real-model HTTP wiring ([environment evidence](docs/submission/evidence/clean-environment.json)).
 
 ```powershell
+# Windows PowerShell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements.txt
 ```
 
-A fresh clone has no model weights. Obtain and checksum the trusted release artifact bundle using [release instructions](docs/submission/README.md). The team can create `runs/release/aero-surrogate-models.zip` locally with `python scripts/package_release.py --include-fields`. An immutable public download is pending; install a received bundle with `python scripts/install_artifacts.py --archive PATH_OR_HTTPS --sha256 TRUSTED_ARCHIVE_HASH --destination .`. Alternatively train the scalar locally:
+```bash
+# macOS / Linux
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirements.txt
+```
+
+Install the model bundle with the same `install_artifacts.py` command as in the Quick start. The team can rebuild that ZIP from qualified artifacts with `python scripts/package_release.py --include-fields`. Alternatively train the scalar locally:
 
 ```powershell
 python -m src.data.drivaernet --fetch
@@ -132,11 +161,11 @@ python -m src.service.qualify --checkpoint runs/drivaernet-random/best.pt --refe
 
 The final local suite passed 1,065 tests with two expected skips. Tests that use synthetic fixtures do not establish physical model accuracy. The [completion report](docs/submission/COMPLETION.md) separates numerical parity, independent grading and browser checks; the [documentation index](docs/README.md) links the current guides.
 
-## Deployment boundary
+## Hosting (optional)
 
-Deployment is intentionally left to the team. The [API guide](src/service/DEPLOY.md) and [web guide](web/DEPLOY.md) describe two CPU containers behind HTTPS. A static host alone is insufficient because the viewer needs `/api/mesh`. Keep one API worker, persist logs and spend accounting, and verify real model identity on the deployed host.
+This release is not publicly hosted. To host it, the [API guide](src/service/DEPLOY.md) and [web guide](web/DEPLOY.md) describe the same two CPU containers behind HTTPS on one small VM. A static host alone is insufficient because the viewer needs `/api/mesh`. Keep one API worker, persist logs and spend accounting, and verify real model identity on the host.
 
-Token Factory is the demonstrated Nebius service. AI Cloud is an available hosting option; no AI Cloud deployment is claimed here. Public hosting, final external-browser rehearsal, video upload and Devpost submission remain external release steps.
+Token Factory is the demonstrated Nebius service. AI Cloud is a possible hosting option; no AI Cloud deployment is claimed here.
 
 ## NVIDIA and Nebius
 
@@ -158,4 +187,4 @@ Our code is [MIT licensed](LICENSE). Third-party data retains its own terms; MIT
 
 Avneet Nijjer / Pranoy / Paramveer
 
-Built for the Nebius x NVIDIA Global AI Hackathon, **Best Apps and Agents**. [Submission materials](docs/submission/submission.md) include the final description, limitations, technology mapping and remaining external steps.
+Built for the Nebius x NVIDIA Global AI Hackathon, **Best Apps and Agents**. [Submission materials](docs/submission/submission.md) include the final description, limitations and technology mapping.

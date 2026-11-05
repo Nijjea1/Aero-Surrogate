@@ -1,0 +1,78 @@
+# Run the complete application locally: the API with the real models and the
+# web UI with its /api/mesh geometry endpoint.
+#
+#   python scripts/install_artifacts.py --archive <release ZIP or URL> --sha256 <hash> --destination .
+#   docker compose up --build
+#
+# Then open http://localhost:5173. The model bundle must be installed first: the
+# API refuses to start if the configured checkpoint is missing (it never falls
+# back to the synthetic stub). A Token Factory key is optional and only needed
+# for live agent runs: put NEBIUS_API_KEY in .env (never committed).
+#
+# Ports are bound to 127.0.0.1 only. For a public deployment see
+# src/service/DEPLOY.md and web/DEPLOY.md instead.
+name: aero-surrogate
+
+services:
+  # One-time copy of the installed historical run logs into the data volume, so
+  # the Runs page shows them. Existing files are never overwritten.
+  seed:
+    image: aero-surrogate:local
+    build: .
+    user: "0"
+    volumes:
+      - data:/data
+      - ./runs/logs:/seed:ro
+    command:
+      - sh
+      - -c
+      - >-
+        mkdir -p /data/logs/events &&
+        if [ -d /seed ]; then
+          find /seed -maxdepth 1 -name '*.jsonl' -exec cp -n {} /data/logs/ \; ;
+          if [ -d /seed/events ]; then find /seed/events -maxdepth 1 -name '*.jsonl' -exec cp -n {} /data/logs/events/ \; ; fi ;
+        fi &&
+        chown -R 10001:10001 /data &&
+        echo "seeded $$(ls /data/logs/*.jsonl 2>/dev/null | wc -l) run logs"
+    restart: "no"
+
+  api:
+    image: aero-surrogate:local
+    build: .
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - data:/data
+      - ./runs/drivaernet-random:/ckpt/scalar:ro
+      - ./runs/fields:/ckpt/fields:ro
+    env_file:
+      - path: .env
+        required: false
+    # These take precedence over .env, whose paths are for running outside Docker.
+    environment:
+      AERO_CHECKPOINT: /ckpt/scalar/best.pt
+      AERO_FIELD_CHECKPOINT: /ckpt/fields/best.pt
+      AERO_RUNLOG_DIR: /data/logs
+      AERO_SPEND_LEDGER: /data/spend.jsonl
+      AERO_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      AERO_TRUST_PROXY: "0"
+    restart: unless-stopped
+
+  web:
+    image: aero-web:local
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:5173:5173"
+    environment:
+      AERO_WEB_API: http://localhost:8000
+    restart: unless-stopped
+
+volumes:
+  data:
