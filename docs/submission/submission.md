@@ -5,7 +5,7 @@ Track: **Best Apps and Agents**.
 Repository: https://github.com/Nijjea1/Aero-Surrogate
 
 Test build: https://github.com/Nijjea1/Aero-Surrogate/releases/tag/v1.0.0 (local-run
-release; no hosted demo). Public YouTube video: **VIDEO_URL** (replace before submitting).
+release; no hosted demo). Demo video: https://github.com/user-attachments/assets/c21d7067-cd7a-441d-93e5-89350a36f70c (use a public YouTube URL in the Devpost form if it requires one).
 
 ## Testing instructions
 

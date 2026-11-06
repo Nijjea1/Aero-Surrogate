@@ -10,9 +10,9 @@
 
 **This is a local-run release.** The complete application, with the real trained models, starts on your machine with Docker in three commands ([Quick start](#quick-start)). The checksummed model bundle is attached to the [v1.0.0 release](https://github.com/Nijjea1/Aero-Surrogate/releases/tag/v1.0.0). There is no hosted demo; watch the demo video below.
 
-<p align="center"><a href="https://github.com/Nijjea1/Aero-Surrogate/releases/download/v1.0.0/aero-surrogate-demo.mp4"><img src="docs/readme/demo-thumbnail.jpg" alt="Watch the 2:26 demo video: real app footage and a live Nemotron Super run" width="100%"></a></p>
+https://github.com/user-attachments/assets/c21d7067-cd7a-441d-93e5-89350a36f70c
 
-<p align="center"><b><a href="https://github.com/Nijjea1/Aero-Surrogate/releases/download/v1.0.0/aero-surrogate-demo.mp4">▶ Watch the demo (2:26)</a></b> · real screen recordings of the local release, including a live Nemotron Super run (shown at a labelled 6× speed)</p>
+<p align="center"><b>Demo (2:26):</b> real screen recordings of the local release, including a live Nemotron Super run shown at a labelled 6× speed.</p>
 
 See the [submission description](docs/submission/submission.md), the [completion report](docs/submission/COMPLETION.md) or the [documentation index](docs/README.md).
 
